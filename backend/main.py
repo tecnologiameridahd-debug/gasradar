@@ -11,7 +11,13 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from backend.geo import DEFAULT_LABEL, DEFAULT_LAT, DEFAULT_LON, geocode_zip
+from backend.geo import (
+    DEFAULT_LABEL,
+    DEFAULT_LAT,
+    DEFAULT_LON,
+    geocode_zip,
+    reverse_geocode,
+)
 from backend.prices import (
     attach_prices,
     cheapest_summary,
@@ -83,12 +89,22 @@ def api_search(
         lat, lon = g["lat"], g["lon"]
         label = g["label"]
         state = g.get("state") or "CO"
-    elif lat is None or lon is None:
+    elif lat is not None and lon is not None:
+        # GPS / coords: descubrir ciudad real (Colorado Springs, etc.)
+        rev = reverse_geocode(float(lat), float(lon))
+        if rev:
+            label = rev["label"]
+            state = rev.get("state") or "CO"
+        else:
+            label = f"Tu ubicación ({float(lat):.3f}, {float(lon):.3f})"
+            state = "CO"
+    else:
+        # Sin GPS ni ZIP → Denver solo como último recurso
         lat, lon = DEFAULT_LAT, DEFAULT_LON
         label = DEFAULT_LABEL
         state = "CO"
 
-    stations = stations_near(lat, lon, radius_mi=radius_mi, limit=limit)
+    stations = stations_near(float(lat), float(lon), radius_mi=radius_mi, limit=limit)
     priced = attach_prices(stations, state=state, fuel=fuel)
     best = cheapest_summary(priced)
     meta = price_meta(state)

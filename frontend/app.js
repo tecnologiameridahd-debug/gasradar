@@ -1,15 +1,49 @@
 const $ = (sel) => document.querySelector(sel);
 
+const STORAGE_KEY = "gasradar_last_location";
+
 const state = {
   lat: null,
   lon: null,
-  label: "Denver, CO",
+  label: "",
   fuel: "regular",
   radius: 5,
   stations: [],
   cheapest: null,
   reportStationId: null,
+  zip: null,
 };
+
+function saveLocation(loc) {
+  try {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        lat: loc.lat,
+        lon: loc.lon,
+        label: loc.label,
+        zip: loc.zip || null,
+        saved_at: Date.now(),
+      })
+    );
+  } catch (_) {
+    /* ignore */
+  }
+}
+
+function loadSavedLocation() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const o = JSON.parse(raw);
+    if (o.lat == null || o.lon == null) return null;
+    // válido 30 días
+    if (o.saved_at && Date.now() - o.saved_at > 30 * 24 * 3600 * 1000) return null;
+    return o;
+  } catch (_) {
+    return null;
+  }
+}
 
 function money(n) {
   if (n == null || Number.isNaN(n)) return "—";
@@ -183,6 +217,16 @@ async function search({ lat, lon, zip } = {}) {
     state.lon = data.center.lon;
     state.label = data.center.label;
     state.stations = data.stations || [];
+    if (zip) state.zip = zip;
+    saveLocation({
+      lat: state.lat,
+      lon: state.lon,
+      label: state.label,
+      zip: state.zip || zip || null,
+    });
+    if (state.zip && $("#zipInput") && !$("#zipInput").value) {
+      $("#zipInput").value = state.zip;
+    }
     render(data);
   } catch (e) {
     setStatus(e.message || "Error de búsqueda", "error");
@@ -317,22 +361,92 @@ async function submitReport() {
 
 function useGps() {
   if (!navigator.geolocation) {
-    setStatus("GPS no disponible. Usa un ZIP.", "error");
+    setStatus("GPS no disponible. Usa un ZIP (ej. 80903 Colorado Springs).", "error");
     return;
   }
   if (window.isSecureContext !== true && !["localhost", "127.0.0.1"].includes(location.hostname)) {
-    setStatus("GPS no disponible aquí. Usa un ZIP.", "error");
+    setStatus("GPS no disponible aquí. Usa un ZIP (ej. 80903).", "error");
     return;
   }
-  setStatus("Obteniendo ubicación…", "loading");
+  setStatus("Obteniendo tu ubicación real…", "loading");
   navigator.geolocation.getCurrentPosition(
     (pos) => {
+      state.zip = null;
       search({ lat: pos.coords.latitude, lon: pos.coords.longitude });
     },
     () => {
-      setStatus("Sin GPS. Usa un ZIP.", "error");
+      setStatus("Sin GPS. Usa un ZIP (Colorado Springs: 80903).", "error");
     },
-    { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 }
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
+  );
+}
+
+/** Arranque: NO forzar Denver. 1) última zona guardada 2) GPS 3) pedir ZIP */
+function startApp() {
+  const saved = loadSavedLocation();
+  if (saved) {
+    state.zip = saved.zip || null;
+    if (saved.zip && $("#zipInput")) $("#zipInput").value = saved.zip;
+    setStatus("Cargando tu última ubicación…", "loading");
+    if (saved.zip) {
+      search({ zip: saved.zip });
+    } else {
+      search({ lat: saved.lat, lon: saved.lon });
+    }
+    // actualizar con GPS si se puede (en segundo plano)
+    tryGpsBackground();
+    return;
+  }
+
+  if (
+    navigator.geolocation &&
+    (window.isSecureContext === true ||
+      ["localhost", "127.0.0.1"].includes(location.hostname))
+  ) {
+    setStatus("Detectando tu ubicación…", "loading");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        search({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+      },
+      () => {
+        setStatus(
+          "Activa GPS o escribe tu ZIP (Colorado Springs: 80903).",
+          "empty"
+        );
+        $("#locationLabel").textContent = "Sin ubicación — usa ZIP o GPS";
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 }
+    );
+    return;
+  }
+
+  setStatus("Escribe tu ZIP (ej. 80903 Colorado Springs) o usa GPS.", "empty");
+  $("#locationLabel").textContent = "Sin ubicación — usa ZIP o GPS";
+}
+
+function tryGpsBackground() {
+  if (!navigator.geolocation) return;
+  if (
+    window.isSecureContext !== true &&
+    !["localhost", "127.0.0.1"].includes(location.hostname)
+  ) {
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const lat = pos.coords.latitude;
+      const lon = pos.coords.longitude;
+      // si te moviste > ~3 millas, refrescar
+      if (state.lat != null && state.lon != null) {
+        const dlat = Math.abs(lat - state.lat);
+        const dlon = Math.abs(lon - state.lon);
+        if (dlat < 0.04 && dlon < 0.04) return;
+      }
+      state.zip = null;
+      search({ lat, lon });
+    },
+    () => {},
+    { enableHighAccuracy: false, timeout: 10000, maximumAge: 120000 }
   );
 }
 
@@ -349,9 +463,10 @@ function bind() {
   $("#btnZip").addEventListener("click", () => {
     const zip = $("#zipInput").value.trim();
     if (!zip) {
-      alert("Escribe un ZIP de USA");
+      alert("Escribe un ZIP de USA (Colorado Springs: 80903)");
       return;
     }
+    state.zip = zip;
     search({ zip });
   });
   $("#zipInput").addEventListener("keydown", (e) => {
@@ -373,5 +488,5 @@ function bind() {
 }
 
 bind();
-// Carga inicial: Denver
-search({ lat: 39.7392, lon: -104.9903 });
+// Carga inicial: tu ubicación (no forzar Denver)
+startApp();
