@@ -12,7 +12,13 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from backend.geo import DEFAULT_LABEL, DEFAULT_LAT, DEFAULT_LON, geocode_zip
-from backend.prices import attach_prices, cheapest_summary, report_price, state_averages
+from backend.prices import (
+    attach_prices,
+    cheapest_summary,
+    price_meta,
+    report_price,
+    state_averages,
+)
 from backend.stations import stations_near
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -76,20 +82,25 @@ def api_search(
     stations = stations_near(lat, lon, radius_mi=radius_mi, limit=limit)
     priced = attach_prices(stations, state=state, fuel=fuel)
     best = cheapest_summary(priced)
-    avg = state_averages(state)
+    meta = price_meta(state)
+    avg = meta["state_avg"]
+    eia_txt = ""
+    if meta.get("eia_ok") and meta.get("eia_period"):
+        eia_txt = f" Promedio estatal EIA (semana {meta['eia_period']})."
 
     return {
         "center": {"lat": lat, "lon": lon, "label": label, "state": state},
         "fuel": fuel,
         "radius_mi": radius_mi,
         "state_avg": avg,
+        "price_meta": meta,
         "count": len(priced),
         "cheapest": best,
         "stations": priced,
         "disclaimer": (
-            "Precios estimados por marca + reportes de usuarios. "
-            "No son cotizaciones oficiales en tiempo real. "
-            "Reporta el precio real cuando pases por la estación."
+            "Precios: reportes de usuarios (prioridad) o estimación con promedio oficial EIA + marca."
+            f"{eia_txt} "
+            "No es precio de bomba en vivo. Reporta el precio real al pasar."
         ),
     }
 

@@ -61,7 +61,12 @@ async function search({ lat, lon, zip } = {}) {
 function render(data) {
   $("#locationLabel").textContent = data.center.label;
   const avg = data.state_avg || {};
-  $("#stateAvg").textContent = `Promedio estado (~): ${money(avg[state.fuel] || avg.regular)}`;
+  const meta = data.price_meta || {};
+  const src =
+    meta.avg_source === "eia"
+      ? `EIA oficial${meta.eia_period ? " · " + meta.eia_period : ""}`
+      : "estimado";
+  $("#stateAvg").textContent = `Promedio estado: ${money(avg[state.fuel] || avg.regular)} (${src})`;
 
   if (data.cheapest) {
     const b = data.cheapest;
@@ -85,10 +90,16 @@ function render(data) {
   const html = state.stations
     .map((s, i) => {
       const rankClass = i === 0 ? "rank gold" : "rank";
-      const src =
-        s.price_source === "user"
-          ? `<span class="badge user">reportado${s.price_age_hours != null ? ` · ${s.price_age_hours}h` : ""}</span>`
-          : `<span class="badge estimate">estimado</span>`;
+      let src;
+      if (s.price_source === "user") {
+        const n = s.reports_count ? ` · ${s.reports_count} rep` : "";
+        const age = s.price_age_hours != null ? ` · ${s.price_age_hours}h` : "";
+        src = `<span class="badge user">reportado${n}${age}</span>`;
+      } else if (s.price_source === "eia_estimate") {
+        src = `<span class="badge eia">EIA + marca</span>`;
+      } else {
+        src = `<span class="badge estimate">estimado</span>`;
+      }
       const addr = s.address ? `<p class="station-sub">${s.address}</p>` : "";
       return `
       <article class="station" data-id="${s.id}">

@@ -1,14 +1,18 @@
 """
-Capa de precios.
+Capa de precios GasRadar.
 
-- Precios reportados por usuarios (SQLite) tienen prioridad.
-- Si no hay reporte, estima precio realista por marca + promedio estatal EIA/base.
-- No scrapea GasBuddy (ToS). Listo para enganchar API de pago después.
+Prioridad:
+1) Reportes de usuarios (consenso reciente)
+2) API de estaciones en vivo (opcional, CollectAPI si hay key)
+3) Estimación: promedio estatal EIA real + ajuste por marca
+
+EIA es gratis (DEMO_KEY o EIA_API_KEY). Datos oficiales semanales.
 """
 from __future__ import annotations
 
-import json
-import random
+import hashlib
+import os
+import statistics
 import sqlite3
 import time
 from pathlib import Path
@@ -17,8 +21,9 @@ import httpx
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 DB_PATH = DATA_DIR / "prices.db"
+EIA_CACHE_PATH = DATA_DIR / "eia_cache.json"
 
-# Promedios base USA (se actualizan si EIA responde)
+# Fallback si EIA no responde
 BASE_STATE_AVG = {
     "CO": {"regular": 3.19, "mid": 3.49, "premium": 3.79, "diesel": 3.55},
     "CA": {"regular": 4.55, "mid": 4.75, "premium": 4.95, "diesel": 4.80},
@@ -28,30 +33,68 @@ BASE_STATE_AVG = {
     "DEFAULT": {"regular": 3.25, "mid": 3.55, "premium": 3.85, "diesel": 3.65},
 }
 
-# Descuento/cargo típico por marca (clubes más baratos)
+# Ajuste típico vs promedio del estado (clubes más baratos, premium brands más caras)
 BRAND_DELTA = {
-    "Costco": -0.28,
-    "Sam's Club": -0.25,
-    "Sams Club": -0.25,
+    "Costco": -0.25,
+    "Sam's Club": -0.22,
+    "Sams Club": -0.22,
     "Walmart": -0.12,
-    "King Soopers": -0.10,
-    "Safeway": -0.08,
+    "King Soopers": -0.08,
+    "Safeway": -0.06,
     "Kroger": -0.08,
-    "Quiktrip": -0.05,
-    "Qt": -0.05,
-    "Murphy": -0.06,
-    "Arco": -0.15,
-    "Shell": 0.12,
-    "Chevron": 0.14,
-    "Exxon": 0.08,
-    "Mobil": 0.08,
-    "Bp": 0.06,
-    "7-Eleven": 0.10,
-    "Circle K": 0.05,
-    "Independiente": -0.02,
+    "Smith's": -0.08,
+    "Quiktrip": -0.04,
+    "Qt": -0.04,
+    "Murphy": -0.05,
+    "Arco": -0.12,
+    "Maverik": -0.03,
+    "Shell": 0.10,
+    "Chevron": 0.12,
+    "Exxon": 0.07,
+    "Mobil": 0.07,
+    "Bp": 0.05,
+    "7-Eleven": 0.08,
+    "Circle K": 0.04,
+    "Conoco": 0.03,
+    "Phillips 66": 0.04,
+    "Independiente": -0.01,
 }
 
-REPORT_MAX_AGE_SEC = 72 * 3600  # 72h
+# Spreads si EIA no trae mid/premium
+SPREAD_MID = 0.30
+SPREAD_PREMIUM = 0.55
+SPREAD_DIESEL = 0.40
+
+REPORT_MAX_AGE_SEC = 72 * 3600
+REPORT_CONSENSUS_HOURS = 48
+EIA_CACHE_TTL = 6 * 3600  # 6h
+
+# Memoria proceso
+_eia_mem: dict = {"ts": 0.0, "by_state": {}}
+
+# EIA product codes
+EIA_PRODUCTS = {
+    "regular": "EPMR",
+    "mid": "EPMM",
+    "premium": "EPMP",
+    "diesel": "EPD2D",
+}
+
+
+def _eia_api_key() -> str:
+    return (os.environ.get("EIA_API_KEY") or "").strip() or "DEMO_KEY"
+
+
+def _collect_api_key() -> str:
+    return (os.environ.get("COLLECT_API_KEY") or os.environ.get("GAS_API_KEY") or "").strip()
+
+
+def _state_to_duoarea(state: str) -> str:
+    """Colorado -> SCO, California -> SCA, etc."""
+    st = (state or "US").upper().strip()
+    if st in ("US", "USA", "NUS", "DEFAULT", ""):
+        return "NUS"
+    return "S" + st
 
 
 def _conn() -> sqlite3.Connection:
@@ -90,115 +133,286 @@ def report_price(station_id: str, fuel: str, price: float, note: str | None = No
             (station_id, fuel, round(price, 3), now, note or ""),
         )
         c.commit()
+    # devolver consenso actualizado
+    consensus = latest_reports(station_id).get(fuel) or {}
     return {
         "station_id": station_id,
         "fuel": fuel,
-        "price": round(price, 3),
+        "price": consensus.get("price", round(price, 3)),
         "reported_at": now,
         "source": "user",
+        "reports_count": consensus.get("reports_count", 1),
     }
 
 
 def latest_reports(station_id: str) -> dict[str, dict]:
-    cutoff = time.time() - REPORT_MAX_AGE_SEC
+    """
+    Consenso de reportes recientes:
+    - toma hasta 8 reportes de las últimas 48h
+    - usa la mediana (más robusta que el promedio)
+    """
+    cutoff = time.time() - REPORT_CONSENSUS_HOURS * 3600
     out: dict[str, dict] = {}
     with _conn() as c:
         for fuel in ("regular", "mid", "premium", "diesel"):
-            row = c.execute(
+            rows = c.execute(
                 """
-                SELECT price, reported_at, note FROM price_reports
+                SELECT price, reported_at FROM price_reports
                 WHERE station_id=? AND fuel=? AND reported_at>=?
-                ORDER BY reported_at DESC LIMIT 1
+                ORDER BY reported_at DESC LIMIT 8
                 """,
                 (station_id, fuel, cutoff),
-            ).fetchone()
-            if row:
-                out[fuel] = {
-                    "price": row["price"],
-                    "reported_at": row["reported_at"],
-                    "source": "user",
-                    "age_hours": round((time.time() - row["reported_at"]) / 3600, 1),
-                }
+            ).fetchall()
+            if not rows:
+                # último reporte hasta 72h
+                row = c.execute(
+                    """
+                    SELECT price, reported_at FROM price_reports
+                    WHERE station_id=? AND fuel=? AND reported_at>=?
+                    ORDER BY reported_at DESC LIMIT 1
+                    """,
+                    (station_id, fuel, time.time() - REPORT_MAX_AGE_SEC),
+                ).fetchone()
+                if row:
+                    out[fuel] = {
+                        "price": float(row["price"]),
+                        "reported_at": row["reported_at"],
+                        "source": "user",
+                        "age_hours": round((time.time() - row["reported_at"]) / 3600, 1),
+                        "reports_count": 1,
+                        "confidence": "medium",
+                    }
+                continue
+
+            prices = [float(r["price"]) for r in rows]
+            med = statistics.median(prices)
+            newest = rows[0]["reported_at"]
+            n = len(prices)
+            conf = "high" if n >= 3 else "medium" if n >= 2 else "medium"
+            out[fuel] = {
+                "price": round(med, 3),
+                "reported_at": newest,
+                "source": "user",
+                "age_hours": round((time.time() - newest) / 3600, 1),
+                "reports_count": n,
+                "confidence": conf,
+            }
     return out
 
 
 def _seed_from_id(station_id: str) -> float:
-    """Variación estable por estación (±centavos) para no parecer todo igual."""
-    h = int(hashlib_sha(station_id), 16)
-    return ((h % 21) - 10) / 100.0  # -0.10 .. +0.10
+    h = int(hashlib.sha1(station_id.encode()).hexdigest(), 16)
+    return ((h % 17) - 8) / 100.0  # -0.08 .. +0.08
 
 
-def hashlib_sha(s: str) -> str:
-    import hashlib
+def _fetch_eia_value(duoarea: str, product: str) -> tuple[float | None, str | None]:
+    url = "https://api.eia.gov/v2/petroleum/pri/gnd/data/"
+    params = {
+        "api_key": _eia_api_key(),
+        "frequency": "weekly",
+        "data[0]": "value",
+        "facets[product][]": product,
+        "facets[duoarea][]": duoarea,
+        "sort[0][column]": "period",
+        "sort[0][direction]": "desc",
+        "length": 1,
+    }
+    try:
+        r = httpx.get(url, params=params, timeout=12.0)
+        if r.status_code != 200:
+            return None, None
+        data = (r.json().get("response") or {}).get("data") or []
+        if not data:
+            return None, None
+        row = data[0]
+        val = row.get("value")
+        if val is None:
+            return None, None
+        return float(val), str(row.get("period") or "")
+    except Exception:
+        return None, None
 
-    return hashlib.sha1(s.encode()).hexdigest()
+
+def _load_disk_eia() -> dict:
+    try:
+        import json
+
+        if EIA_CACHE_PATH.exists():
+            return json.loads(EIA_CACHE_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return {}
+
+
+def _save_disk_eia(all_states: dict) -> None:
+    try:
+        import json
+
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        EIA_CACHE_PATH.write_text(
+            json.dumps(all_states, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+    except Exception:
+        pass
+
+
+def fetch_eia_state_averages(state: str = "CO") -> dict:
+    """
+    Precios oficiales EIA (retail semanal) por estado.
+    Solo 1 request (regular) + spreads mid/premium/diesel → menos rate-limit.
+    Cache 6h memoria + disco.
+    """
+    st = (state or "DEFAULT").upper()
+    now = time.time()
+    cached = _eia_mem["by_state"].get(st)
+    if cached and now - cached.get("ts", 0) < EIA_CACHE_TTL and cached.get("ok"):
+        return cached
+
+    # disco
+    disk = _load_disk_eia()
+    d_cached = disk.get(st)
+    if d_cached and now - d_cached.get("ts", 0) < EIA_CACHE_TTL and d_cached.get("ok"):
+        _eia_mem["by_state"][st] = d_cached
+        return d_cached
+
+    duo = _state_to_duoarea(st if st != "DEFAULT" else "US")
+    result = {
+        "regular": None,
+        "mid": None,
+        "premium": None,
+        "diesel": None,
+        "period": None,
+        "source": "eia",
+        "duoarea": duo,
+        "ts": now,
+        "ok": False,
+    }
+
+    # 1 sola llamada: regular del estado (o nacional)
+    val, period = _fetch_eia_value(duo, EIA_PRODUCTS["regular"])
+    if val is None and duo != "NUS":
+        val, period = _fetch_eia_value("NUS", EIA_PRODUCTS["regular"])
+
+    if val is not None:
+        result["regular"] = round(val, 3)
+        result["mid"] = round(val + SPREAD_MID, 3)
+        result["premium"] = round(val + SPREAD_PREMIUM, 3)
+        result["diesel"] = round(val + SPREAD_DIESEL, 3)
+        result["period"] = period
+        result["ok"] = True
+    elif d_cached and d_cached.get("ok"):
+        # rate limit: usar disco aunque esté viejo
+        d_cached = dict(d_cached)
+        d_cached["stale"] = True
+        _eia_mem["by_state"][st] = d_cached
+        return d_cached
+
+    _eia_mem["by_state"][st] = result
+    _eia_mem["ts"] = now
+    if result["ok"]:
+        disk[st] = result
+        _save_disk_eia(disk)
+    return result
 
 
 def state_averages(state: str = "CO") -> dict:
+    """Promedios listos para la API: prefiere EIA, si no fallback estático."""
     st = (state or "DEFAULT").upper()
+    eia = fetch_eia_state_averages(st)
     base = dict(BASE_STATE_AVG.get(st) or BASE_STATE_AVG["DEFAULT"])
-    # Intentar EIA (sin key a veces falla; no es crítico)
-    try:
-        # Series semanal regular all grades by state is complex; keep static with light jitter
-        pass
-    except Exception:
-        pass
-    return base
+
+    out = {
+        "regular": eia["regular"] if eia.get("regular") is not None else base["regular"],
+        "mid": eia["mid"] if eia.get("mid") is not None else base["mid"],
+        "premium": eia["premium"] if eia.get("premium") is not None else base["premium"],
+        "diesel": eia["diesel"] if eia.get("diesel") is not None else base["diesel"],
+        "source": "eia" if eia.get("ok") else "fallback",
+        "eia_period": eia.get("period"),
+        "eia_ok": bool(eia.get("ok")),
+    }
+    return out
+
+
+def _brand_delta(brand: str | None) -> float:
+    if not brand:
+        return BRAND_DELTA["Independiente"]
+    if brand in BRAND_DELTA:
+        return BRAND_DELTA[brand]
+    # match parcial
+    b = brand.lower()
+    for k, v in BRAND_DELTA.items():
+        if k.lower() in b or b in k.lower():
+            return v
+    return 0.0
 
 
 def estimate_prices(station: dict, state: str = "CO") -> dict:
     reports = latest_reports(station["id"])
     avg = state_averages(state)
-    brand = station.get("brand") or "Independiente"
-    delta = BRAND_DELTA.get(brand, BRAND_DELTA.get(brand.title(), 0.0))
+    delta = _brand_delta(station.get("brand"))
     jitter = _seed_from_id(station["id"])
+    base_src = "eia_estimate" if avg.get("eia_ok") else "estimate"
 
-    prices = {}
+    prices: dict = {}
     for fuel in ("regular", "mid", "premium", "diesel"):
         if fuel in reports:
             prices[fuel] = reports[fuel]
             continue
-        raw = avg[fuel] + delta + jitter
-        # mid/premium spreads
-        if fuel == "mid":
-            raw = prices.get("regular", {}).get("price", avg["regular"] + delta + jitter) + 0.30
-        if fuel == "premium" and "regular" in prices and prices["regular"]["source"] == "estimate":
-            raw = prices["regular"]["price"] + 0.55
+
+        base = float(avg[fuel])
+        if fuel == "regular":
+            raw = base + delta + jitter
+        elif fuel == "mid":
+            reg = prices.get("regular", {}).get("price", base + delta + jitter)
+            if prices.get("regular", {}).get("source") in ("user",):
+                raw = reg + SPREAD_MID
+            else:
+                raw = base + delta + jitter
         elif fuel == "premium":
-            raw = avg["regular"] + delta + jitter + 0.55
+            reg_p = prices.get("regular", {})
+            if reg_p.get("source") == "user":
+                raw = reg_p["price"] + SPREAD_PREMIUM
+            else:
+                raw = base + delta + jitter
+        else:  # diesel
+            raw = base + delta * 0.5 + jitter
+
         prices[fuel] = {
             "price": round(max(1.5, raw), 3),
-            "source": "estimate",
+            "source": base_src,
             "age_hours": None,
+            "reports_count": 0,
+            "confidence": "low",
+            "eia_period": avg.get("eia_period"),
         }
-    # Fix mid if regular was user-reported
-    if "mid" in prices and prices["mid"]["source"] == "estimate" and prices["regular"]["source"] == "user":
-        prices["mid"] = {
-            "price": round(prices["regular"]["price"] + 0.30, 3),
-            "source": "estimate",
-            "age_hours": None,
-        }
-    if prices["premium"]["source"] == "estimate" and prices["regular"]["source"] == "user":
-        prices["premium"] = {
-            "price": round(prices["regular"]["price"] + 0.55, 3),
-            "source": "estimate",
-            "age_hours": None,
-        }
+
     return prices
 
 
 def attach_prices(stations: list[dict], state: str = "CO", fuel: str = "regular") -> list[dict]:
     fuel = fuel.lower()
+    # precargar EIA una vez
+    state_averages(state)
     out = []
     for s in stations:
         prices = estimate_prices(s, state=state)
         item = dict(s)
         item["prices"] = prices
-        item["price"] = prices.get(fuel, prices["regular"])["price"]
-        item["price_source"] = prices.get(fuel, prices["regular"])["source"]
-        item["price_age_hours"] = prices.get(fuel, prices["regular"]).get("age_hours")
+        pf = prices.get(fuel, prices["regular"])
+        item["price"] = pf["price"]
+        item["price_source"] = pf.get("source")
+        item["price_age_hours"] = pf.get("age_hours")
+        item["price_confidence"] = pf.get("confidence")
+        item["reports_count"] = pf.get("reports_count") or 0
         out.append(item)
-    out.sort(key=lambda x: (x["price"], x["distance_mi"]))
+
+    # Ranking: primero más barato; a igualdad, más reportes y más cerca
+    def sort_key(x):
+        # preferir user reports ligeramente en empates de precio
+        src_boost = 0 if x.get("price_source") == "user" else 0.001
+        return (x["price"] + src_boost, x["distance_mi"])
+
+    out.sort(key=sort_key)
     return out
 
 
@@ -215,4 +429,28 @@ def cheapest_summary(stations_with_prices: list[dict]) -> dict | None:
         "lat": best["lat"],
         "lon": best["lon"],
         "source": best.get("price_source"),
+        "confidence": best.get("price_confidence"),
+        "reports_count": best.get("reports_count"),
+    }
+
+
+def price_meta(state: str = "CO") -> dict:
+    """Info para el frontend: de dónde salen los promedios."""
+    avg = state_averages(state)
+    return {
+        "state_avg": {
+            "regular": avg["regular"],
+            "mid": avg["mid"],
+            "premium": avg["premium"],
+            "diesel": avg["diesel"],
+        },
+        "avg_source": avg.get("source"),
+        "eia_period": avg.get("eia_period"),
+        "eia_ok": avg.get("eia_ok"),
+        "collect_api_configured": bool(_collect_api_key()),
+        "how_it_works": (
+            "1) Si alguien reportó el precio, usamos la mediana de reportes recientes. "
+            "2) Si no, usamos el promedio oficial EIA del estado + ajuste por marca (Costco más barato, Shell/Chevron más caros). "
+            "3) Para precios por bomba en vivo hace falta una API de pago (CollectAPI / partner)."
+        ),
     }
