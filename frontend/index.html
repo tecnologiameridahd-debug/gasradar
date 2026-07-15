@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b1220" />
+    <meta name="description" content="GasRadar — encuentra la gasolina más barata cerca de ti en USA" />
+    <title>GasRadar — Precios de gasolina USA</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header>
+        <div class="brand">
+          <div class="logo" title="GasRadar">📡</div>
+          <div>
+            <h1>GasRadar</h1>
+            <p class="subtitle">Radar de precios de gasolina · USA</p>
+          </div>
+        </div>
+      </header>
+
+      <section class="card">
+        <div class="row">
+          <button class="btn-primary grow" id="btnGps" type="button">📍 Usar mi ubicación</button>
+        </div>
+        <div class="row" style="margin-top: 8px">
+          <div class="grow">
+            <input id="zipInput" type="text" inputmode="numeric" placeholder="ZIP (ej. 80202)" maxlength="10" />
+          </div>
+          <button class="btn-secondary" id="btnZip" type="button">Buscar</button>
+        </div>
+        <div class="filters">
+          <select id="fuelSelect">
+            <option value="regular" selected>Regular</option>
+            <option value="mid">Mid</option>
+            <option value="premium">Premium</option>
+            <option value="diesel">Diesel</option>
+          </select>
+          <select id="radiusSelect">
+            <option value="3">3 millas</option>
+            <option value="5" selected>5 millas</option>
+            <option value="10">10 millas</option>
+            <option value="15">15 millas</option>
+          </select>
+        </div>
+        <p class="disclaimer" style="margin-top: 10px">
+          Ubicación: <strong id="locationLabel">—</strong><br />
+          <span id="stateAvg"></span>
+        </p>
+      </section>
+
+      <section class="card best" id="bestCard" style="display: none">
+        <span class="badge user">Más barata</span>
+        <div class="price" id="bestPrice">$—</div>
+        <div>
+          <strong id="bestName">—</strong>
+          <div class="meta" id="bestMeta"></div>
+        </div>
+        <a class="btn-primary" id="bestMaps" href="#" target="_blank" rel="noopener" style="text-align: center; text-decoration: none; display: block; margin-top: 6px">
+          Ir a la estación
+        </a>
+      </section>
+
+      <section class="card">
+        <div id="status" class="loading">Cargando…</div>
+        <div id="results"></div>
+        <p class="disclaimer" id="disclaimer"></p>
+      </section>
+
+      <footer>GasRadar · reporta precios para mejorar la comunidad</footer>
+    </div>
+
+    <div class="modal-bg" id="modal">
+      <div class="modal">
+        <h3 id="reportTitle">Reportar precio</h3>
+        <p class="subtitle">¿Cuánto viste en la bomba? (USD/gal)</p>
+        <input id="reportPrice" type="number" step="0.001" min="1" max="12" placeholder="ej. 2.999" />
+        <div class="row">
+          <button class="btn-secondary grow" id="btnCloseModal" type="button">Cancelar</button>
+          <button class="btn-primary grow" id="btnSubmitReport" type="button">Guardar</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>

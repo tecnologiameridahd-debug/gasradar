@@ -1,0 +1,13 @@
+# Despliegue en Render.com (gratis)
+# 1) Sube este repo a GitHub
+# 2) En render.com: New → Blueprint → selecciona el repo
+services:
+  - type: web
+    name: gasradar
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.8"
