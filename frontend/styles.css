@@ -303,11 +303,28 @@ button {
   margin-top: 10px;
 }
 
-footer {
+footer,
+.site-footer {
   text-align: center;
   color: var(--muted);
-  font-size: 0.75rem;
-  margin-top: 8px;
+  font-size: 0.78rem;
+  margin-top: 12px;
+  line-height: 1.55;
+  padding: 8px 4px 16px;
+}
+
+.site-footer strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.site-footer a {
+  color: var(--blue);
+  text-decoration: none;
+}
+
+.site-footer a:hover {
+  text-decoration: underline;
 }
 
 @media (min-width: 600px) {
