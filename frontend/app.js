@@ -52,9 +52,6 @@ function mapsUrl(lat, lon, name) {
 }
 
 function mapsButtonLabel() {
-  const p = detectPlatform();
-  if (p === "ios") return "Cómo llegar (Apple Maps)";
-  if (p === "android") return "Cómo llegar (Google Maps)";
   return "Cómo llegar";
 }
 
@@ -113,12 +110,7 @@ function render(data) {
     $("#bestName").textContent = b.name;
     $("#bestMeta").textContent = `${b.distance_mi} mi · ${b.source === "user" ? "reportado" : "estimado"}`;
     $("#bestMaps").href = mapsUrl(b.lat, b.lon, b.name);
-    $("#bestMaps").textContent =
-      detectPlatform() === "ios"
-        ? "Ir con Apple Maps"
-        : detectPlatform() === "android"
-          ? "Ir con Google Maps"
-          : "Ir a la estación";
+    $("#bestMaps").textContent = "Cómo llegar";
   }
 
   if (!state.stations.length) {
