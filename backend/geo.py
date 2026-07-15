@@ -41,8 +41,8 @@ def geocode_zip(zip_code: str) -> dict | None:
 @lru_cache(maxsize=512)
 def reverse_geocode(lat: float, lon: float) -> dict | None:
     """
-    Convierte lat/lon en ciudad + estado (para no etiquetar siempre Denver).
-    Usa OpenStreetMap Nominatim. Coordenadas redondeadas para caché.
+    Convierte lat/lon en ciudad + estado.
+    Timeout corto: si falla, la app sigue (no se queda cargando).
     """
     lat_r = round(float(lat), 3)
     lon_r = round(float(lon), 3)
@@ -60,7 +60,7 @@ def reverse_geocode(lat: float, lon: float) -> dict | None:
                 "User-Agent": "GasRadar/1.0 (tecnologiameridahd@gmail.com)",
                 "Accept-Language": "en",
             },
-            timeout=12.0,
+            timeout=3.0,
         )
         if r.status_code != 200:
             return None
@@ -75,12 +75,10 @@ def reverse_geocode(lat: float, lon: float) -> dict | None:
             or ""
         )
         state = addr.get("state") or ""
-        # Prefer 2-letter if present in ISO3166-2-lvl4 etc.
         state_code = addr.get("ISO3166-2-lvl4") or ""
         if state_code and "-" in state_code:
             state_abbr = state_code.split("-")[-1]
         else:
-            # map common full names lightly
             state_abbr = _state_abbr(state) or ""
         postcode = (addr.get("postcode") or "").split(";")[0][:5]
         parts = [p for p in [city, state_abbr or state, postcode] if p]

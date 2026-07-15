@@ -8,11 +8,12 @@ import httpx
 
 from backend.geo import haversine_miles
 
+# Pocos mirrors y timeout corto: si falla, sugerencias rápidas (no colgar la app)
 OVERPASS_URLS = [
     "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
-    "https://overpass.openstreetmap.ru/api/interpreter",
 ]
+OVERPASS_TIMEOUT = 8.0  # segundos — no bloquear la UI
 
 
 def _station_id(lat: float, lon: float, name: str) -> str:
@@ -23,47 +24,12 @@ def _station_id(lat: float, lon: float, name: str) -> str:
 def _guess_brand(name: str) -> str:
     n = (name or "").lower()
     brands = [
-        "shell",
-        "chevron",
-        "exxon",
-        "mobil",
-        "bp",
-        "arco",
-        "costco",
-        "sam's club",
-        "sams club",
-        "walmart",
-        "safeway",
-        "king soopers",
-        "circle k",
-        "7-eleven",
-        "7 eleven",
-        "conoco",
-        "phillips 66",
-        "phillips66",
-        "sinclair",
-        "valero",
-        "marathon",
-        "speedway",
-        "quiktrip",
-        "qt",
-        "murphy",
-        "wawa",
-        "racetrac",
-        "casey's",
-        "kum & go",
-        "loaf 'n jug",
-        "maverik",
-        "holiday",
-        "cenex",
-        "texaco",
-        "gulf",
-        "sunoco",
-        "getgo",
-        "meijer",
-        "kroger",
-        "albertsons",
-        "smith's",
+        "shell", "chevron", "exxon", "mobil", "bp", "arco", "costco",
+        "sam's club", "sams club", "walmart", "safeway", "king soopers",
+        "circle k", "7-eleven", "7 eleven", "conoco", "phillips 66",
+        "phillips66", "sinclair", "valero", "marathon", "speedway",
+        "quiktrip", "qt", "murphy", "maverik", "holiday", "cenex",
+        "texaco", "kroger", "albertsons", "smith's",
     ]
     for b in brands:
         if b in n:
@@ -106,7 +72,6 @@ def _parse_elements(elements: list, user_lat: float, user_lon: float) -> list[di
         postcode = tags.get("addr:postcode", "")
         address = ", ".join(p for p in [street, city, state, postcode] if p) or None
 
-        # query de mapas: nombre + dirección si hay (más preciso que solo un punto)
         maps_query = name
         if street:
             maps_query = f"{name}, {street}"
@@ -140,24 +105,20 @@ def _parse_elements(elements: list, user_lat: float, user_lon: float) -> list[di
 
 @lru_cache(maxsize=64)
 def fetch_stations_osm(lat: float, lon: float, radius_m: int = 8000) -> tuple:
-    """
-    Devuelve tuple cacheable de estaciones OSM reales.
-    Si Overpass falla → lista vacía (ya no inventamos gasolineras falsas).
-    """
+    # query simple y timeout corto
     query = f"""
-    [out:json][timeout:45];
+    [out:json][timeout:8];
     (
       node["amenity"="fuel"](around:{radius_m},{lat},{lon});
       way["amenity"="fuel"](around:{radius_m},{lat},{lon});
-      node["amenity"="fuel_station"](around:{radius_m},{lat},{lon});
     );
-    out center tags;
+    out center tags 40;
     """
     data = None
     last_err = None
     for url in OVERPASS_URLS:
         try:
-            r = httpx.post(url, data={"data": query}, timeout=28.0)
+            r = httpx.post(url, data={"data": query}, timeout=OVERPASS_TIMEOUT)
             if r.status_code == 200:
                 data = r.json()
                 break
@@ -167,7 +128,7 @@ def fetch_stations_osm(lat: float, lon: float, radius_m: int = 8000) -> tuple:
             continue
 
     if not data:
-        print(f"[stations] OSM sin datos ({last_err})")
+        print(f"[stations] OSM skip ({last_err})")
         return tuple(), tuple()
 
     elements = data.get("elements") or []
@@ -194,7 +155,12 @@ def stations_near(
     radius_m = int(min(max(radius_mi, 1) * 1609.34, 25000))
     lat_r = round(lat, 3)
     lon_r = round(lon, 3)
-    result = fetch_stations_osm(lat_r, lon_r, radius_m)
+
+    try:
+        result = fetch_stations_osm(lat_r, lon_r, radius_m)
+    except Exception as e:
+        print(f"[stations] error {e}")
+        result = (tuple(), tuple())
 
     stations: list[dict] = []
     try:
@@ -202,15 +168,12 @@ def stations_near(
             isinstance(result, tuple)
             and len(result) == 2
             and isinstance(result[1], tuple)
+            and result[1]
         ):
-            serialized = result[1]
-            stations = [dict(items) for items in serialized]
-        else:
-            stations = []
+            stations = [dict(items) for items in result[1]]
     except Exception:
         stations = []
 
-    # recompute distance from exact user point
     for s in stations:
         s["distance_mi"] = haversine_miles(lat, lon, float(s["lat"]), float(s["lon"]))
         s["lat"] = float(s["lat"])
@@ -226,15 +189,11 @@ def stations_near(
     if stations:
         return stations[:limit]
 
-    # Último recurso: sugerencias de búsqueda (NO coordenadas inventadas)
-    print("[stations] sin OSM → sugerencias de búsqueda (no son pines exactos)")
+    # Rápido: sugerencias de búsqueda (no coords inventadas)
     return _search_suggestions(lat, lon, limit=min(limit, 8))
 
 
 def _search_suggestions(lat: float, lon: float, limit: int = 8) -> list[dict]:
-    """
-    No inventa ubicaciones. Solo sugiere marcas para que Maps busque la real cerca de ti.
-    """
     brands = [
         "Costco Gasoline",
         "Sam's Club Fuel",
@@ -248,9 +207,8 @@ def _search_suggestions(lat: float, lon: float, limit: int = 8) -> list[dict]:
         "Maverik",
     ]
     out = []
-    for i, name in enumerate(brands[:limit]):
+    for name in brands[:limit]:
         brand = _guess_brand(name)
-        # punto del usuario: Maps buscará la estación real con ese nombre cerca
         q = f"{name} near {lat:.5f},{lon:.5f}"
         out.append(
             {
@@ -259,7 +217,7 @@ def _search_suggestions(lat: float, lon: float, limit: int = 8) -> list[dict]:
                 "brand": brand,
                 "lat": float(lat),
                 "lon": float(lon),
-                "address": "Buscar en el mapa (ubicación aproximada)",
+                "address": "Buscar en el mapa (cerca de ti)",
                 "maps_query": q,
                 "distance_mi": 0.0,
                 "phone": None,
@@ -267,7 +225,7 @@ def _search_suggestions(lat: float, lon: float, limit: int = 8) -> list[dict]:
                 "osm_id": None,
                 "source": "search_suggest",
                 "is_demo": True,
-                "nav_mode": "search",  # importante para el frontend
+                "nav_mode": "search",
             }
         )
     return out

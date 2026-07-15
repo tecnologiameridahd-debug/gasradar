@@ -348,7 +348,13 @@ def _brand_delta(brand: str | None) -> float:
 
 def estimate_prices(station: dict, state: str = "CO") -> dict:
     reports = latest_reports(station["id"])
-    avg = state_averages(state)
+    # no bloquear con red en cada estación
+    meta = price_meta(state, fast=True)
+    avg = {
+        **meta["state_avg"],
+        "eia_ok": meta.get("eia_ok"),
+        "eia_period": meta.get("eia_period"),
+    }
     delta = _brand_delta(station.get("brand"))
     jitter = _seed_from_id(station["id"])
     base_src = "eia_estimate" if avg.get("eia_ok") else "estimate"
@@ -391,8 +397,8 @@ def estimate_prices(station: dict, state: str = "CO") -> dict:
 
 def attach_prices(stations: list[dict], state: str = "CO", fuel: str = "regular") -> list[dict]:
     fuel = fuel.lower()
-    # precargar EIA una vez
-    state_averages(state)
+    # usar promedios sin bloquear (caché o fallback)
+    # no llamar EIA síncrono aquí
     out = []
     for s in stations:
         prices = estimate_prices(s, state=state)
@@ -434,9 +440,33 @@ def cheapest_summary(stations_with_prices: list[dict]) -> dict | None:
     }
 
 
-def price_meta(state: str = "CO") -> dict:
-    """Info para el frontend: de dónde salen los promedios."""
-    avg = state_averages(state)
+def price_meta(state: str = "CO", fast: bool = True) -> dict:
+    """Info para el frontend. fast=True evita llamar EIA si no hay caché (no colgar)."""
+    st = (state or "DEFAULT").upper()
+    # si hay caché caliente, usarla; si no, fallback sin red
+    cached = _eia_mem["by_state"].get(st)
+    now = time.time()
+    if cached and now - cached.get("ts", 0) < EIA_CACHE_TTL and cached.get("ok"):
+        avg = state_averages(state)
+    elif not fast:
+        avg = state_averages(state)
+    else:
+        # no bloquear con EIA en cada búsqueda
+        disk = _load_disk_eia().get(st)
+        if disk and disk.get("ok"):
+            avg = {
+                "regular": disk["regular"],
+                "mid": disk["mid"],
+                "premium": disk["premium"],
+                "diesel": disk["diesel"],
+                "source": "eia",
+                "eia_period": disk.get("period"),
+                "eia_ok": True,
+            }
+        else:
+            base = dict(BASE_STATE_AVG.get(st) or BASE_STATE_AVG["DEFAULT"])
+            avg = {**base, "source": "fallback", "eia_period": None, "eia_ok": False}
+
     return {
         "state_avg": {
             "regular": avg["regular"],
@@ -449,8 +479,7 @@ def price_meta(state: str = "CO") -> dict:
         "eia_ok": avg.get("eia_ok"),
         "collect_api_configured": bool(_collect_api_key()),
         "how_it_works": (
-            "1) Si alguien reportó el precio, usamos la mediana de reportes recientes. "
-            "2) Si no, usamos el promedio oficial EIA del estado + ajuste por marca (Costco más barato, Shell/Chevron más caros). "
-            "3) Para precios por bomba en vivo hace falta una API de pago (CollectAPI / partner)."
+            "1) Reportes de usuarios. 2) EIA + marca si hay caché. "
+            "3) Precios en vivo por bomba: API de pago."
         ),
     }

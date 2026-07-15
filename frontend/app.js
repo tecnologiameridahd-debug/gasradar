@@ -211,22 +211,29 @@ function setStatus(msg, kind = "loading") {
 }
 
 async function search({ lat, lon, zip } = {}) {
-  setStatus("GasRadar escaneando estaciones…", "loading");
+  setStatus("Buscando…", "loading");
   $("#results").innerHTML = "";
   $("#bestCard").style.display = "none";
 
   const params = new URLSearchParams();
   params.set("fuel", state.fuel);
   params.set("radius_mi", String(state.radius));
-  params.set("limit", "35");
+  params.set("limit", "25");
   if (zip) params.set("zip", zip);
   if (lat != null && lon != null) {
     params.set("lat", String(lat));
     params.set("lon", String(lon));
   }
 
+  // No quedarse cargando para siempre (Render free + OSM lentos)
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 20000);
+
   try {
-    const res = await fetch(`/api/search?${params.toString()}`);
+    const res = await fetch(`/api/search?${params.toString()}`, {
+      signal: ctrl.signal,
+    });
+    clearTimeout(timer);
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.detail || `Error ${res.status}`);
@@ -248,7 +255,12 @@ async function search({ lat, lon, zip } = {}) {
     }
     render(data);
   } catch (e) {
-    setStatus(e.message || "Error de búsqueda", "error");
+    clearTimeout(timer);
+    if (e && e.name === "AbortError") {
+      setStatus("Tardó mucho. Prueba de nuevo o escribe un ZIP.", "error");
+    } else {
+      setStatus(e.message || "Error de búsqueda. Prueba un ZIP.", "error");
+    }
   }
 }
 
@@ -410,47 +422,42 @@ function useGps() {
   );
 }
 
-/** Arranque: NO forzar Denver. 1) última zona guardada 2) GPS 3) pedir ZIP */
+/** Arranque: última zona o pedir ZIP/GPS — sin colgarse en GPS */
 function startApp() {
   const saved = loadSavedLocation();
   if (saved) {
     state.zip = saved.zip || null;
     if (saved.zip && $("#zipInput")) $("#zipInput").value = saved.zip;
-    setStatus("Cargando tu última ubicación…", "loading");
+    setStatus("Cargando…", "loading");
     if (saved.zip) {
       search({ zip: saved.zip });
     } else {
       search({ lat: saved.lat, lon: saved.lon });
     }
-    // actualizar con GPS si se puede (en segundo plano)
-    tryGpsBackground();
     return;
   }
 
+  // No esperar GPS eterno: el usuario puede buscar ya
+  setStatus("Escribe tu ZIP o toca Usar mi ubicación.", "empty");
+  $("#locationLabel").textContent = "Sin ubicación — ZIP o GPS";
+
+  // Intentar GPS en segundo plano (si tarda, el usuario ya puede usar ZIP)
   if (
     navigator.geolocation &&
     (window.isSecureContext === true ||
       ["localhost", "127.0.0.1"].includes(location.hostname))
   ) {
-    setStatus("Detectando tu ubicación…", "loading");
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        search({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+        // solo si aún no buscó
+        if (!state.stations.length && state.lat == null) {
+          search({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+        }
       },
-      () => {
-        setStatus(
-          "Activa GPS o escribe tu ZIP (Colorado Springs: 80903).",
-          "empty"
-        );
-        $("#locationLabel").textContent = "Sin ubicación — usa ZIP o GPS";
-      },
-      { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 }
+      () => {},
+      { enableHighAccuracy: false, timeout: 6000, maximumAge: 120000 }
     );
-    return;
   }
-
-  setStatus("Escribe tu ZIP (ej. 80903 Colorado Springs) o usa GPS.", "empty");
-  $("#locationLabel").textContent = "Sin ubicación — usa ZIP o GPS";
 }
 
 function tryGpsBackground() {
