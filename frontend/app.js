@@ -7,12 +7,108 @@ const state = {
   fuel: "regular",
   radius: 5,
   stations: [],
+  cheapest: null,
   reportStationId: null,
 };
 
 function money(n) {
   if (n == null || Number.isNaN(n)) return "—";
   return `$${Number(n).toFixed(2)}`;
+}
+
+function fuelLabel(fuel) {
+  const map = {
+    regular: "Regular",
+    mid: "Mid",
+    premium: "Premium",
+    diesel: "Diesel",
+  };
+  return map[fuel] || fuel || "Regular";
+}
+
+function showToast(msg) {
+  let el = document.getElementById("toast");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "toast";
+    el.className = "toast";
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => el.classList.remove("show"), 2200);
+}
+
+/** Texto listo para WhatsApp / iMessage / copiar */
+function buildShareText(station) {
+  const name = station.name || "Estación";
+  const price = money(station.price);
+  const fuel = fuelLabel(state.fuel);
+  const dist =
+    station.distance_mi != null ? `${station.distance_mi} mi` : "";
+  const zona = state.label || "";
+  const maps = mapsUrl(station.lat, station.lon, name);
+  const appUrl = location.origin + location.pathname;
+
+  let lines = [
+    `⛽ GasRadar — precio de gasolina`,
+    ``,
+    `${name}`,
+    `${fuel}: ${price}/gal`,
+  ];
+  if (dist) lines.push(`Distancia: ${dist}`);
+  if (zona) lines.push(`Zona: ${zona}`);
+  lines.push(``);
+  lines.push(`📍 Cómo llegar: ${maps}`);
+  lines.push(``);
+  lines.push(`App: ${appUrl}`);
+  lines.push(`Por Alberto · tecnologiameridahd@gmail.com`);
+  return lines.join("\n");
+}
+
+async function sharePrice(station) {
+  if (!station || station.lat == null) {
+    showToast("No hay precio para compartir");
+    return;
+  }
+  const text = buildShareText(station);
+  const title = `Gasolina ${money(station.price)} — ${station.name || "GasRadar"}`;
+
+  // 1) Compartir nativo (iPhone / Android)
+  if (navigator.share) {
+    try {
+      await navigator.share({ title, text });
+      return;
+    } catch (e) {
+      // usuario canceló
+      if (e && e.name === "AbortError") return;
+    }
+  }
+
+  // 2) WhatsApp (muy usado)
+  const wa = `https://wa.me/?text=${encodeURIComponent(text)}`;
+  try {
+    window.open(wa, "_blank", "noopener");
+    return;
+  } catch (_) {
+    /* fallthrough */
+  }
+
+  // 3) Copiar al portapapeles
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast("Precio copiado — pégalo a tus amigos");
+  } catch (_) {
+    // fallback viejo
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+    showToast("Precio copiado");
+  }
 }
 
 /** Detecta iPhone/iPad vs Android vs PC */
@@ -105,12 +201,15 @@ function render(data) {
 
   if (data.cheapest) {
     const b = data.cheapest;
+    state.cheapest = b;
     $("#bestCard").style.display = "block";
     $("#bestPrice").textContent = money(b.price);
     $("#bestName").textContent = b.name;
     $("#bestMeta").textContent = `${b.distance_mi} mi · ${b.source === "user" ? "reportado" : "estimado"}`;
     $("#bestMaps").href = mapsUrl(b.lat, b.lon, b.name);
     $("#bestMaps").textContent = "Cómo llegar";
+  } else {
+    state.cheapest = null;
   }
 
   if (!state.stations.length) {
@@ -149,7 +248,8 @@ function render(data) {
         </div>
         <div class="station-actions">
           <a class="btn-ghost" href="${mapsUrl(s.lat, s.lon, s.name)}" target="_blank" rel="noopener">${mapsButtonLabel()}</a>
-          <button class="btn-ghost" data-report="${s.id}" data-name="${escapeHtml(s.name)}">Reportar precio</button>
+          <button class="btn-ghost" type="button" data-share="${escapeHtml(s.id)}">Compartir</button>
+          <button class="btn-ghost" type="button" data-report="${s.id}" data-name="${escapeHtml(s.name)}">Reportar precio</button>
         </div>
       </article>`;
     })
@@ -160,6 +260,13 @@ function render(data) {
 
   $("#results").querySelectorAll("[data-report]").forEach((btn) => {
     btn.addEventListener("click", () => openReport(btn.dataset.report, btn.dataset.name));
+  });
+  $("#results").querySelectorAll("[data-share]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-share");
+      const st = state.stations.find((x) => x.id === id);
+      if (st) sharePrice(st);
+    });
   });
 }
 
@@ -230,6 +337,14 @@ function useGps() {
 }
 
 function bind() {
+  const bestShare = $("#bestShare");
+  if (bestShare) {
+    bestShare.addEventListener("click", () => {
+      if (state.cheapest) sharePrice(state.cheapest);
+      else if (state.stations[0]) sharePrice(state.stations[0]);
+      else showToast("Busca precios primero");
+    });
+  }
   $("#btnGps").addEventListener("click", useGps);
   $("#btnZip").addEventListener("click", () => {
     const zip = $("#zipInput").value.trim();
