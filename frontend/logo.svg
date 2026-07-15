@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="GasRadar">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#22c55e"/>
+      <stop offset="100%" stop-color="#0ea5e9"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#g)"/>
+  <!-- radar rings -->
+  <circle cx="64" cy="64" r="38" fill="none" stroke="#04210f" stroke-opacity="0.25" stroke-width="4"/>
+  <circle cx="64" cy="64" r="26" fill="none" stroke="#04210f" stroke-opacity="0.35" stroke-width="4"/>
+  <circle cx="64" cy="64" r="14" fill="none" stroke="#04210f" stroke-opacity="0.45" stroke-width="4"/>
+  <!-- sweep -->
+  <path d="M64 64 L64 22 A42 42 0 0 1 98 48 Z" fill="#04210f" fill-opacity="0.22"/>
+  <!-- center pin / fuel drop -->
+  <circle cx="64" cy="64" r="8" fill="#04210f"/>
+  <text x="64" y="108" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" fill="#04210f" fill-opacity="0.85">GR</text>
+</svg>

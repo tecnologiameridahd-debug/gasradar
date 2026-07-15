@@ -6,13 +6,29 @@
     <meta name="theme-color" content="#0b1220" />
     <meta name="description" content="GasRadar — encuentra la gasolina más barata cerca de ti en USA" />
     <title>GasRadar — Precios de gasolina USA</title>
+    <!-- Icono de la pestaña del navegador: cambia favicon.png o favicon.svg -->
+    <link rel="icon" href="/static/logo.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
     <div class="app">
       <header>
         <div class="brand">
-          <div class="logo" title="GasRadar">📡</div>
+          <!--
+            LOGO de la app:
+            - Por defecto: logo.svg
+            - Para poner TU imagen: guarda el archivo como
+              frontend/logo.png  (o logo.jpg / logo.webp)
+              y cambia abajo src="/static/logo.png"
+          -->
+          <img
+            class="logo"
+            src="/static/logo.svg"
+            width="44"
+            height="44"
+            alt="GasRadar"
+            title="GasRadar"
+          />
           <div>
             <h1>GasRadar</h1>
             <p class="subtitle">Radar de precios de gasolina · USA</p>
