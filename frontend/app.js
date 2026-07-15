@@ -15,9 +15,47 @@ function money(n) {
   return `$${Number(n).toFixed(2)}`;
 }
 
+/** Detecta iPhone/iPad vs Android vs PC */
+function detectPlatform() {
+  const ua = navigator.userAgent || navigator.vendor || "";
+  if (/iPad|iPhone|iPod/i.test(ua)) return "ios";
+  // iPadOS 13+ a veces se hace pasar por Mac
+  if (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) return "ios";
+  if (/Android/i.test(ua)) return "android";
+  return "web";
+}
+
+/**
+ * Enlace de navegación según el teléfono:
+ * - iPhone → Apple Maps (mapas del iPhone)
+ * - Android → Google Maps
+ * - PC → Google Maps web
+ */
 function mapsUrl(lat, lon, name) {
-  const q = encodeURIComponent(`${name || "Gas"} @ ${lat},${lon}`);
-  return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}&destination_place_id=&travelmode=driving&q=${q}`;
+  const label = encodeURIComponent(name || "Gasolina");
+  const dest = `${lat},${lon}`;
+  const platform = detectPlatform();
+
+  if (platform === "ios") {
+    // Apple Maps: abre la app nativa en iPhone
+    return `https://maps.apple.com/?daddr=${dest}&q=${label}&dirflg=d`;
+  }
+
+  if (platform === "android") {
+    // Google Maps: navegación en Android
+    // geo: abre Maps; el de dir es más fiable para "cómo llegar"
+    return `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving&destination_place_id=`;
+  }
+
+  // PC / otros
+  return `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`;
+}
+
+function mapsButtonLabel() {
+  const p = detectPlatform();
+  if (p === "ios") return "Cómo llegar (Apple Maps)";
+  if (p === "android") return "Cómo llegar (Google Maps)";
+  return "Cómo llegar";
 }
 
 function setStatus(msg, kind = "loading") {
@@ -75,6 +113,12 @@ function render(data) {
     $("#bestName").textContent = b.name;
     $("#bestMeta").textContent = `${b.distance_mi} mi · ${b.source === "user" ? "reportado" : "estimado"}`;
     $("#bestMaps").href = mapsUrl(b.lat, b.lon, b.name);
+    $("#bestMaps").textContent =
+      detectPlatform() === "ios"
+        ? "Ir con Apple Maps"
+        : detectPlatform() === "android"
+          ? "Ir con Google Maps"
+          : "Ir a la estación";
   }
 
   if (!state.stations.length) {
@@ -112,7 +156,7 @@ function render(data) {
           <div class="station-price">${money(s.price)}</div>
         </div>
         <div class="station-actions">
-          <a class="btn-ghost" href="${mapsUrl(s.lat, s.lon, s.name)}" target="_blank" rel="noopener">Cómo llegar</a>
+          <a class="btn-ghost" href="${mapsUrl(s.lat, s.lon, s.name)}" target="_blank" rel="noopener">${mapsButtonLabel()}</a>
           <button class="btn-ghost" data-report="${s.id}" data-name="${escapeHtml(s.name)}">Reportar precio</button>
         </div>
       </article>`;
