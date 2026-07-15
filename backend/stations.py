@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import hashlib
-import re
 from functools import lru_cache
 
 import httpx
@@ -12,6 +11,7 @@ from backend.geo import haversine_miles
 OVERPASS_URLS = [
     "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass.openstreetmap.ru/api/interpreter",
 ]
 
 
@@ -67,47 +67,19 @@ def _guess_brand(name: str) -> str:
     ]
     for b in brands:
         if b in n:
-            return b.title().replace("Sams Club", "Sam's Club").replace("7 Eleven", "7-Eleven")
+            return (
+                b.title()
+                .replace("Sams Club", "Sam's Club")
+                .replace("7 Eleven", "7-Eleven")
+            )
     return "Independiente"
 
 
-@lru_cache(maxsize=64)
-def fetch_stations_osm(lat: float, lon: float, radius_m: int = 8000) -> tuple:
-    """
-    Devuelve tuple de estaciones (hashable para caché).
-    radius_m: radio de búsqueda (default ~5 millas).
-    """
-    # Overpass around point
-    query = f"""
-    [out:json][timeout:25];
-    (
-      node["amenity"="fuel"](around:{radius_m},{lat},{lon});
-      way["amenity"="fuel"](around:{radius_m},{lat},{lon});
-    );
-    out center tags;
-    """
-    data = None
-    last_err = None
-    for url in OVERPASS_URLS:
-        try:
-            r = httpx.post(url, data={"data": query}, timeout=12.0)
-            if r.status_code == 200:
-                data = r.json()
-                break
-            last_err = f"HTTP {r.status_code}"
-        except Exception as e:
-            last_err = str(e)
-            continue
-    if not data:
-        # Fallback demo stations around point if OSM fails / timeout
-        print(f"[stations] OSM fallback demo ({last_err})")
-        return _demo_stations(lat, lon)
-
-    elements = data.get("elements") or []
+def _parse_elements(elements: list, user_lat: float, user_lon: float) -> list[dict]:
     stations = []
     for el in elements:
         tags = el.get("tags") or {}
-        if el.get("type") == "way" or el.get("type") == "relation":
+        if el.get("type") in ("way", "relation"):
             center = el.get("center") or {}
             slat = center.get("lat")
             slon = center.get("lon")
@@ -116,6 +88,7 @@ def fetch_stations_osm(lat: float, lon: float, radius_m: int = 8000) -> tuple:
             slon = el.get("lon")
         if slat is None or slon is None:
             continue
+
         name = (
             tags.get("name")
             or tags.get("brand")
@@ -132,7 +105,19 @@ def fetch_stations_osm(lat: float, lon: float, radius_m: int = 8000) -> tuple:
         state = tags.get("addr:state", "")
         postcode = tags.get("addr:postcode", "")
         address = ", ".join(p for p in [street, city, state, postcode] if p) or None
-        dist = haversine_miles(lat, lon, float(slat), float(slon))
+
+        # query de mapas: nombre + dirección si hay (más preciso que solo un punto)
+        maps_query = name
+        if street:
+            maps_query = f"{name}, {street}"
+            if city:
+                maps_query += f", {city}"
+            if state:
+                maps_query += f" {state}"
+            if postcode:
+                maps_query += f" {postcode}"
+
+        dist = haversine_miles(user_lat, user_lon, float(slat), float(slon))
         stations.append(
             {
                 "id": _station_id(float(slat), float(slon), name),
@@ -141,15 +126,55 @@ def fetch_stations_osm(lat: float, lon: float, radius_m: int = 8000) -> tuple:
                 "lat": float(slat),
                 "lon": float(slon),
                 "address": address,
+                "maps_query": maps_query,
                 "distance_mi": dist,
                 "phone": tags.get("phone") or tags.get("contact:phone"),
                 "website": tags.get("website") or tags.get("contact:website"),
                 "osm_id": el.get("id"),
                 "source": "openstreetmap",
+                "is_demo": False,
             }
         )
+    return stations
 
-    # dedupe by id
+
+@lru_cache(maxsize=64)
+def fetch_stations_osm(lat: float, lon: float, radius_m: int = 8000) -> tuple:
+    """
+    Devuelve tuple cacheable de estaciones OSM reales.
+    Si Overpass falla → lista vacía (ya no inventamos gasolineras falsas).
+    """
+    query = f"""
+    [out:json][timeout:45];
+    (
+      node["amenity"="fuel"](around:{radius_m},{lat},{lon});
+      way["amenity"="fuel"](around:{radius_m},{lat},{lon});
+      node["amenity"="fuel_station"](around:{radius_m},{lat},{lon});
+    );
+    out center tags;
+    """
+    data = None
+    last_err = None
+    for url in OVERPASS_URLS:
+        try:
+            r = httpx.post(url, data={"data": query}, timeout=28.0)
+            if r.status_code == 200:
+                data = r.json()
+                break
+            last_err = f"HTTP {r.status_code}"
+        except Exception as e:
+            last_err = str(e)
+            continue
+
+    if not data:
+        print(f"[stations] OSM sin datos ({last_err})")
+        return tuple(), tuple()
+
+    elements = data.get("elements") or []
+    stations = _parse_elements(elements, lat, lon)
+    if not stations:
+        return tuple(), tuple()
+
     seen = set()
     unique = []
     for s in sorted(stations, key=lambda x: x["distance_mi"]):
@@ -158,23 +183,19 @@ def fetch_stations_osm(lat: float, lon: float, radius_m: int = 8000) -> tuple:
         seen.add(s["id"])
         unique.append(s)
 
-    if not unique:
-        return _demo_stations(lat, lon)
     return tuple(s["id"] for s in unique), tuple(
         tuple(sorted(s.items())) for s in unique
     )
 
 
-def stations_near(lat: float, lon: float, radius_mi: float = 5.0, limit: int = 40) -> list[dict]:
+def stations_near(
+    lat: float, lon: float, radius_mi: float = 5.0, limit: int = 40
+) -> list[dict]:
     radius_m = int(min(max(radius_mi, 1) * 1609.34, 25000))
-    # round coords for cache hits
     lat_r = round(lat, 3)
     lon_r = round(lon, 3)
     result = fetch_stations_osm(lat_r, lon_r, radius_m)
-    if not result:
-        return _demo_stations_list(lat, lon)
 
-    # Cacheable form: (ids_tuple, serialized_stations_tuple)
     stations: list[dict] = []
     try:
         if (
@@ -185,55 +206,68 @@ def stations_near(lat: float, lon: float, radius_mi: float = 5.0, limit: int = 4
             serialized = result[1]
             stations = [dict(items) for items in serialized]
         else:
-            stations = [dict(x) for x in result]  # type: ignore[arg-type]
+            stations = []
     except Exception:
-        stations = _demo_stations_list(lat, lon)
+        stations = []
 
     # recompute distance from exact user point
     for s in stations:
         s["distance_mi"] = haversine_miles(lat, lon, float(s["lat"]), float(s["lon"]))
         s["lat"] = float(s["lat"])
         s["lon"] = float(s["lon"])
-    stations = [s for s in stations if s["distance_mi"] <= radius_mi + 0.15]
+        s["is_demo"] = False
+        s["source"] = s.get("source") or "openstreetmap"
+        if not s.get("maps_query"):
+            s["maps_query"] = s.get("name") or "gas station"
+
+    stations = [s for s in stations if s["distance_mi"] <= radius_mi + 0.2]
     stations.sort(key=lambda x: x["distance_mi"])
-    return stations[:limit]
+
+    if stations:
+        return stations[:limit]
+
+    # Último recurso: sugerencias de búsqueda (NO coordenadas inventadas)
+    print("[stations] sin OSM → sugerencias de búsqueda (no son pines exactos)")
+    return _search_suggestions(lat, lon, limit=min(limit, 8))
 
 
-def _demo_stations(lat: float, lon: float):
-    lst = _demo_stations_list(lat, lon)
-    return tuple(s["id"] for s in lst), tuple(tuple(sorted(s.items())) for s in lst)
-
-
-def _demo_stations_list(lat: float, lon: float) -> list[dict]:
-    """Fallback si Overpass cae — estaciones demo cerca del punto."""
-    offsets = [
-        (0.012, 0.008, "Costco Gasoline", "Costco"),
-        (0.018, -0.010, "Shell", "Shell"),
-        (-0.009, 0.015, "King Soopers Fuel", "King Soopers"),
-        (0.005, -0.018, "Safeway Fuel", "Safeway"),
-        (-0.015, -0.006, "Conoco", "Conoco"),
-        (0.022, 0.004, "Circle K", "Circle K"),
-        (-0.006, 0.022, "7-Eleven", "7-Eleven"),
-        (0.008, 0.012, "Chevron", "Chevron"),
-        (-0.020, 0.010, "Sam's Club Fuel", "Sam's Club"),
-        (0.014, -0.014, "Phillips 66", "Phillips 66"),
+def _search_suggestions(lat: float, lon: float, limit: int = 8) -> list[dict]:
+    """
+    No inventa ubicaciones. Solo sugiere marcas para que Maps busque la real cerca de ti.
+    """
+    brands = [
+        "Costco Gasoline",
+        "Sam's Club Fuel",
+        "King Soopers Fuel",
+        "Safeway Fuel",
+        "Shell",
+        "Chevron",
+        "Conoco",
+        "Circle K",
+        "7-Eleven",
+        "Maverik",
     ]
     out = []
-    for dlat, dlon, name, brand in offsets:
-        slat, slon = lat + dlat, lon + dlon
+    for i, name in enumerate(brands[:limit]):
+        brand = _guess_brand(name)
+        # punto del usuario: Maps buscará la estación real con ese nombre cerca
+        q = f"{name} near {lat:.5f},{lon:.5f}"
         out.append(
             {
-                "id": _station_id(slat, slon, name),
+                "id": _station_id(lat, lon, f"suggest-{name}"),
                 "name": name,
                 "brand": brand,
-                "lat": slat,
-                "lon": slon,
-                "address": None,
-                "distance_mi": haversine_miles(lat, lon, slat, slon),
+                "lat": float(lat),
+                "lon": float(lon),
+                "address": "Buscar en el mapa (ubicación aproximada)",
+                "maps_query": q,
+                "distance_mi": 0.0,
                 "phone": None,
                 "website": None,
                 "osm_id": None,
-                "source": "demo",
+                "source": "search_suggest",
+                "is_demo": True,
+                "nav_mode": "search",  # importante para el frontend
             }
         )
-    return sorted(out, key=lambda x: x["distance_mi"])
+    return out

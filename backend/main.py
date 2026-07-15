@@ -125,7 +125,8 @@ def api_search(
         "disclaimer": (
             "Precios: reportes de usuarios (prioridad) o estimación con promedio oficial EIA + marca."
             f"{eia_txt} "
-            "No es precio de bomba en vivo. Reporta el precio real al pasar."
+            "No es precio de bomba en vivo. Reporta el precio real al pasar. "
+            "Estaciones con etiqueta «buscar en mapa» no son pines exactos: Maps buscará la real cerca de ti."
         ),
     }
 

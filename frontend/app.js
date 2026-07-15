@@ -82,7 +82,7 @@ function buildShareText(station) {
   const dist =
     station.distance_mi != null ? `${station.distance_mi} mi` : "";
   const zona = state.label || "";
-  const maps = mapsUrl(station.lat, station.lon, name);
+  const maps = mapsUrl(station);
   const appUrl = location.origin + location.pathname;
 
   let lines = [
@@ -156,29 +156,48 @@ function detectPlatform() {
 }
 
 /**
- * Enlace de navegación según el teléfono:
- * - iPhone → Apple Maps (mapas del iPhone)
- * - Android → Google Maps
- * - PC → Google Maps web
+ * Enlace de navegación:
+ * - Estación real (OSM): ir a lat/lon exactos
+ * - Sugerencia / demo: buscar por nombre cerca de ti (evita direcciones inventadas)
+ * - iPhone → Apple Maps | Android/PC → Google Maps
  */
-function mapsUrl(lat, lon, name) {
-  const label = encodeURIComponent(name || "Gasolina");
-  const dest = `${lat},${lon}`;
+function mapsUrl(stationOrLat, lon, name) {
+  // Acepta (station) o (lat, lon, name) por compatibilidad
+  let lat, stationName, mapsQuery, isSearch;
+  if (stationOrLat && typeof stationOrLat === "object") {
+    const s = stationOrLat;
+    lat = s.lat;
+    lon = s.lon;
+    stationName = s.name || "Gasolina";
+    mapsQuery = s.maps_query || s.name || "gas station";
+    isSearch = s.is_demo || s.source === "search_suggest" || s.nav_mode === "search";
+  } else {
+    lat = stationOrLat;
+    stationName = name || "Gasolina";
+    mapsQuery = stationName;
+    isSearch = false;
+  }
+
   const platform = detectPlatform();
+  const dest = `${lat},${lon}`;
+  const q = encodeURIComponent(mapsQuery);
 
+  // Modo búsqueda: Maps encuentra la gasolinera real cerca
+  if (isSearch) {
+    if (platform === "ios") {
+      return `https://maps.apple.com/?q=${q}`;
+    }
+    return `https://www.google.com/maps/search/?api=1&query=${q}`;
+  }
+
+  // Coordenadas reales de OpenStreetMap
   if (platform === "ios") {
-    // Apple Maps: abre la app nativa en iPhone
-    return `https://maps.apple.com/?daddr=${dest}&q=${label}&dirflg=d`;
+    // daddr + q ayuda a Apple Maps a fijar el destino
+    return `https://maps.apple.com/?daddr=${dest}&q=${encodeURIComponent(stationName)}&dirflg=d&ll=${dest}`;
   }
-
-  if (platform === "android") {
-    // Google Maps: navegación en Android
-    // geo: abre Maps; el de dir es más fiable para "cómo llegar"
-    return `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving&destination_place_id=`;
-  }
-
-  // PC / otros
-  return `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`;
+  return `https://www.google.com/maps/dir/?api=1&destination=${dest}&destination=${encodeURIComponent(
+    stationName
+  )}&travelmode=driving`;
 }
 
 function mapsButtonLabel() {
@@ -250,7 +269,12 @@ function render(data) {
     $("#bestPrice").textContent = money(b.price);
     $("#bestName").textContent = b.name;
     $("#bestMeta").textContent = `${b.distance_mi} mi · ${b.source === "user" ? "reportado" : "estimado"}`;
-    $("#bestMaps").href = mapsUrl(b.lat, b.lon, b.name);
+    // cheapest puede no traer maps_query; buscar en stations
+    const full =
+      state.stations.find((x) => x.id === b.station_id) ||
+      state.stations.find((x) => x.name === b.name) ||
+      b;
+    $("#bestMaps").href = mapsUrl(full);
     $("#bestMaps").textContent = "Cómo llegar";
   } else {
     state.cheapest = null;
@@ -279,19 +303,24 @@ function render(data) {
       } else {
         src = `<span class="badge estimate">estimado</span>`;
       }
-      const addr = s.address ? `<p class="station-sub">${s.address}</p>` : "";
+      const addr = s.address
+        ? `<p class="station-sub">${escapeHtml(s.address)}</p>`
+        : "";
+      const demoBadge = s.is_demo
+        ? `<span class="badge estimate">buscar en mapa</span> `
+        : "";
       return `
       <article class="station" data-id="${s.id}">
         <div class="station-top">
           <div>
             <p class="station-name"><span class="${rankClass}">${i + 1}</span>${escapeHtml(s.name)}</p>
-            <p class="station-sub">${escapeHtml(s.brand || "")} · ${s.distance_mi} mi ${src}</p>
+            <p class="station-sub">${demoBadge}${escapeHtml(s.brand || "")} · ${s.distance_mi} mi ${src}</p>
             ${addr}
           </div>
           <div class="station-price">${money(s.price)}</div>
         </div>
         <div class="station-actions">
-          <a class="btn-ghost" href="${mapsUrl(s.lat, s.lon, s.name)}" target="_blank" rel="noopener">${mapsButtonLabel()}</a>
+          <a class="btn-ghost" href="${mapsUrl(s)}" target="_blank" rel="noopener">${mapsButtonLabel()}</a>
           <button class="btn-ghost" type="button" data-share="${escapeHtml(s.id)}">Compartir</button>
           <button class="btn-ghost" type="button" data-report="${s.id}" data-name="${escapeHtml(s.name)}">Reportar precio</button>
         </div>
