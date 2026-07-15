@@ -45,7 +45,16 @@ class ReportBody(BaseModel):
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "app": "gasradar", "version": "0.1.0"}
+    """Healthcheck para Render y keep-alive (cron / script)."""
+    from datetime import datetime, timezone
+
+    return {
+        "ok": True,
+        "app": "gasradar",
+        "version": "0.1.1",
+        "utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "status": "alive",
+    }
 
 
 @app.get("/api/geo/zip/{zip_code}")
