@@ -10,11 +10,9 @@ from backend.geo import haversine_miles
 
 # Pocos mirrors y timeout corto: si falla, sugerencias rápidas (no colgar la app)
 OVERPASS_URLS = [
-    "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
 ]
-OVERPASS_TIMEOUT = 8.0  # segundos — no bloquear la UI
-
+OVERPASS_TIMEOUT = 5.0  # si falla → sugerencias al instante
 
 def _station_id(lat: float, lon: float, name: str) -> str:
     raw = f"{lat:.5f}|{lon:.5f}|{name.lower()}"
