@@ -293,7 +293,10 @@ function render(data) {
   }
 
   if (!state.stations.length) {
-    setStatus("No hay estaciones en ese radio. Prueba 10 mi.", "empty");
+    setStatus(
+      "No hay estaciones reales en el mapa aquí. Prueba 10 millas u otro ZIP.",
+      "empty"
+    );
     return;
   }
 
@@ -318,15 +321,12 @@ function render(data) {
       const addr = s.address
         ? `<p class="station-sub">${escapeHtml(s.address)}</p>`
         : "";
-      const demoBadge = s.is_demo
-        ? `<span class="badge estimate">buscar en mapa</span> `
-        : "";
       return `
       <article class="station" data-id="${s.id}">
         <div class="station-top">
           <div>
             <p class="station-name"><span class="${rankClass}">${i + 1}</span>${escapeHtml(s.name)}</p>
-            <p class="station-sub">${demoBadge}${escapeHtml(s.brand || "")} · ${s.distance_mi} mi ${src}</p>
+            <p class="station-sub">${escapeHtml(s.brand || "")} · ${s.distance_mi} mi ${src}</p>
             ${addr}
           </div>
           <div class="station-price">${money(s.price)}</div>

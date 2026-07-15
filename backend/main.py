@@ -105,13 +105,20 @@ def api_search(
         state = "CO"
 
     stations = stations_near(float(lat), float(lon), radius_mi=radius_mi, limit=limit)
-    priced = attach_prices(stations, state=state, fuel=fuel)
-    best = cheapest_summary(priced)
+    priced = attach_prices(stations, state=state, fuel=fuel) if stations else []
+    best = cheapest_summary(priced) if priced else None
     meta = price_meta(state)
     avg = meta["state_avg"]
     eia_txt = ""
     if meta.get("eia_ok") and meta.get("eia_period"):
         eia_txt = f" Promedio estatal EIA (semana {meta['eia_period']})."
+
+    note = ""
+    if not priced:
+        note = (
+            " No se encontraron estaciones reales en el mapa ahora. "
+            "Prueba un radio mayor (10 mi) o otro ZIP."
+        )
 
     return {
         "center": {"lat": lat, "lon": lon, "label": label, "state": state},
@@ -123,10 +130,11 @@ def api_search(
         "cheapest": best,
         "stations": priced,
         "disclaimer": (
-            "Precios: reportes de usuarios (prioridad) o estimación con promedio oficial EIA + marca."
+            "Estaciones: OpenStreetMap (reales). "
+            "Precios: reportes de usuarios o estimación EIA + marca."
             f"{eia_txt} "
-            "No es precio de bomba en vivo. Reporta el precio real al pasar. "
-            "Estaciones con etiqueta «buscar en mapa» no son pines exactos: Maps buscará la real cerca de ti."
+            "No es precio de bomba en vivo. Reporta el precio real al pasar."
+            f"{note}"
         ),
     }
 
