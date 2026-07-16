@@ -57,7 +57,7 @@ def reverse_geocode(lat: float, lon: float) -> dict | None:
                 "addressdetails": 1,
             },
             headers={
-                "User-Agent": "GasRadar/1.0 (tecnologiameridahd@gmail.com)",
+                "User-Agent": "GasRadar/1.0 (contact@gasradarapp.com)",
                 "Accept-Language": "en",
             },
             timeout=3.0,

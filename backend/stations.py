@@ -23,7 +23,7 @@ DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 CACHE_DIR = DATA_DIR / "stations_cache"
 CACHE_TTL = 6 * 3600  # 6 horas
 
-USER_AGENT = "GasRadar/1.1 (https://github.com/tecnologiameridahd-debug/gasradar; tecnologiameridahd@gmail.com)"
+USER_AGENT = "GasRadar/1.1 (https://github.com/tecnologiameridahd-debug/gasradar; contact@gasradarapp.com)"
 
 OVERPASS_URLS = [
     "https://overpass-api.de/api/interpreter",
