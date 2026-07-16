@@ -1,0 +1,111 @@
+========================================
+  GASRADAR — PUBLICAR EN INTERNET
+  (Render.com — gratis)
+========================================
+
+Tu código YA está en GitHub:
+https://github.com/tecnologiameridahd-debug/gasradar
+
+Ahora solo hay que "conectar" ese código a Render
+para que te den un link https://... que funciona en el teléfono.
+
+----------------------------------------
+PASO 1 — Crear cuenta en Render
+----------------------------------------
+1. Abre el navegador (Chrome o Edge).
+2. Entra a esta dirección:
+
+   https://render.com
+
+3. Pulsa el botón "Get Started" o "Sign Up".
+4. Elige "Sign up with GitHub" / "Continue with GitHub".
+5. Acepta / autoriza que Render vea tus repositorios.
+6. Si te pide permisos de GitHub, pulsa "Authorize".
+
+----------------------------------------
+PASO 2 — Crear el servicio web
+----------------------------------------
+1. Cuando entres al panel de Render, busca un botón:
+
+   "New +"  o  "New"
+
+2. Haz clic y elige:
+
+   "Web Service"
+
+3. Si te pide conectar GitHub y no lo ves:
+   - "Configure account" / conectar GitHub
+   - Da permiso al repo "gasradar"
+
+4. Busca en la lista el repositorio:
+
+   tecnologiameridahd-debug / gasradar
+
+5. Haz clic en "Connect" o "Connect" al lado de gasradar.
+
+----------------------------------------
+PASO 3 — Rellenar SOLO estos datos
+----------------------------------------
+Copia y pega exactamente:
+
+Name:
+  gasradar
+
+Region:
+  (deja la que salga, ej. Oregon)
+
+Branch:
+  main
+
+Root Directory:
+  (déjalo VACÍO)
+
+Runtime:
+  Python 3   (o Python)
+
+Build Command:
+  pip install -r requirements.txt
+
+Start Command:
+  uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+
+Instance type / Plan:
+  Free
+
+----------------------------------------
+PASO 4 — Crear
+----------------------------------------
+1. Baja hasta el final.
+2. Pulsa "Create Web Service".
+3. Espera 3 a 8 minutos.
+   Verás logs (texto negro) bajando. Es normal.
+
+Cuando diga "Live" o "Your service is live":
+
+4. Arriba verás un link verde o azul tipo:
+
+   https://gasradar-xxxx.onrender.com
+
+5. Haz clic en ese link.
+6. ¡Esa es tu app GasRadar en internet!
+7. Ábrelo también en el teléfono (con datos o WiFi).
+
+----------------------------------------
+SI ALGO FALLA
+----------------------------------------
+- Si no aparece el repo gasradar:
+  En Render: Account Settings → GitHub → + Connect
+  y da acceso al repositorio gasradar.
+
+- Si el build falla:
+  Copia el error en rojo y mándamelo.
+
+- La primera vez que abres el link free puede
+  tardar 30–60 segundos (se "despierta").
+
+----------------------------------------
+RESUMEN EN 1 LÍNEA
+----------------------------------------
+GitHub (ya listo) → Render New Web Service →
+conectar gasradar → pegar Build y Start → Free → Create
+→ copiar el link https://...

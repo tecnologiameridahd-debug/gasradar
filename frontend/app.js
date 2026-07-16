@@ -12,6 +12,8 @@ const state = {
   cheapest: null,
   reportStationId: null,
   zip: null,
+  searching: false,
+  lastData: null,
 };
 
 function saveLocation(loc) {
@@ -37,7 +39,6 @@ function loadSavedLocation() {
     if (!raw) return null;
     const o = JSON.parse(raw);
     if (o.lat == null || o.lon == null) return null;
-    // válido 30 días
     if (o.saved_at && Date.now() - o.saved_at > 30 * 24 * 3600 * 1000) return null;
     return o;
   } catch (_) {
@@ -45,8 +46,9 @@ function loadSavedLocation() {
   }
 }
 
+/** Precio en pantalla: $3.68 (2 decimales) */
 function money(n) {
-  if (n == null || Number.isNaN(n)) return "—";
+  if (n == null || Number.isNaN(Number(n))) return "—";
   return `$${Number(n).toFixed(2)}`;
 }
 
@@ -61,17 +63,33 @@ function fuelLabel(fuel) {
 }
 
 function showToast(msg) {
-  let el = document.getElementById("toast");
-  if (!el) {
-    el = document.createElement("div");
-    el.id = "toast";
-    el.className = "toast";
-    document.body.appendChild(el);
-  }
+  const el = $("#toast") || (() => {
+    const t = document.createElement("div");
+    t.id = "toast";
+    t.className = "toast";
+    document.body.appendChild(t);
+    return t;
+  })();
   el.textContent = msg;
   el.classList.add("show");
   clearTimeout(showToast._t);
-  showToast._t = setTimeout(() => el.classList.remove("show"), 2200);
+  showToast._t = setTimeout(() => el.classList.remove("show"), 2400);
+}
+
+function setLocDot(mode) {
+  const dot = $("#locDot");
+  if (!dot) return;
+  dot.classList.remove("on", "loading");
+  if (mode === "on") dot.classList.add("on");
+  if (mode === "loading") dot.classList.add("loading");
+}
+
+function setBusy(busy) {
+  state.searching = busy;
+  ["#btnGps", "#btnZip", "#fuelSelect", "#radiusSelect"].forEach((sel) => {
+    const el = $(sel);
+    if (el) el.disabled = !!busy;
+  });
 }
 
 /** Texto listo para WhatsApp / iMessage / copiar */
@@ -109,18 +127,15 @@ async function sharePrice(station) {
   const text = buildShareText(station);
   const title = `Gasolina ${money(station.price)} — ${station.name || "GasRadar"}`;
 
-  // 1) Compartir nativo (iPhone / Android)
   if (navigator.share) {
     try {
       await navigator.share({ title, text });
       return;
     } catch (e) {
-      // usuario canceló
       if (e && e.name === "AbortError") return;
     }
   }
 
-  // 2) WhatsApp (muy usado)
   const wa = `https://wa.me/?text=${encodeURIComponent(text)}`;
   try {
     window.open(wa, "_blank", "noopener");
@@ -129,12 +144,10 @@ async function sharePrice(station) {
     /* fallthrough */
   }
 
-  // 3) Copiar al portapapeles
   try {
     await navigator.clipboard.writeText(text);
     showToast("Precio copiado — pégalo a tus amigos");
   } catch (_) {
-    // fallback viejo
     const ta = document.createElement("textarea");
     ta.value = text;
     document.body.appendChild(ta);
@@ -149,7 +162,6 @@ async function sharePrice(station) {
 function detectPlatform() {
   const ua = navigator.userAgent || navigator.vendor || "";
   if (/iPad|iPhone|iPod/i.test(ua)) return "ios";
-  // iPadOS 13+ a veces se hace pasar por Mac
   if (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) return "ios";
   if (/Android/i.test(ua)) return "android";
   return "web";
@@ -206,14 +218,79 @@ function mapsButtonLabel() {
 
 function setStatus(msg, kind = "loading") {
   const el = $("#status");
+  if (!el) return;
   el.className = kind;
-  el.textContent = msg;
+  if (kind === "empty") {
+    el.innerHTML = `<div class="empty-title">Sin resultados aún</div>${escapeHtml(msg)}`;
+  } else {
+    el.textContent = msg;
+  }
+  el.hidden = false;
+  const sk = $("#skeleton");
+  if (sk) sk.hidden = kind !== "loading";
+  if (kind === "loading") {
+    setLocDot("loading");
+  }
+}
+
+function hideStatus() {
+  const el = $("#status");
+  if (el) {
+    el.hidden = true;
+    el.textContent = "";
+  }
+  const sk = $("#skeleton");
+  if (sk) sk.hidden = true;
+}
+
+function sourceBadgeHtml(s) {
+  if (s.price_source === "user") {
+    const n = s.reports_count ? ` · ${s.reports_count} rep` : "";
+    const age =
+      s.price_age_hours != null ? ` · ${s.price_age_hours}h` : "";
+    return `<span class="badge user">reportado${n}${age}</span>`;
+  }
+  if (s.price_source === "eia_estimate") {
+    return `<span class="badge eia">EIA + marca</span>`;
+  }
+  return `<span class="badge estimate">estimado</span>`;
+}
+
+function sourceLabel(source) {
+  if (source === "user") return "reportado";
+  if (source === "eia_estimate") return "EIA + marca";
+  return "estimado";
+}
+
+function rankClass(i) {
+  if (i === 0) return "rank gold";
+  if (i === 1) return "rank silver";
+  if (i === 2) return "rank bronze";
+  return "rank";
+}
+
+function vsAvgHtml(vs) {
+  if (vs == null || Number.isNaN(Number(vs))) return "";
+  const v = Number(vs);
+  if (Math.abs(v) < 0.005) {
+    return `<div class="station-vs">≈ promedio</div>`;
+  }
+  if (v < 0) {
+    return `<div class="station-vs cheaper">−${money(Math.abs(v))}</div>`;
+  }
+  return `<div class="station-vs pricier">+${money(v)}</div>`;
 }
 
 async function search({ lat, lon, zip } = {}) {
-  setStatus("Buscando…", "loading");
+  if (state.searching) return;
+
+  setBusy(true);
+  setStatus("Buscando estaciones…", "loading");
   $("#results").innerHTML = "";
-  $("#bestCard").style.display = "none";
+  const bestCard = $("#bestCard");
+  if (bestCard) bestCard.hidden = true;
+  const head = $("#resultsHead");
+  if (head) head.hidden = true;
 
   const params = new URLSearchParams();
   params.set("fuel", state.fuel);
@@ -225,9 +302,8 @@ async function search({ lat, lon, zip } = {}) {
     params.set("lon", String(lon));
   }
 
-  // No quedarse cargando para siempre (Render free + OSM lentos)
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 20000);
+  const timer = setTimeout(() => ctrl.abort(), 25000);
 
   try {
     const res = await fetch(`/api/search?${params.toString()}`, {
@@ -236,14 +312,22 @@ async function search({ lat, lon, zip } = {}) {
     clearTimeout(timer);
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || `Error ${res.status}`);
+      const detail =
+        typeof err.detail === "string"
+          ? err.detail
+          : Array.isArray(err.detail)
+            ? err.detail.map((d) => d.msg || d).join(", ")
+            : null;
+      throw new Error(detail || `Error ${res.status}`);
     }
     const data = await res.json();
     state.lat = data.center.lat;
     state.lon = data.center.lon;
     state.label = data.center.label;
     state.stations = data.stations || [];
+    state.lastData = data;
     if (zip) state.zip = zip;
+    if (data.center && data.center.zip) state.zip = data.center.zip;
     saveLocation({
       lat: state.lat,
       lon: state.lon,
@@ -256,32 +340,81 @@ async function search({ lat, lon, zip } = {}) {
     render(data);
   } catch (e) {
     clearTimeout(timer);
+    setLocDot("off");
     if (e && e.name === "AbortError") {
       setStatus("Tardó mucho. Prueba de nuevo o escribe un ZIP.", "error");
     } else {
       setStatus(e.message || "Error de búsqueda. Prueba un ZIP.", "error");
     }
+  } finally {
+    setBusy(false);
   }
 }
 
 function render(data) {
-  $("#locationLabel").textContent = data.center.label;
+  $("#locationLabel").textContent = data.center.label || "—";
+  setLocDot("on");
+
   const avg = data.state_avg || {};
   const meta = data.price_meta || {};
-  const src =
-    meta.avg_source === "eia"
-      ? `EIA oficial${meta.eia_period ? " · " + meta.eia_period : ""}`
-      : "estimado";
-  $("#stateAvg").textContent = `Promedio estado: ${money(avg[state.fuel] || avg.regular)} (${src})`;
+  const fuelAvg = avg[state.fuel] != null ? avg[state.fuel] : avg.regular;
+  let src;
+  if (meta.avg_source === "eia") {
+    src = `EIA oficial${meta.eia_period ? " · " + meta.eia_period : ""}`;
+  } else {
+    src = "referencia";
+  }
+  $("#stateAvg").textContent = `Promedio ${data.center.state || ""}: ${money(
+    fuelAvg
+  )} (${src}) · ${fuelLabel(state.fuel)}`;
 
+  // Best card
   if (data.cheapest) {
     const b = data.cheapest;
     state.cheapest = b;
-    $("#bestCard").style.display = "block";
+    $("#bestCard").hidden = false;
     $("#bestPrice").textContent = money(b.price);
     $("#bestName").textContent = b.name;
-    $("#bestMeta").textContent = `${b.distance_mi} mi · ${b.source === "user" ? "reportado" : "estimado"}`;
-    // cheapest puede no traer maps_query; buscar en stations
+    const conf =
+      b.source === "user"
+        ? "precio reportado"
+        : b.source === "eia_estimate"
+          ? "estimado EIA + marca"
+          : "estimado";
+    $("#bestMeta").textContent = `${b.distance_mi} mi · ${conf}`;
+    const badge = $("#bestSourceBadge");
+    if (badge) {
+      badge.textContent = sourceLabel(b.source);
+      badge.className =
+        "badge " +
+        (b.source === "user"
+          ? "user"
+          : b.source === "eia_estimate"
+            ? "eia"
+            : "estimate");
+    }
+
+    const saveEl = $("#bestSave");
+    const savings =
+      b.savings_vs_avg != null
+        ? b.savings_vs_avg
+        : b.vs_avg != null
+          ? -b.vs_avg
+          : null;
+    if (saveEl) {
+      if (savings != null && savings > 0.004) {
+        saveEl.hidden = false;
+        saveEl.className = "best-save";
+        saveEl.textContent = `Ahorras ~${money(savings)}/gal vs promedio`;
+      } else if (savings != null && savings < -0.004) {
+        saveEl.hidden = false;
+        saveEl.className = "best-save over";
+        saveEl.textContent = `${money(Math.abs(savings))}/gal sobre el promedio`;
+      } else {
+        saveEl.hidden = true;
+      }
+    }
+
     const full =
       state.stations.find((x) => x.id === b.station_id) ||
       state.stations.find((x) => x.name === b.name) ||
@@ -290,51 +423,61 @@ function render(data) {
     $("#bestMaps").textContent = "Cómo llegar";
   } else {
     state.cheapest = null;
+    $("#bestCard").hidden = true;
   }
 
   if (!state.stations.length) {
     setStatus(
-      "No hay estaciones reales en el mapa aquí. Prueba 10 millas u otro ZIP.",
+      "No hay estaciones reales aquí. Prueba 10 millas u otro ZIP.",
       "empty"
     );
+    const head = $("#resultsHead");
+    if (head) head.hidden = true;
+    $("#disclaimer").textContent = data.disclaimer || "";
     return;
   }
 
-  setStatus(
-    `${data.count} estaciones · ordenadas por precio más bajo · ${state.fuel}`,
-    "loading"
-  );
+  hideStatus();
+  const head = $("#resultsHead");
+  if (head) {
+    head.hidden = false;
+    const cnt = $("#resultsCount");
+    if (cnt) {
+      const ur = data.user_reports_count || 0;
+      cnt.textContent =
+        ur > 0
+          ? `${data.count} estaciones · ${ur} con reporte`
+          : `${data.count} estaciones · por precio`;
+    }
+  }
 
   const html = state.stations
     .map((s, i) => {
-      const rankClass = i === 0 ? "rank gold" : "rank";
-      let src;
-      if (s.price_source === "user") {
-        const n = s.reports_count ? ` · ${s.reports_count} rep` : "";
-        const age = s.price_age_hours != null ? ` · ${s.price_age_hours}h` : "";
-        src = `<span class="badge user">reportado${n}${age}</span>`;
-      } else if (s.price_source === "eia_estimate") {
-        src = `<span class="badge eia">EIA + marca</span>`;
-      } else {
-        src = `<span class="badge estimate">estimado</span>`;
-      }
+      const src = sourceBadgeHtml(s);
+      const brandBit =
+        s.brand && s.brand !== s.name && s.brand !== "Gasolinera"
+          ? `${escapeHtml(s.brand)} · `
+          : "";
       const addr = s.address
         ? `<p class="station-sub">${escapeHtml(s.address)}</p>`
         : "";
       return `
-      <article class="station" data-id="${s.id}">
+      <article class="station" data-id="${escapeHtml(s.id)}">
         <div class="station-top">
           <div>
-            <p class="station-name"><span class="${rankClass}">${i + 1}</span>${escapeHtml(s.name)}</p>
-            <p class="station-sub">${escapeHtml(s.brand || "")} · ${s.distance_mi} mi ${src}</p>
+            <p class="station-name"><span class="${rankClass(i)}">${i + 1}</span>${escapeHtml(s.name)}</p>
+            <p class="station-sub">${brandBit}${s.distance_mi} mi ${src}</p>
             ${addr}
           </div>
-          <div class="station-price">${money(s.price)}</div>
+          <div class="station-price-col">
+            <div class="station-price">${money(s.price)}</div>
+            ${vsAvgHtml(s.vs_avg)}
+          </div>
         </div>
         <div class="station-actions">
           <a class="btn-ghost" href="${mapsUrl(s)}" target="_blank" rel="noopener">${mapsButtonLabel()}</a>
           <button class="btn-ghost" type="button" data-share="${escapeHtml(s.id)}">Compartir</button>
-          <button class="btn-ghost" type="button" data-report="${s.id}" data-name="${escapeHtml(s.name)}">Reportar precio</button>
+          <button class="btn-ghost" type="button" data-report="${escapeHtml(s.id)}" data-name="${escapeHtml(s.name)}">Reportar</button>
         </div>
       </article>`;
     })
@@ -344,7 +487,9 @@ function render(data) {
   $("#disclaimer").textContent = data.disclaimer || "";
 
   $("#results").querySelectorAll("[data-report]").forEach((btn) => {
-    btn.addEventListener("click", () => openReport(btn.dataset.report, btn.dataset.name));
+    btn.addEventListener("click", () =>
+      openReport(btn.dataset.report, btn.dataset.name)
+    );
   });
   $("#results").querySelectorAll("[data-share]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -368,6 +513,11 @@ function openReport(stationId, name) {
   $("#reportTitle").textContent = `Reportar · ${name}`;
   $("#reportPrice").value = "";
   $("#modal").classList.add("open");
+  setTimeout(() => {
+    try {
+      $("#reportPrice").focus();
+    } catch (_) {}
+  }, 80);
 }
 
 function closeReport() {
@@ -376,59 +526,85 @@ function closeReport() {
 }
 
 async function submitReport() {
-  const price = parseFloat($("#reportPrice").value);
+  const raw = ($("#reportPrice").value || "").trim();
+  const price = parseFloat(raw);
   if (!state.reportStationId || Number.isNaN(price)) {
-    alert("Pon un precio válido");
+    showToast("Pon un precio válido");
     return;
   }
-  const res = await fetch("/api/report", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      station_id: state.reportStationId,
-      fuel: state.fuel,
-      price,
-    }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    alert(err.detail || "No se pudo guardar");
+  if (price < 1 || price > 12) {
+    showToast("Precio fuera de rango (1–12 USD)");
     return;
   }
-  closeReport();
-  // refresh same location
-  await search({ lat: state.lat, lon: state.lon });
+
+  const btn = $("#btnSubmitReport");
+  if (btn) btn.disabled = true;
+
+  try {
+    const res = await fetch("/api/report", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        station_id: state.reportStationId,
+        fuel: state.fuel,
+        price,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      showToast(err.detail || "No se pudo guardar");
+      return;
+    }
+    closeReport();
+    showToast(`Precio guardado: ${money(price)}`);
+    await search({ lat: state.lat, lon: state.lon, zip: state.zip || undefined });
+  } catch (_) {
+    showToast("Error de red al guardar");
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 function useGps() {
   if (!navigator.geolocation) {
-    setStatus("GPS no disponible. Usa un ZIP (ej. 80903 Colorado Springs).", "error");
+    setStatus("GPS no disponible. Usa un ZIP (ej. 80903).", "error");
     return;
   }
-  if (window.isSecureContext !== true && !["localhost", "127.0.0.1"].includes(location.hostname)) {
-    setStatus("GPS no disponible aquí. Usa un ZIP (ej. 80903).", "error");
+  if (
+    window.isSecureContext !== true &&
+    !["localhost", "127.0.0.1"].includes(location.hostname)
+  ) {
+    setStatus("GPS solo funciona con HTTPS. Usa un ZIP.", "error");
     return;
   }
-  setStatus("Obteniendo tu ubicación real…", "loading");
+  setStatus("Obteniendo tu ubicación…", "loading");
+  setLocDot("loading");
   navigator.geolocation.getCurrentPosition(
     (pos) => {
       state.zip = null;
       search({ lat: pos.coords.latitude, lon: pos.coords.longitude });
     },
-    () => {
-      setStatus("Sin GPS. Usa un ZIP (Colorado Springs: 80903).", "error");
+    (err) => {
+      setLocDot("off");
+      const code = err && err.code;
+      if (code === 1) {
+        setStatus("Permiso de ubicación denegado. Usa un ZIP.", "error");
+      } else if (code === 3) {
+        setStatus("GPS tardó mucho. Usa un ZIP (ej. 80903).", "error");
+      } else {
+        setStatus("Sin GPS. Usa un ZIP (Colorado Springs: 80903).", "error");
+      }
     },
     { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
   );
 }
 
-/** Arranque: última zona o pedir ZIP/GPS — sin colgarse en GPS */
 function startApp() {
   const saved = loadSavedLocation();
   if (saved) {
     state.zip = saved.zip || null;
     if (saved.zip && $("#zipInput")) $("#zipInput").value = saved.zip;
-    setStatus("Cargando…", "loading");
+    setStatus("Cargando tu última zona…", "loading");
     if (saved.zip) {
       search({ zip: saved.zip });
     } else {
@@ -437,11 +613,11 @@ function startApp() {
     return;
   }
 
-  // No esperar GPS eterno: el usuario puede buscar ya
   setStatus("Escribe tu ZIP o toca Usar mi ubicación.", "empty");
-  $("#locationLabel").textContent = "Sin ubicación — ZIP o GPS";
+  $("#locationLabel").textContent = "Sin ubicación";
+  $("#stateAvg").textContent = "ZIP o GPS para empezar";
+  setLocDot("off");
 
-  // Intentar GPS en segundo plano (si tarda, el usuario ya puede usar ZIP)
   if (
     navigator.geolocation &&
     (window.isSecureContext === true ||
@@ -449,8 +625,7 @@ function startApp() {
   ) {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        // solo si aún no buscó
-        if (!state.stations.length && state.lat == null) {
+        if (!state.stations.length && state.lat == null && !state.searching) {
           search({ lat: pos.coords.latitude, lon: pos.coords.longitude });
         }
       },
@@ -458,32 +633,6 @@ function startApp() {
       { enableHighAccuracy: false, timeout: 6000, maximumAge: 120000 }
     );
   }
-}
-
-function tryGpsBackground() {
-  if (!navigator.geolocation) return;
-  if (
-    window.isSecureContext !== true &&
-    !["localhost", "127.0.0.1"].includes(location.hostname)
-  ) {
-    return;
-  }
-  navigator.geolocation.getCurrentPosition(
-    (pos) => {
-      const lat = pos.coords.latitude;
-      const lon = pos.coords.longitude;
-      // si te moviste > ~3 millas, refrescar
-      if (state.lat != null && state.lon != null) {
-        const dlat = Math.abs(lat - state.lat);
-        const dlon = Math.abs(lon - state.lon);
-        if (dlat < 0.04 && dlon < 0.04) return;
-      }
-      state.zip = null;
-      search({ lat, lon });
-    },
-    () => {},
-    { enableHighAccuracy: false, timeout: 10000, maximumAge: 120000 }
-  );
 }
 
 function bind() {
@@ -499,30 +648,60 @@ function bind() {
   $("#btnZip").addEventListener("click", () => {
     const zip = $("#zipInput").value.trim();
     if (!zip) {
-      alert("Escribe un ZIP de USA (Colorado Springs: 80903)");
+      showToast("Escribe un ZIP de USA (ej. 80903)");
+      $("#zipInput").focus();
       return;
     }
-    state.zip = zip;
-    search({ zip });
+    const digits = zip.replace(/\D/g, "");
+    if (digits.length < 5) {
+      showToast("ZIP debe tener 5 dígitos");
+      return;
+    }
+    state.zip = digits.slice(0, 5);
+    search({ zip: state.zip });
   });
   $("#zipInput").addEventListener("keydown", (e) => {
     if (e.key === "Enter") $("#btnZip").click();
   });
+  // Solo dígitos y guión en ZIP
+  $("#zipInput").addEventListener("input", (e) => {
+    const v = e.target.value.replace(/[^\d-]/g, "").slice(0, 10);
+    if (v !== e.target.value) e.target.value = v;
+  });
   $("#fuelSelect").addEventListener("change", (e) => {
     state.fuel = e.target.value;
-    if (state.lat != null) search({ lat: state.lat, lon: state.lon });
+    if (state.lat != null) {
+      search({
+        lat: state.lat,
+        lon: state.lon,
+        zip: state.zip || undefined,
+      });
+    }
   });
   $("#radiusSelect").addEventListener("change", (e) => {
     state.radius = Number(e.target.value);
-    if (state.lat != null) search({ lat: state.lat, lon: state.lon });
+    if (state.lat != null) {
+      search({
+        lat: state.lat,
+        lon: state.lon,
+        zip: state.zip || undefined,
+      });
+    }
   });
   $("#btnCloseModal").addEventListener("click", closeReport);
   $("#btnSubmitReport").addEventListener("click", submitReport);
+  $("#reportPrice").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") submitReport();
+  });
   $("#modal").addEventListener("click", (e) => {
     if (e.target.id === "modal") closeReport();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && $("#modal").classList.contains("open")) {
+      closeReport();
+    }
   });
 }
 
 bind();
-// Carga inicial: tu ubicación (no forzar Denver)
 startApp();

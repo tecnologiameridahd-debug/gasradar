@@ -21,24 +21,35 @@ from backend.geo import (
 from backend.prices import (
     attach_prices,
     cheapest_summary,
+    fetch_eia_state_averages,
     price_meta,
     report_price,
-    state_averages,
 )
 from backend.stations import stations_near
 
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-app = FastAPI(title="GasRadar", version="0.1.0")
+APP_VERSION = "0.2.0"
 
-# Headers básicos para PWA-lite / embebido en móvil
+app = FastAPI(title="GasRadar", version=APP_VERSION)
+
+
 @app.middleware("http")
 async def add_headers(request, call_next):
     response = await call_next(request)
     response.headers["X-App"] = "GasRadar"
-    # Permitir geolocation en contextos seguros (HTTPS en producción)
+    response.headers["X-App-Version"] = APP_VERSION
     response.headers["Permissions-Policy"] = "geolocation=(self)"
+    # Cache estáticos un rato; HTML siempre fresco
+    path = request.url.path
+    if path.startswith("/static/"):
+        if path.endswith((".png", ".svg", ".jpg", ".webp", ".ico")):
+            response.headers["Cache-Control"] = "public, max-age=86400"
+        elif path.endswith((".css", ".js")):
+            response.headers["Cache-Control"] = "public, max-age=300"
+    elif path == "/":
+        response.headers["Cache-Control"] = "no-cache"
     return response
 
 
@@ -57,7 +68,7 @@ def health():
     return {
         "ok": True,
         "app": "gasradar",
-        "version": "0.1.1",
+        "version": APP_VERSION,
         "utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "status": "alive",
     }
@@ -82,6 +93,7 @@ def api_search(
 ):
     label = DEFAULT_LABEL
     state = "CO"
+    zip_code = None
     if zip:
         g = geocode_zip(zip)
         if not g:
@@ -89,51 +101,75 @@ def api_search(
         lat, lon = g["lat"], g["lon"]
         label = g["label"]
         state = g.get("state") or "CO"
+        zip_code = g.get("zip") or zip
     elif lat is not None and lon is not None:
-        # GPS / coords: descubrir ciudad real (Colorado Springs, etc.)
         rev = reverse_geocode(float(lat), float(lon))
         if rev:
             label = rev["label"]
             state = rev.get("state") or "CO"
+            zip_code = rev.get("zip")
         else:
             label = f"Tu ubicación ({float(lat):.3f}, {float(lon):.3f})"
             state = "CO"
     else:
-        # Sin GPS ni ZIP → Denver solo como último recurso
         lat, lon = DEFAULT_LAT, DEFAULT_LON
         label = DEFAULT_LABEL
         state = "CO"
 
+    # Calentar EIA una vez por búsqueda (evita estimaciones sin dato oficial)
+    try:
+        fetch_eia_state_averages(state)
+    except Exception:
+        pass
+
     stations = stations_near(float(lat), float(lon), radius_mi=radius_mi, limit=limit)
     priced = attach_prices(stations, state=state, fuel=fuel) if stations else []
     best = cheapest_summary(priced) if priced else None
-    meta = price_meta(state)
+    meta = price_meta(state, fast=True)
     avg = meta["state_avg"]
+    avg_fuel = avg.get(fuel) or avg.get("regular")
+
+    # Ahorro vs promedio del estado en la más barata
+    if best and avg_fuel:
+        best["savings_vs_avg"] = round(float(avg_fuel) - float(best["price"]), 3)
+        best["state_avg_fuel"] = avg_fuel
+
     eia_txt = ""
     if meta.get("eia_ok") and meta.get("eia_period"):
         eia_txt = f" Promedio estatal EIA (semana {meta['eia_period']})."
+    elif not meta.get("eia_ok"):
+        eia_txt = " Promedio de referencia (EIA no disponible ahora)."
 
     note = ""
     if not priced:
         note = (
-            " No se encontraron estaciones reales en el mapa ahora. "
+            " No se encontraron estaciones reales cerca. "
             "Prueba un radio mayor (10 mi) o otro ZIP."
         )
 
+    user_reports = sum(1 for s in priced if s.get("price_source") == "user")
+
     return {
-        "center": {"lat": lat, "lon": lon, "label": label, "state": state},
+        "center": {
+            "lat": lat,
+            "lon": lon,
+            "label": label,
+            "state": state,
+            "zip": zip_code,
+        },
         "fuel": fuel,
         "radius_mi": radius_mi,
         "state_avg": avg,
         "price_meta": meta,
         "count": len(priced),
+        "user_reports_count": user_reports,
         "cheapest": best,
         "stations": priced,
         "disclaimer": (
-            "Estaciones: OpenStreetMap (reales). "
-            "Precios: reportes de usuarios o estimación EIA + marca."
+            "Estaciones reales (OpenStreetMap). "
+            "Precios: reportes de la comunidad o estimación EIA + marca."
             f"{eia_txt} "
-            "No es precio de bomba en vivo. Reporta el precio real al pasar."
+            "No es precio de bomba en vivo — reporta el precio real al pasar."
             f"{note}"
         ),
     }

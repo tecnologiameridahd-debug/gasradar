@@ -23,13 +23,22 @@ DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 DB_PATH = DATA_DIR / "prices.db"
 EIA_CACHE_PATH = DATA_DIR / "eia_cache.json"
 
-# Fallback si EIA no responde
+# Fallback si EIA no responde (actualizado ~2026; se reemplaza cuando EIA responde)
 BASE_STATE_AVG = {
     "CO": {"regular": 3.19, "mid": 3.49, "premium": 3.79, "diesel": 3.55},
     "CA": {"regular": 4.55, "mid": 4.75, "premium": 4.95, "diesel": 4.80},
     "TX": {"regular": 2.85, "mid": 3.15, "premium": 3.45, "diesel": 3.20},
     "NY": {"regular": 3.35, "mid": 3.65, "premium": 3.95, "diesel": 3.90},
     "FL": {"regular": 3.10, "mid": 3.40, "premium": 3.70, "diesel": 3.50},
+    "AZ": {"regular": 3.25, "mid": 3.55, "premium": 3.85, "diesel": 3.60},
+    "NM": {"regular": 2.95, "mid": 3.25, "premium": 3.55, "diesel": 3.30},
+    "UT": {"regular": 3.15, "mid": 3.45, "premium": 3.75, "diesel": 3.50},
+    "WY": {"regular": 3.05, "mid": 3.35, "premium": 3.65, "diesel": 3.40},
+    "KS": {"regular": 2.90, "mid": 3.20, "premium": 3.50, "diesel": 3.25},
+    "NE": {"regular": 2.95, "mid": 3.25, "premium": 3.55, "diesel": 3.30},
+    "NV": {"regular": 3.55, "mid": 3.85, "premium": 4.15, "diesel": 3.90},
+    "WA": {"regular": 4.10, "mid": 4.40, "premium": 4.70, "diesel": 4.40},
+    "OR": {"regular": 3.85, "mid": 4.15, "premium": 4.45, "diesel": 4.15},
     "DEFAULT": {"regular": 3.25, "mid": 3.55, "premium": 3.85, "diesel": 3.65},
 }
 
@@ -43,21 +52,35 @@ BRAND_DELTA = {
     "Safeway": -0.06,
     "Kroger": -0.08,
     "Smith's": -0.08,
+    "QuikTrip": -0.04,
     "Quiktrip": -0.04,
     "Qt": -0.04,
     "Murphy": -0.05,
+    "Murphy USA": -0.08,
     "Arco": -0.12,
     "Maverik": -0.03,
+    "Sinclair": 0.02,
     "Shell": 0.10,
     "Chevron": 0.12,
     "Exxon": 0.07,
     "Mobil": 0.07,
     "Bp": 0.05,
+    "BP": 0.05,
     "7-Eleven": 0.08,
     "Circle K": 0.04,
     "Conoco": 0.03,
     "Phillips 66": 0.04,
+    "Valero": 0.02,
+    "Texaco": 0.06,
+    "Speedway": 0.03,
+    "Cenex": 0.01,
+    "Holiday": 0.02,
+    "Kum & Go": 0.02,
+    "Love's": -0.02,
+    "Pilot": -0.01,
+    "Flying J": -0.01,
     "Independiente": -0.01,
+    "Gasolinera": 0.0,
 }
 
 # Spreads si EIA no trae mid/premium
@@ -412,13 +435,27 @@ def attach_prices(stations: list[dict], state: str = "CO", fuel: str = "regular"
         item["reports_count"] = pf.get("reports_count") or 0
         out.append(item)
 
-    # Ranking: primero más barato; a igualdad, más reportes y más cerca
+    # Ranking: más barato primero; reportes de usuario ganan empates; luego cercanía
     def sort_key(x):
-        # preferir user reports ligeramente en empates de precio
-        src_boost = 0 if x.get("price_source") == "user" else 0.001
-        return (x["price"] + src_boost, x["distance_mi"])
+        is_user = 0 if x.get("price_source") == "user" else 1
+        conf_rank = {"high": 0, "medium": 1, "low": 2}.get(
+            x.get("price_confidence") or "low", 2
+        )
+        return (round(float(x["price"]), 3), is_user, conf_rank, float(x["distance_mi"]))
 
     out.sort(key=sort_key)
+
+    # Delta vs promedio del estado (para UI de "ahorro")
+    avg_fuel = None
+    try:
+        meta = price_meta(state, fast=True)
+        avg_fuel = (meta.get("state_avg") or {}).get(fuel)
+    except Exception:
+        avg_fuel = None
+    if avg_fuel is not None:
+        for item in out:
+            item["vs_avg"] = round(float(item["price"]) - float(avg_fuel), 3)
+
     return out
 
 
@@ -434,9 +471,11 @@ def cheapest_summary(stations_with_prices: list[dict]) -> dict | None:
         "distance_mi": best["distance_mi"],
         "lat": best["lat"],
         "lon": best["lon"],
+        "address": best.get("address"),
         "source": best.get("price_source"),
         "confidence": best.get("price_confidence"),
         "reports_count": best.get("reports_count"),
+        "vs_avg": best.get("vs_avg"),
     }
 
 
@@ -479,7 +518,8 @@ def price_meta(state: str = "CO", fast: bool = True) -> dict:
         "eia_ok": avg.get("eia_ok"),
         "collect_api_configured": bool(_collect_api_key()),
         "how_it_works": (
-            "1) Reportes de usuarios. 2) EIA + marca si hay caché. "
-            "3) Precios en vivo por bomba: API de pago."
+            "1) Reportes de la comunidad (prioridad). "
+            "2) Estimacion EIA oficial + ajuste por marca. "
+            "3) Precios exactos de bomba requieren API de pago o mas reportes."
         ),
     }
