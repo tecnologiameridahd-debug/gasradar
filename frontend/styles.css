@@ -792,6 +792,50 @@ a.btn-secondary:hover {
   margin-top: 14px;
 }
 
+/* ——— TikTok flotante (esquina) ——— */
+.tiktok-fab {
+  position: fixed;
+  right: max(14px, env(safe-area-inset-right));
+  bottom: max(18px, calc(12px + env(safe-area-inset-bottom)));
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 14px 11px 12px;
+  border-radius: 999px;
+  background: #010101;
+  color: #fff;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 0.84rem;
+  letter-spacing: 0.01em;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 0 0 2px rgba(37, 244, 238, 0.35),
+    0 0 0 4px rgba(254, 44, 85, 0.28),
+    0 10px 28px rgba(0, 0, 0, 0.45);
+  transition: transform 0.15s ease, filter 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tiktok-fab:hover {
+  filter: brightness(1.08);
+  transform: translateY(-2px);
+}
+
+.tiktok-fab:active {
+  transform: scale(0.97);
+}
+
+.tiktok-ico {
+  flex-shrink: 0;
+  display: block;
+}
+
+.tiktok-txt {
+  line-height: 1;
+}
+
 /* ——— Footer ——— */
 .site-footer {
   text-align: center;
