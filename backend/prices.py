@@ -110,17 +110,48 @@ def _eia_api_key() -> str:
     return (os.environ.get("EIA_API_KEY") or "").strip() or "DEMO_KEY"
 
 
-def _collect_api_key() -> str:
-    """CollectAPI (formato id|token). Env o config_local — nunca en git."""
-    k = (os.environ.get("COLLECT_API_KEY") or os.environ.get("GAS_API_KEY") or "").strip()
-    if k:
-        return k
+def _secret_from_local(*names: str) -> str:
     try:
         import config_local as _cfg  # type: ignore
 
-        return (getattr(_cfg, "COLLECT_API_KEY", None) or getattr(_cfg, "GAS_API_KEY", None) or "").strip()
+        for n in names:
+            v = getattr(_cfg, n, None)
+            if v:
+                return str(v).strip()
     except ImportError:
-        return ""
+        pass
+    return ""
+
+
+def _zyla_api_key() -> str:
+    """
+    Zyla Labs API key (formato id|token).
+    Env: ZYLA_API_KEY o COLLECT_API_KEY / GAS_API_KEY (compat).
+    """
+    return (
+        (os.environ.get("ZYLA_API_KEY") or "").strip()
+        or (os.environ.get("COLLECT_API_KEY") or "").strip()
+        or (os.environ.get("GAS_API_KEY") or "").strip()
+        or _secret_from_local("ZYLA_API_KEY", "COLLECT_API_KEY", "GAS_API_KEY")
+    )
+
+
+def _zyla_gas_url() -> str:
+    """
+    URL completa del endpoint Zyla al que te suscribiste.
+    Ejemplo típico (ZIP):
+      https://zylalabs.com/api/3109/us+gas+prices+api/24537/get+prices
+    En dashboard Zyla: pestaña del API → cURL → copiar URL base (sin ?zip=).
+    """
+    return (
+        (os.environ.get("ZYLA_GAS_URL") or "").strip()
+        or _secret_from_local("ZYLA_GAS_URL")
+    )
+
+
+def _collect_api_key() -> str:
+    """Compat: misma key que Zyla."""
+    return _zyla_api_key()
 
 
 def _state_to_duoarea(state: str) -> str:
@@ -323,132 +354,201 @@ def fetch_eia_state_averages(state: str = "CO") -> dict:
     return result
 
 
-# Caché CollectAPI (promedios / estado)
-_collect_mem: dict = {"ts": 0.0, "by_state": {}}
-COLLECT_CACHE_TTL = 3 * 3600  # 3h
+# Caché Zyla (precios por ZIP / estado)
+_zyla_mem: dict = {"ts": 0.0, "by_key": {}}
+ZYLA_CACHE_TTL = 2 * 3600  # 2h
+
+
+def _parse_price_val(v) -> float | None:
+    if v is None:
+        return None
+    try:
+        return float(str(v).replace("$", "").replace(",", "").strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _extract_fuel_prices(obj) -> dict | None:
+    """Intenta sacar regular/mid/premium/diesel de un JSON Zyla (formatos varios)."""
+    if obj is None:
+        return None
+    regular = mid = premium = diesel = None
+
+    def dig(d: dict):
+        nonlocal regular, mid, premium, diesel
+        mapping = [
+            (("regular", "gasoline", "gas", "unleaded", "reg", "price"), "regular"),
+            (("mid", "midgrade", "mid_grade", "plus"), "mid"),
+            (("premium", "super", "prem"), "premium"),
+            (("diesel", "dsl"), "diesel"),
+        ]
+        for keys, target in mapping:
+            for k in keys:
+                if k in d and d[k] is not None:
+                    val = _parse_price_val(d[k])
+                    if val is None:
+                        continue
+                    if target == "regular" and regular is None:
+                        regular = val
+                    elif target == "mid" and mid is None:
+                        mid = val
+                    elif target == "premium" and premium is None:
+                        premium = val
+                    elif target == "diesel" and diesel is None:
+                        diesel = val
+
+    if isinstance(obj, dict):
+        dig(obj)
+        for nest in ("result", "data", "prices", "price", "average", "averages", "state"):
+            if isinstance(obj.get(nest), dict):
+                dig(obj[nest])
+        # lista de estaciones → promedio de regular
+        stations = obj.get("stations") or obj.get("results") or obj.get("data")
+        if regular is None and isinstance(stations, list) and stations:
+            vals = []
+            for s in stations[:40]:
+                if not isinstance(s, dict):
+                    continue
+                dig(s)
+                p = _parse_price_val(
+                    s.get("regular")
+                    or s.get("gasoline")
+                    or s.get("price")
+                    or s.get("gas_price")
+                )
+                if p is not None:
+                    vals.append(p)
+            if vals:
+                regular = sum(vals) / len(vals)
+    elif isinstance(obj, list) and obj:
+        return _extract_fuel_prices(obj[0] if isinstance(obj[0], dict) else {"data": obj})
+
+    if regular is None:
+        return None
+    return {
+        "regular": round(regular, 3),
+        "mid": round(mid if mid is not None else regular + SPREAD_MID, 3),
+        "premium": round(premium if premium is not None else regular + SPREAD_PREMIUM, 3),
+        "diesel": round(diesel if diesel is not None else regular + SPREAD_DIESEL, 3),
+    }
+
+
+def fetch_zyla_zip_prices(zip_code: str, fuel: str = "regular") -> dict | None:
+    """
+    Precios vía Zyla Labs (Bearer token).
+    Requiere ZYLA_API_KEY + ZYLA_GAS_URL (endpoint del API al que te suscribiste).
+    """
+    key = _zyla_api_key()
+    base = _zyla_gas_url()
+    if not key or not base:
+        return None
+    z = "".join(c for c in str(zip_code) if c.isdigit())[:5]
+    if len(z) != 5:
+        return None
+    cache_key = f"zip:{z}:{fuel}"
+    now = time.time()
+    cached = _zyla_mem["by_key"].get(cache_key)
+    if cached and now - cached.get("ts", 0) < ZYLA_CACHE_TTL and cached.get("ok"):
+        return cached
+
+    # URL puede ser plantilla o base; añadimos zip/type si faltan
+    url = base
+    params = {}
+    if "{zip}" in url:
+        url = url.replace("{zip}", z)
+    else:
+        params["zip"] = z
+    if "type=" not in url and "{type}" not in url:
+        params.setdefault("type", fuel or "regular")
+    if "{type}" in url:
+        url = url.replace("{type}", fuel or "regular")
+
+    headers = {
+        "Authorization": f"Bearer {key}",
+        "Accept": "application/json",
+    }
+    try:
+        r = httpx.get(url, params=params or None, headers=headers, timeout=16.0)
+        if r.status_code != 200:
+            print(f"[zyla] status={r.status_code} body={r.text[:220]}")
+            return None
+        data = r.json()
+        prices = _extract_fuel_prices(data)
+        if not prices:
+            print(f"[zyla] no pude parsear: {str(data)[:240]}")
+            return None
+        out = {**prices, "source": "zyla", "ok": True, "ts": now, "zip": z}
+        _zyla_mem["by_key"][cache_key] = out
+        print(f"[zyla] OK zip={z} regular={out['regular']}")
+        return out
+    except Exception as e:
+        print(f"[zyla] fail: {e}")
+        return None
 
 
 def fetch_collect_state_averages(state: str = "CO") -> dict | None:
-    """
-    Promedios por estado vía CollectAPI gasPrice/stateUsaPrice.
-    Requiere COLLECT_API_KEY (env o config_local).
-    """
-    key = _collect_api_key()
-    if not key:
+    """Compat nombre viejo: usa Zyla si hay URL de estado; si no, None."""
+    # Algunos endpoints Zyla usan ?state=CO
+    key = _zyla_api_key()
+    base = _zyla_gas_url()
+    if not key or not base:
+        return None
+    if "zip" in base.lower() and "state" not in base.lower():
         return None
     st = (state or "CO").upper().strip()
-    if st in ("DEFAULT", "US", "USA"):
-        st = "CO"
+    cache_key = f"state:{st}"
     now = time.time()
-    cached = _collect_mem["by_state"].get(st)
-    if cached and now - cached.get("ts", 0) < COLLECT_CACHE_TTL and cached.get("ok"):
+    cached = _zyla_mem["by_key"].get(cache_key)
+    if cached and now - cached.get("ts", 0) < ZYLA_CACHE_TTL and cached.get("ok"):
         return cached
-
-    headers = {
-        "authorization": f"apikey {key}",
-        "content-type": "application/json",
-    }
+    url = base
+    params = {}
+    if "{state}" in url:
+        url = url.replace("{state}", st)
+    else:
+        params["state"] = st
     try:
         r = httpx.get(
-            "https://api.collectapi.com/gasPrice/stateUsaPrice",
-            params={"state": st},
-            headers=headers,
-            timeout=14.0,
+            url,
+            params=params or None,
+            headers={"Authorization": f"Bearer {key}", "Accept": "application/json"},
+            timeout=16.0,
         )
         if r.status_code != 200:
-            print(f"[collectapi] status={r.status_code} body={r.text[:180]}")
+            print(f"[zyla] state status={r.status_code} {r.text[:180]}")
             return None
-        data = r.json() or {}
-        if data.get("success") is False:
-            print(f"[collectapi] success=false {str(data)[:180]}")
+        prices = _extract_fuel_prices(r.json())
+        if not prices:
             return None
-        result = data.get("result") or data
-        # Formatos posibles: result.state / result.cities / result como dict de precios
-        regular = mid = premium = diesel = None
-        if isinstance(result, dict):
-            state_block = result.get("state") or result.get("gasoline") or result
-            if isinstance(state_block, dict):
-                # claves comunes: gasoline, midGrade, premium, diesel
-                for k, target in (
-                    ("gasoline", "regular"),
-                    ("regular", "regular"),
-                    ("midGrade", "mid"),
-                    ("mid", "mid"),
-                    ("premium", "premium"),
-                    ("diesel", "diesel"),
-                ):
-                    v = state_block.get(k)
-                    if v is None and isinstance(state_block.get("prices"), dict):
-                        v = state_block["prices"].get(k)
-                    if v is not None:
-                        try:
-                            val = float(str(v).replace("$", "").strip())
-                            if target == "regular":
-                                regular = val
-                            elif target == "mid":
-                                mid = val
-                            elif target == "premium":
-                                premium = val
-                            else:
-                                diesel = val
-                        except (TypeError, ValueError):
-                            pass
-            # a veces result es lista de ciudades con average
-            if regular is None and isinstance(result, list) and result:
-                try:
-                    regular = float(str(result[0].get("gasoline") or result[0].get("price")).replace("$", ""))
-                except (TypeError, ValueError, AttributeError):
-                    pass
-            if regular is None and isinstance(result.get("cities"), list) and result["cities"]:
-                try:
-                    c0 = result["cities"][0]
-                    regular = float(str(c0.get("gasoline") or c0.get("price")).replace("$", ""))
-                except (TypeError, ValueError, AttributeError, IndexError):
-                    pass
-
-        if regular is None:
-            print(f"[collectapi] no pude parsear precios: {str(data)[:240]}")
-            return None
-
-        out = {
-            "regular": round(regular, 3),
-            "mid": round(mid if mid is not None else regular + SPREAD_MID, 3),
-            "premium": round(premium if premium is not None else regular + SPREAD_PREMIUM, 3),
-            "diesel": round(diesel if diesel is not None else regular + SPREAD_DIESEL, 3),
-            "source": "collectapi",
-            "ok": True,
-            "ts": now,
-            "state": st,
-        }
-        _collect_mem["by_state"][st] = out
-        print(f"[collectapi] OK {st} regular={out['regular']}")
+        out = {**prices, "source": "zyla", "ok": True, "ts": now, "state": st}
+        _zyla_mem["by_key"][cache_key] = out
         return out
     except Exception as e:
-        print(f"[collectapi] fail: {e}")
+        print(f"[zyla] state fail: {e}")
         return None
 
 
 def state_averages(state: str = "CO") -> dict:
-    """Promedios: EIA → CollectAPI → fallback estático."""
+    """Promedios: EIA → Zyla → fallback estático."""
     st = (state or "DEFAULT").upper()
     eia = fetch_eia_state_averages(st)
     base = dict(BASE_STATE_AVG.get(st) or BASE_STATE_AVG["DEFAULT"])
-    collect = None
+    zyla = None
     if not eia.get("ok"):
-        collect = fetch_collect_state_averages(st if st != "DEFAULT" else "CO")
+        zyla = fetch_collect_state_averages(st if st != "DEFAULT" else "CO")
 
     if eia.get("ok"):
         source = "eia"
         regular, mid, premium, diesel = eia["regular"], eia["mid"], eia["premium"], eia["diesel"]
         period = eia.get("period")
         eia_ok = True
-    elif collect and collect.get("ok"):
-        source = "collectapi"
+    elif zyla and zyla.get("ok"):
+        source = "zyla"
         regular, mid, premium, diesel = (
-            collect["regular"],
-            collect["mid"],
-            collect["premium"],
-            collect["diesel"],
+            zyla["regular"],
+            zyla["mid"],
+            zyla["premium"],
+            zyla["diesel"],
         )
         period = None
         eia_ok = False
@@ -466,7 +566,8 @@ def state_averages(state: str = "CO") -> dict:
         "source": source,
         "eia_period": period,
         "eia_ok": eia_ok,
-        "collect_ok": bool(collect and collect.get("ok")),
+        "zyla_ok": bool(zyla and zyla.get("ok")),
+        "collect_ok": bool(zyla and zyla.get("ok")),
     }
     return out
 
@@ -631,10 +732,12 @@ def price_meta(state: str = "CO", fast: bool = True) -> dict:
         "avg_source": avg.get("source"),
         "eia_period": avg.get("eia_period"),
         "eia_ok": avg.get("eia_ok"),
-        "collect_api_configured": bool(_collect_api_key()),
+        "collect_api_configured": bool(_zyla_api_key()),
+        "zyla_configured": bool(_zyla_api_key()),
+        "zyla_url_configured": bool(_zyla_gas_url()),
         "how_it_works": (
             "1) Reportes de la comunidad (prioridad). "
-            "2) EIA oficial o CollectAPI + ajuste por marca. "
+            "2) EIA oficial o Zyla Labs + ajuste por marca. "
             "3) Precios exactos de bomba: mas reportes o API de estaciones."
         ),
     }
