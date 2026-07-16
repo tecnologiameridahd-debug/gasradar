@@ -30,7 +30,7 @@ from backend.stations import stations_near
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.2.4"
+APP_VERSION = "0.2.5"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 

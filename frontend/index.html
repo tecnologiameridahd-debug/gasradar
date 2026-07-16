@@ -4,26 +4,24 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#0b1220" />
-    <meta name="description" content="GasRadar — encuentra la gasolina más barata cerca de ti en USA" />
+    <meta name="description" content="GasRadar — find the cheapest gas near you in the USA" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <title>GasRadar — Precios de gasolina USA</title>
-    <link rel="icon" href="/static/favicon-32.png?v=0.2.4" type="image/png" sizes="32x32" />
-    <link rel="icon" href="/static/favicon-64.png?v=0.2.4" type="image/png" sizes="64x64" />
-    <link rel="apple-touch-icon" href="/static/logo-192.png?v=0.2.4" />
-    <!-- ?v= evita cache del navegador al actualizar -->
-    <link rel="stylesheet" href="/static/styles.css?v=0.2.4" />
+    <title>GasRadar — Gas prices USA</title>
+    <link rel="icon" href="/static/favicon-32.png?v=0.2.5" type="image/png" sizes="32x32" />
+    <link rel="icon" href="/static/favicon-64.png?v=0.2.5" type="image/png" sizes="64x64" />
+    <link rel="apple-touch-icon" href="/static/logo-192.png?v=0.2.5" />
+    <link rel="stylesheet" href="/static/styles.css?v=0.2.5" />
   </head>
   <body>
-    <!-- TikTok flotante (esquina) -->
     <a
       class="tiktok-fab"
       href="https://www.tiktok.com/@gasradarapp"
       target="_blank"
       rel="noopener noreferrer"
-      title="GasRadar en TikTok"
-      aria-label="Síguenos en TikTok @gasradarapp"
+      title="GasRadar on TikTok"
+      aria-label="Follow GasRadar on TikTok"
     >
       <svg class="tiktok-ico" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
         <path
@@ -39,7 +37,7 @@
         <div class="brand">
           <img
             class="logo"
-            src="/static/logo.svg?v=0.2.4"
+            src="/static/logo.svg?v=0.2.5"
             width="56"
             height="56"
             alt="GasRadar"
@@ -47,33 +45,38 @@
           />
           <div class="brand-text">
             <h1><span class="brand-gas">Gas</span><span class="brand-radar">Radar</span></h1>
-            <p class="subtitle">Mejores precios cerca de ti · USA</p>
+            <p class="subtitle" data-i18n="subtitle">Mejores precios cerca de ti · USA</p>
           </div>
+        </div>
+        <div class="lang-switch" role="group" aria-label="Language">
+          <button type="button" class="lang-btn active" id="btnLangEs" data-lang="es">ES</button>
+          <button type="button" class="lang-btn" id="btnLangEn" data-lang="en">EN</button>
         </div>
       </header>
 
       <section class="card search-card">
         <button class="btn-primary grow btn-gps" id="btnGps" type="button">
           <span class="btn-ico" aria-hidden="true">📍</span>
-          Usar mi ubicación
+          <span data-i18n="btnGps">Usar mi ubicación</span>
         </button>
         <div class="row zip-row">
           <div class="grow zip-wrap">
-            <label class="sr-only" for="zipInput">Código ZIP</label>
+            <label class="sr-only" for="zipInput" data-i18n="zipLabel">Código ZIP</label>
             <input
               id="zipInput"
               type="text"
               inputmode="numeric"
               autocomplete="postal-code"
+              data-i18n-placeholder="zipPlaceholder"
               placeholder="ZIP (ej. 80903)"
               maxlength="10"
             />
           </div>
-          <button class="btn-secondary" id="btnZip" type="button">Buscar</button>
+          <button class="btn-secondary" id="btnZip" type="button" data-i18n="btnSearch">Buscar</button>
         </div>
         <div class="filters">
           <label class="field">
-            <span class="field-label">Combustible</span>
+            <span class="field-label" data-i18n="fuelLabel">Combustible</span>
             <select id="fuelSelect">
               <option value="regular" selected>Regular</option>
               <option value="mid">Mid</option>
@@ -82,12 +85,12 @@
             </select>
           </label>
           <label class="field">
-            <span class="field-label">Radio</span>
+            <span class="field-label" data-i18n="radiusLabel">Radio</span>
             <select id="radiusSelect">
-              <option value="3">3 millas</option>
-              <option value="5" selected>5 millas</option>
-              <option value="10">10 millas</option>
-              <option value="15">15 millas</option>
+              <option value="3" data-i18n="mi3">3 millas</option>
+              <option value="5" selected data-i18n="mi5">5 millas</option>
+              <option value="10" data-i18n="mi10">10 millas</option>
+              <option value="15" data-i18n="mi15">15 millas</option>
             </select>
           </label>
         </div>
@@ -95,8 +98,8 @@
           <div class="loc-row">
             <span class="loc-dot" id="locDot" aria-hidden="true"></span>
             <div>
-              <div class="loc-label" id="locationLabel">Sin ubicación</div>
-              <div class="loc-sub" id="stateAvg">Escribe un ZIP o usa el GPS</div>
+              <div class="loc-label" id="locationLabel" data-i18n="noLocation">Sin ubicación</div>
+              <div class="loc-sub" id="stateAvg" data-i18n="locHint">Escribe un ZIP o usa el GPS</div>
             </div>
           </div>
         </div>
@@ -104,7 +107,7 @@
 
       <section class="card best" id="bestCard" hidden>
         <div class="best-top">
-          <span class="badge gold">★ Más barata</span>
+          <span class="badge gold" data-i18n="cheapestBadge">★ Más barata</span>
           <span class="badge muted" id="bestSourceBadge"></span>
         </div>
         <div class="price" id="bestPrice">$—</div>
@@ -114,16 +117,10 @@
           <div class="meta" id="bestMeta"></div>
         </div>
         <div class="best-actions">
-          <a
-            class="btn-primary grow"
-            id="bestMaps"
-            href="#"
-            target="_blank"
-            rel="noopener"
-          >
+          <a class="btn-primary grow" id="bestMaps" href="#" target="_blank" rel="noopener" data-i18n="directions">
             Cómo llegar
           </a>
-          <button class="btn-secondary grow" id="bestShare" type="button">
+          <button class="btn-secondary grow" id="bestShare" type="button" data-i18n="share">
             Compartir
           </button>
         </div>
@@ -131,10 +128,10 @@
 
       <section class="card results-card">
         <div class="results-head" id="resultsHead" hidden>
-          <h2 class="results-title">Cerca de ti</h2>
+          <h2 class="results-title" data-i18n="nearYou">Cerca de ti</h2>
           <span class="results-count" id="resultsCount"></span>
         </div>
-        <div id="status" class="loading">Cargando…</div>
+        <div id="status" class="loading" data-i18n="loading">Cargando…</div>
         <div id="skeleton" class="skeleton-list" hidden>
           <div class="skeleton-row"></div>
           <div class="skeleton-row"></div>
@@ -147,22 +144,22 @@
       <footer class="site-footer">
         <div><strong>GasRadar</strong> · beta</div>
         <div>
-          Contacto:
+          <span data-i18n="contact">Contacto:</span>
           <a href="mailto:contact@gasradarapp.com">contact@gasradarapp.com</a>
         </div>
         <div class="footer-note">
           <a href="https://www.tiktok.com/@gasradarapp" target="_blank" rel="noopener noreferrer"
             >TikTok @gasradarapp</a
           >
-          · Precios de referencia
+          · <span data-i18n="refPrices">Precios de referencia</span>
         </div>
       </footer>
     </div>
 
     <div class="modal-bg" id="modal" role="dialog" aria-modal="true" aria-labelledby="reportTitle">
       <div class="modal">
-        <h3 id="reportTitle">Reportar precio</h3>
-        <p class="subtitle modal-sub">¿Cuánto viste en la bomba? (USD / galón)</p>
+        <h3 id="reportTitle" data-i18n="reportTitle">Reportar precio</h3>
+        <p class="subtitle modal-sub" data-i18n="reportSub">¿Cuánto viste en la bomba? (USD / galón)</p>
         <div class="price-input-wrap">
           <span class="price-prefix">$</span>
           <input
@@ -172,19 +169,19 @@
             min="1"
             max="12"
             inputmode="decimal"
-            placeholder="2.999"
+            placeholder="2.99"
           />
         </div>
-        <p class="hint" id="reportHint">Ejemplo: 2.99 o 3.15</p>
+        <p class="hint" id="reportHint" data-i18n="reportHint">Ejemplo: 2.99 o 3.15</p>
         <div class="row modal-actions">
-          <button class="btn-secondary grow" id="btnCloseModal" type="button">Cancelar</button>
-          <button class="btn-primary grow" id="btnSubmitReport" type="button">Guardar</button>
+          <button class="btn-secondary grow" id="btnCloseModal" type="button" data-i18n="cancel">Cancelar</button>
+          <button class="btn-primary grow" id="btnSubmitReport" type="button" data-i18n="save">Guardar</button>
         </div>
       </div>
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-    <script src="/static/app.js?v=0.2.4"></script>
+    <script src="/static/app.js?v=0.2.5"></script>
   </body>
 </html>
