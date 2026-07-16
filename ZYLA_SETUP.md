@@ -1,100 +1,39 @@
-# Conectar precios Zyla Labs a GasRadar
+# Zyla Labs — Gas Price Locator (API #4808)
 
-## Endpoints configurados (API #3109 US Gas Prices)
+Hallado en tu carpeta Descargas:
+`Gas Price Locator API_collection_Zyla Api Hub (1).json`
+
+## Endpoints correctos
 
 ```text
-# Promedios por ZIP
-GET https://zylalabs.com/api/3109/us+gas+prices+api/24537/get+prices?zip=80903&type=regular
+# Precios por ZIP (nota: "pices" es el nombre real en Zyla)
+GET https://zylalabs.com/api/4808/gas+price+locator+api/5997/get+pices?zip=80903&type=regular
 
-# Estaciones con precio (station data)
-GET https://zylalabs.com/api/3109/us+gas+prices+api/24538/station+data?zip=80903&type=regular
+# Detalle de estación
+GET https://zylalabs.com/api/4808/gas+price+locator+api/23308/station+data?station_id=179035
 ```
 
 Auth:
 
 ```http
-Authorization: Bearer 14765|tu_token
+Authorization: Bearer 14766|tu_token
 ```
 
-Variables:
-
-| Env / config_local | Uso |
-|--------------------|-----|
-| `ZYLA_API_KEY` | Bearer token |
-| `ZYLA_GAS_URL` | .../24537/get+prices |
-| `ZYLA_STATION_URL` | .../24538/station+data |
-
-## Importante
-
-Tu key **sí es de Zyla** (formato `12345|xxxx`).
-
-Al probarla ahora, Zyla responde:
-
-> **"You are not authorized to access this API. Please subscribe to this API."**
-
-Eso significa:
-
-1. La key es válida (Bearer funciona).
-2. **Falta suscribirte al API #3109 — US Gas Prices API** en el dashboard de Zyla.
-
----
-
-## Pasos en Zyla
-
-1. Entra a https://zylalabs.com y inicia sesión.
-2. Busca un API de gasolina USA, por ejemplo:
-   - **US Gas Prices API**
-   - **Gas Prices in USA by ZIP Code**
-   - **ZIP Code Gas Prices API**
-   - **Gas Price Locator API**
-3. Pulsa **Subscribe** / **Start free trial** (el plan free del que te suscribiste).
-4. Abre el API → pestaña de documentación / **cURL**.
-5. Copia la URL, algo así:
-
-```text
-https://zylalabs.com/api/3109/us+gas+prices+api/24537/get+prices?zip=90001&type=regular
-```
-
-6. La parte **sin** los parámetros (o con `{zip}`) es tu `ZYLA_GAS_URL`.
-
----
-
-## En tu PC (`config_local.py`)
-
-```python
-ZYLA_API_KEY = "14765|tu_token"
-ZYLA_GAS_URL = "https://zylalabs.com/api/XXXX/.../get+prices"
-```
-
----
-
-## En Render (internet)
-
-Environment:
+## Variables (config_local / Render)
 
 | Key | Value |
 |-----|--------|
-| `ZYLA_API_KEY` | `14765\|...` |
-| `ZYLA_GAS_URL` | URL del endpoint (copiada de Zyla) |
+| `ZYLA_API_KEY` | `14766\|...` |
+| `ZYLA_GAS_URL` | `https://zylalabs.com/api/4808/gas+price+locator+api/5997/get+pices` |
+| `ZYLA_STATION_URL` | `https://zylalabs.com/api/4808/gas+price+locator+api/23308/station+data` |
 
----
+## Respuesta ejemplo (ZIP 80903)
 
-## Auth correcta (Zyla)
+- average: **$3.87**
+- lowest: **$3.66** (Sam's Club)
+- estaciones con precio + nombre + coords
 
-```http
-Authorization: Bearer 14765|xxxxxxxx
-```
+## Nota
 
-No uses el estilo CollectAPI (`apikey ...`).
-
----
-
-## Comprobar
-
-Cuando la suscripción y la URL estén bien, al buscar un ZIP en la app o en logs:
-
-```text
-[zyla] OK zip=80903 regular=3.xx
-```
-
-Si sigue el mensaje de “subscribe to this API”, el producto aún no está activo en tu cuenta.
+El API **3109** (US Gas Prices) daba 401 sin suscripción.
+El que **sí funciona** con tu key es **4808 Gas Price Locator**.

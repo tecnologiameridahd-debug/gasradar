@@ -33,7 +33,7 @@ from backend.stations import stations_near
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.3.1"
+APP_VERSION = "0.3.2"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -158,9 +158,91 @@ def api_search(
     stations = stations_near(float(lat), float(lon), radius_mi=radius_mi, limit=limit)
     priced = attach_prices(stations, state=state, fuel=fuel) if stations else []
 
-    # Precios reales de estaciones Zyla (station+data) sobre OSM
-    if zyla_stations and priced:
-        priced = merge_zyla_prices_into_stations(priced, zyla_stations, fuel=fuel)
+    # Precios reales Zyla sobre OSM + añadir estaciones Zyla que no estén en el mapa
+    if zyla_stations:
+        if priced:
+            priced = merge_zyla_prices_into_stations(priced, zyla_stations, fuel=fuel)
+        # Estaciones Zyla con coords que no matchearon OSM
+        from backend.geo import haversine_miles
+        from backend.stations import _station_id, _pretty_station_name, _display_brand
+
+        existing_ids = {s.get("id") for s in priced}
+        for zs in zyla_stations:
+            if zs.get("lat") is None or zs.get("lon") is None:
+                continue
+            if zs.get("price") is None:
+                continue
+            dist = haversine_miles(
+                float(lat), float(lon), float(zs["lat"]), float(zs["lon"])
+            )
+            if dist > float(radius_mi) + 0.5:
+                continue
+            name = _pretty_station_name(
+                zs.get("name") or "Gas Station",
+                zs.get("brand"),
+                zs.get("name") or "",
+                zs.get("address"),
+            )
+            brand = _display_brand(zs.get("brand"), name)
+            sid = _station_id(float(zs["lat"]), float(zs["lon"]), name)
+            # evitar duplicado por coords/nombre
+            dup = False
+            for s in priced:
+                if s.get("id") == sid:
+                    dup = True
+                    break
+                if s.get("price_source") == "zyla" and s.get("name") == name:
+                    try:
+                        d2 = haversine_miles(
+                            float(s["lat"]), float(s["lon"]), float(zs["lat"]), float(zs["lon"])
+                        )
+                        if d2 < 0.1:
+                            dup = True
+                            break
+                    except Exception:
+                        pass
+            if dup or sid in existing_ids:
+                continue
+            existing_ids.add(sid)
+            priced.append(
+                {
+                    "id": sid,
+                    "name": name,
+                    "brand": brand,
+                    "lat": float(zs["lat"]),
+                    "lon": float(zs["lon"]),
+                    "address": zs.get("address"),
+                    "maps_query": f"{name}, {zs.get('address') or ''}".strip(", "),
+                    "distance_mi": dist,
+                    "phone": None,
+                    "website": None,
+                    "source": "zyla",
+                    "is_demo": False,
+                    "nav_mode": "coords",
+                    "price": float(zs["price"]),
+                    "price_source": "zyla",
+                    "price_confidence": "high",
+                    "price_age_hours": None,
+                    "reports_count": 0,
+                    "prices": {
+                        fuel: {
+                            "price": float(zs["price"]),
+                            "source": "zyla",
+                            "confidence": "high",
+                            "reports_count": 0,
+                            "age_hours": None,
+                        }
+                    },
+                }
+            )
+        priced.sort(
+            key=lambda x: (
+                round(float(x.get("price") or 99), 3),
+                0 if x.get("price_source") == "user" else 1,
+                0 if x.get("price_source") == "zyla" else 1,
+                float(x.get("distance_mi") or 99),
+            )
+        )
 
     # Si Zyla trajo promedio del ZIP, re-anclar estimaciones restantes
     if zyla and zyla.get("ok") and priced:

@@ -451,14 +451,118 @@ def _normalize_station_name(name: str) -> str:
     return " ".join(n.split())
 
 
-def fetch_zyla_stations(zip_code: str, fuel: str = "regular") -> list[dict]:
+def _zyla_headers() -> dict:
+    return {
+        "Authorization": f"Bearer {_zyla_api_key()}",
+        "Accept": "application/json",
+    }
+
+
+def _parse_zyla_locator_payload(data: dict, fuel: str) -> tuple[dict | None, list[dict]]:
     """
-    Lista estaciones con precio desde Zyla station+data.
-    Cada item: name, brand, lat, lon, address, price, fuel, distance_mi?
+    Formato Gas Price Locator API (4808):
+    {
+      status, zip, gas_type,
+      gas_prices: [ {average, lowest}, {station_id, price}, ... ]
+    }
     """
+    avg_block = None
+    station_prices: list[dict] = []
+    items = []
+    if isinstance(data, dict):
+        items = data.get("gas_prices") or data.get("stations") or data.get("results") or []
+        if not items and isinstance(data.get("data"), list):
+            items = data["data"]
+    if not isinstance(items, list):
+        return None, []
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        if "average" in it or "lowest" in it:
+            avg_block = it
+            continue
+        sid = it.get("station_id") or it.get("id")
+        price = _parse_price_val(it.get("price") or it.get(fuel) or it.get("regular"))
+        if sid is None or price is None:
+            continue
+        station_prices.append({"station_id": str(sid), "price": round(price, 3)})
+    averages = None
+    if avg_block:
+        reg = _parse_price_val(avg_block.get("average") or avg_block.get("regular"))
+        low = _parse_price_val(avg_block.get("lowest"))
+        if reg is not None:
+            averages = {
+                "regular": round(reg, 3),
+                "mid": round(reg + SPREAD_MID, 3),
+                "premium": round(reg + SPREAD_PREMIUM, 3),
+                "diesel": round(reg + SPREAD_DIESEL, 3),
+                "lowest": round(low, 3) if low is not None else None,
+                "source": "zyla",
+                "ok": True,
+            }
+    return averages, station_prices
+
+
+def _fetch_zyla_station_detail(station_id: str) -> dict | None:
+    """Detalle de estación: name, address, lat/lng."""
     key = _zyla_api_key()
     base = _zyla_station_url()
-    if not key or not base:
+    if not key or not base or not station_id:
+        return None
+    try:
+        r = httpx.get(
+            base,
+            params={"station_id": station_id},
+            headers=_zyla_headers(),
+            timeout=12.0,
+        )
+        if r.status_code != 200:
+            return None
+        data = r.json() or {}
+        d = data.get("data") if isinstance(data.get("data"), dict) else data
+        if not isinstance(d, dict):
+            return None
+        name = d.get("name") or "Gas Station"
+        brands = d.get("brands") or []
+        brand = brands[0] if isinstance(brands, list) and brands else d.get("brand")
+        coords = d.get("coordinates") or {}
+        lat = coords.get("lat") if isinstance(coords, dict) else d.get("lat")
+        lon = coords.get("lng") if isinstance(coords, dict) else (
+            d.get("lng") or d.get("lon")
+        )
+        addr_o = d.get("address") or {}
+        if isinstance(addr_o, dict):
+            address = ", ".join(
+                str(addr_o.get(k))
+                for k in ("line1", "city", "state", "postal_code")
+                if addr_o.get(k)
+            )
+        else:
+            address = str(addr_o) if addr_o else None
+        return {
+            "station_id": str(station_id),
+            "name": str(name).strip(),
+            "name_norm": _normalize_station_name(str(name)),
+            "brand": (str(brand).strip() if brand else None),
+            "lat": float(lat) if lat is not None else None,
+            "lon": float(lon) if lon is not None else None,
+            "address": address,
+            "source": "zyla",
+        }
+    except Exception as e:
+        print(f"[zyla detail] {station_id}: {e}")
+        return None
+
+
+def fetch_zyla_stations(zip_code: str, fuel: str = "regular") -> list[dict]:
+    """
+    Gas Price Locator:
+    1) get+pices?zip=&type= → station_id + price (+ average)
+    2) station+data?station_id= → nombre, coords (top N más baratas)
+    """
+    key = _zyla_api_key()
+    prices_url = _zyla_gas_url()
+    if not key or not prices_url:
         return []
     z = "".join(c for c in str(zip_code) if c.isdigit())[:5]
     if len(z) != 5:
@@ -469,93 +573,49 @@ def fetch_zyla_stations(zip_code: str, fuel: str = "regular") -> list[dict]:
     if cached and now - cached.get("ts", 0) < ZYLA_CACHE_TTL and cached.get("ok"):
         return list(cached.get("stations") or [])
 
-    params = {"zip": z, "type": fuel or "regular"}
-    headers = {"Authorization": f"Bearer {key}", "Accept": "application/json"}
     try:
-        r = httpx.get(base, params=params, headers=headers, timeout=18.0)
+        r = httpx.get(
+            prices_url,
+            params={"zip": z, "type": fuel or "regular"},
+            headers=_zyla_headers(),
+            timeout=18.0,
+        )
         if r.status_code != 200:
             print(f"[zyla stations] status={r.status_code} body={r.text[:220]}")
             return []
-        data = r.json()
-        raw_list = []
-        if isinstance(data, list):
-            raw_list = data
-        elif isinstance(data, dict):
-            for k in ("stations", "results", "data", "result", "items"):
-                v = data.get(k)
-                if isinstance(v, list):
-                    raw_list = v
-                    break
-                if isinstance(v, dict):
-                    for k2 in ("stations", "results", "items"):
-                        if isinstance(v.get(k2), list):
-                            raw_list = v[k2]
-                            break
+        data = r.json() or {}
+        averages, priced_ids = _parse_zyla_locator_payload(data, fuel)
+        if averages:
+            _zyla_mem["by_key"][f"zip:{z}:{fuel}"] = {**averages, "ts": now, "zip": z}
+
+        # Enriquecer top 12 más baratas (evitar demasiadas llamadas)
+        priced_ids.sort(key=lambda x: x["price"])
         out: list[dict] = []
-        for s in raw_list:
-            if not isinstance(s, dict):
-                continue
-            name = (
-                s.get("name")
-                or s.get("station")
-                or s.get("station_name")
-                or s.get("title")
-                or "Gas Station"
-            )
-            brand = s.get("brand") or s.get("company") or None
-            lat = s.get("lat") or s.get("latitude") or s.get("Latitude")
-            lon = s.get("lon") or s.get("lng") or s.get("longitude") or s.get("Longitude")
-            try:
-                lat_f = float(lat) if lat is not None else None
-                lon_f = float(lon) if lon is not None else None
-            except (TypeError, ValueError):
-                lat_f = lon_f = None
-            addr = (
-                s.get("address")
-                or s.get("street")
-                or s.get("addr")
-                or s.get("location")
-            )
-            if isinstance(addr, dict):
-                addr = ", ".join(
-                    str(addr.get(k))
-                    for k in ("street", "city", "state", "zip", "zipcode")
-                    if addr.get(k)
+        for row in priced_ids[:12]:
+            detail = _fetch_zyla_station_detail(row["station_id"])
+            if detail:
+                detail["price"] = row["price"]
+                detail["fuel"] = fuel
+                out.append(detail)
+            else:
+                out.append(
+                    {
+                        "station_id": row["station_id"],
+                        "name": f"Station {row['station_id']}",
+                        "name_norm": f"station {row['station_id']}",
+                        "brand": None,
+                        "lat": None,
+                        "lon": None,
+                        "address": None,
+                        "price": row["price"],
+                        "fuel": fuel,
+                        "source": "zyla",
+                    }
                 )
-            price = _parse_price_val(
-                s.get(fuel)
-                or s.get("regular")
-                or s.get("gasoline")
-                or s.get("price")
-                or s.get("gas_price")
-                or s.get("reg_price")
-            )
-            if price is None and isinstance(s.get("prices"), dict):
-                pr = s["prices"]
-                price = _parse_price_val(
-                    pr.get(fuel) or pr.get("regular") or pr.get("gasoline") or pr.get("price")
-                )
-            if price is None:
-                continue
-            out.append(
-                {
-                    "name": str(name).strip(),
-                    "name_norm": _normalize_station_name(str(name)),
-                    "brand": (str(brand).strip() if brand else None),
-                    "lat": lat_f,
-                    "lon": lon_f,
-                    "address": str(addr).strip() if addr else None,
-                    "price": round(price, 3),
-                    "fuel": fuel,
-                    "source": "zyla",
-                }
-            )
-        _zyla_mem["by_key"][cache_key] = {
-            "ok": True,
-            "ts": now,
-            "stations": out,
-        }
-        print(f"[zyla stations] OK zip={z} n={len(out)}")
+            time.sleep(0.12)
+
+        _zyla_mem["by_key"][cache_key] = {"ok": True, "ts": now, "stations": out}
+        print(f"[zyla stations] OK zip={z} n={len(out)} avg={averages}")
         return out
     except Exception as e:
         print(f"[zyla stations] fail: {e}")
@@ -643,8 +703,7 @@ def merge_zyla_prices_into_stations(
 
 def fetch_zyla_zip_prices(zip_code: str, fuel: str = "regular") -> dict | None:
     """
-    Precios vía Zyla Labs (Bearer token).
-    Requiere ZYLA_API_KEY + ZYLA_GAS_URL (endpoint del API al que te suscribiste).
+    Promedio/lowest por ZIP — Gas Price Locator get+pices.
     """
     key = _zyla_api_key()
     base = _zyla_gas_url()
@@ -659,35 +718,27 @@ def fetch_zyla_zip_prices(zip_code: str, fuel: str = "regular") -> dict | None:
     if cached and now - cached.get("ts", 0) < ZYLA_CACHE_TTL and cached.get("ok"):
         return cached
 
-    # URL puede ser plantilla o base; añadimos zip/type si faltan
-    url = base
-    params = {}
-    if "{zip}" in url:
-        url = url.replace("{zip}", z)
-    else:
-        params["zip"] = z
-    if "type=" not in url and "{type}" not in url:
-        params.setdefault("type", fuel or "regular")
-    if "{type}" in url:
-        url = url.replace("{type}", fuel or "regular")
-
-    headers = {
-        "Authorization": f"Bearer {key}",
-        "Accept": "application/json",
-    }
     try:
-        r = httpx.get(url, params=params or None, headers=headers, timeout=16.0)
+        r = httpx.get(
+            base,
+            params={"zip": z, "type": fuel or "regular"},
+            headers=_zyla_headers(),
+            timeout=16.0,
+        )
         if r.status_code != 200:
             print(f"[zyla] status={r.status_code} body={r.text[:220]}")
             return None
-        data = r.json()
-        prices = _extract_fuel_prices(data)
-        if not prices:
-            print(f"[zyla] no pude parsear: {str(data)[:240]}")
-            return None
-        out = {**prices, "source": "zyla", "ok": True, "ts": now, "zip": z}
+        averages, _ = _parse_zyla_locator_payload(r.json() or {}, fuel)
+        if not averages:
+            # fallback parse genérico
+            prices = _extract_fuel_prices(r.json())
+            if not prices:
+                print(f"[zyla] no pude parsear: {str(r.text)[:240]}")
+                return None
+            averages = {**prices, "source": "zyla", "ok": True}
+        out = {**averages, "ts": now, "zip": z}
         _zyla_mem["by_key"][cache_key] = out
-        print(f"[zyla] OK zip={z} regular={out['regular']}")
+        print(f"[zyla] OK zip={z} regular={out.get('regular')}")
         return out
     except Exception as e:
         print(f"[zyla] fail: {e}")
