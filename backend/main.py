@@ -30,7 +30,7 @@ from backend.stations import stations_near
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.2.0"
+APP_VERSION = "0.2.1"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -41,15 +41,16 @@ async def add_headers(request, call_next):
     response.headers["X-App"] = "GasRadar"
     response.headers["X-App-Version"] = APP_VERSION
     response.headers["Permissions-Policy"] = "geolocation=(self)"
-    # Cache estáticos un rato; HTML siempre fresco
+    # HTML/CSS/JS sin cache agresivo (beta: los cambios se ven al recargar)
     path = request.url.path
     if path.startswith("/static/"):
         if path.endswith((".png", ".svg", ".jpg", ".webp", ".ico")):
             response.headers["Cache-Control"] = "public, max-age=86400"
         elif path.endswith((".css", ".js")):
-            response.headers["Cache-Control"] = "public, max-age=300"
+            response.headers["Cache-Control"] = "no-cache, must-revalidate"
     elif path == "/":
-        response.headers["Cache-Control"] = "no-cache"
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
     return response
 
 

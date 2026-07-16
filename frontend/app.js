@@ -355,8 +355,8 @@ function render(data) {
   const avg = data.state_avg || {};
   const fuelAvg = avg[state.fuel] != null ? avg[state.fuel] : avg.regular;
   const st = data.center.state ? ` ${data.center.state}` : "";
-  // Solo promedio de estado — sin "EIA oficial" ni fecha
-  $("#stateAvg").textContent = `Promedio del estado${st}: ${money(fuelAvg)} · ${fuelLabel(state.fuel)}`;
+  // Texto corto: solo promedio del estado (sin EIA ni fecha)
+  $("#stateAvg").textContent = `Promedio del estado${st}: ${money(fuelAvg)}`;
 
   // Best card
   if (data.cheapest) {
