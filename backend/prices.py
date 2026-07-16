@@ -13,14 +13,16 @@ from __future__ import annotations
 import hashlib
 import os
 import statistics
-import sqlite3
 import time
 from pathlib import Path
 
 import httpx
 
+from backend.db import execute as db_execute
+from backend.db import fetchall as db_fetchall
+from backend.db import fetchone as db_fetchone
+
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
-DB_PATH = DATA_DIR / "prices.db"
 EIA_CACHE_PATH = DATA_DIR / "eia_cache.json"
 
 # Fallback si EIA no responde (actualizado ~2026; se reemplaza cuando EIA responde)
@@ -120,29 +122,6 @@ def _state_to_duoarea(state: str) -> str:
     return "S" + st
 
 
-def _conn() -> sqlite3.Connection:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    c = sqlite3.connect(str(DB_PATH))
-    c.row_factory = sqlite3.Row
-    c.execute(
-        """
-        CREATE TABLE IF NOT EXISTS price_reports (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            station_id TEXT NOT NULL,
-            fuel TEXT NOT NULL,
-            price REAL NOT NULL,
-            reported_at REAL NOT NULL,
-            note TEXT
-        )
-        """
-    )
-    c.execute(
-        "CREATE INDEX IF NOT EXISTS idx_reports_station ON price_reports(station_id, fuel, reported_at DESC)"
-    )
-    c.commit()
-    return c
-
-
 def report_price(station_id: str, fuel: str, price: float, note: str | None = None) -> dict:
     fuel = fuel.lower().strip()
     if fuel not in ("regular", "mid", "premium", "diesel"):
@@ -150,12 +129,10 @@ def report_price(station_id: str, fuel: str, price: float, note: str | None = No
     if price < 1.0 or price > 12.0:
         raise ValueError("precio fuera de rango")
     now = time.time()
-    with _conn() as c:
-        c.execute(
-            "INSERT INTO price_reports(station_id, fuel, price, reported_at, note) VALUES (?,?,?,?,?)",
-            (station_id, fuel, round(price, 3), now, note or ""),
-        )
-        c.commit()
+    db_execute(
+        "INSERT INTO price_reports(station_id, fuel, price, reported_at, note) VALUES (?,?,?,?,?)",
+        (station_id, fuel, round(price, 3), now, note or ""),
+    )
     # devolver consenso actualizado
     consensus = latest_reports(station_id).get(fuel) or {}
     return {
@@ -176,50 +153,49 @@ def latest_reports(station_id: str) -> dict[str, dict]:
     """
     cutoff = time.time() - REPORT_CONSENSUS_HOURS * 3600
     out: dict[str, dict] = {}
-    with _conn() as c:
-        for fuel in ("regular", "mid", "premium", "diesel"):
-            rows = c.execute(
+    for fuel in ("regular", "mid", "premium", "diesel"):
+        rows = db_fetchall(
+            """
+            SELECT price, reported_at FROM price_reports
+            WHERE station_id=? AND fuel=? AND reported_at>=?
+            ORDER BY reported_at DESC LIMIT 8
+            """,
+            (station_id, fuel, cutoff),
+        )
+        if not rows:
+            # último reporte hasta 72h
+            row = db_fetchone(
                 """
                 SELECT price, reported_at FROM price_reports
                 WHERE station_id=? AND fuel=? AND reported_at>=?
-                ORDER BY reported_at DESC LIMIT 8
+                ORDER BY reported_at DESC LIMIT 1
                 """,
-                (station_id, fuel, cutoff),
-            ).fetchall()
-            if not rows:
-                # último reporte hasta 72h
-                row = c.execute(
-                    """
-                    SELECT price, reported_at FROM price_reports
-                    WHERE station_id=? AND fuel=? AND reported_at>=?
-                    ORDER BY reported_at DESC LIMIT 1
-                    """,
-                    (station_id, fuel, time.time() - REPORT_MAX_AGE_SEC),
-                ).fetchone()
-                if row:
-                    out[fuel] = {
-                        "price": float(row["price"]),
-                        "reported_at": row["reported_at"],
-                        "source": "user",
-                        "age_hours": round((time.time() - row["reported_at"]) / 3600, 1),
-                        "reports_count": 1,
-                        "confidence": "medium",
-                    }
-                continue
+                (station_id, fuel, time.time() - REPORT_MAX_AGE_SEC),
+            )
+            if row:
+                out[fuel] = {
+                    "price": float(row["price"]),
+                    "reported_at": row["reported_at"],
+                    "source": "user",
+                    "age_hours": round((time.time() - row["reported_at"]) / 3600, 1),
+                    "reports_count": 1,
+                    "confidence": "medium",
+                }
+            continue
 
-            prices = [float(r["price"]) for r in rows]
-            med = statistics.median(prices)
-            newest = rows[0]["reported_at"]
-            n = len(prices)
-            conf = "high" if n >= 3 else "medium" if n >= 2 else "medium"
-            out[fuel] = {
-                "price": round(med, 3),
-                "reported_at": newest,
-                "source": "user",
-                "age_hours": round((time.time() - newest) / 3600, 1),
-                "reports_count": n,
-                "confidence": conf,
-            }
+        prices = [float(r["price"]) for r in rows]
+        med = statistics.median(prices)
+        newest = rows[0]["reported_at"]
+        n = len(prices)
+        conf = "high" if n >= 3 else "medium" if n >= 2 else "medium"
+        out[fuel] = {
+            "price": round(med, 3),
+            "reported_at": newest,
+            "source": "user",
+            "age_hours": round((time.time() - newest) / 3600, 1),
+            "reports_count": n,
+            "confidence": conf,
+        }
     return out
 
 
