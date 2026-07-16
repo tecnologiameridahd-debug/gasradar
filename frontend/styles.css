@@ -65,24 +65,33 @@ body {
 }
 
 .logo {
-  width: 52px;
-  height: 52px;
-  border-radius: 14px;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
   object-fit: cover;
   object-position: center;
   display: block;
-  box-shadow: var(--shadow-sm);
-  background: #000;
+  box-shadow:
+    0 0 0 1px rgba(56, 189, 248, 0.22),
+    0 8px 20px rgba(0, 0, 0, 0.35);
+  background: #0b1220;
   flex-shrink: 0;
-  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .brand-text h1 {
   margin: 0;
-  font-size: 1.35rem;
+  font-size: 1.4rem;
   letter-spacing: -0.03em;
   font-weight: 800;
   line-height: 1.15;
+}
+
+.brand-gas {
+  color: var(--text);
+}
+
+.brand-radar {
+  color: var(--blue);
 }
 
 .subtitle {

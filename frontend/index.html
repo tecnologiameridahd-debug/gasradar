@@ -9,10 +9,11 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="mobile-web-app-capable" content="yes" />
     <title>GasRadar — Precios de gasolina USA</title>
-    <link rel="icon" href="/static/logo.png" type="image/png" />
-    <link rel="apple-touch-icon" href="/static/logo.png" />
+    <link rel="icon" href="/static/favicon-32.png?v=0.2.4" type="image/png" sizes="32x32" />
+    <link rel="icon" href="/static/favicon-64.png?v=0.2.4" type="image/png" sizes="64x64" />
+    <link rel="apple-touch-icon" href="/static/logo-192.png?v=0.2.4" />
     <!-- ?v= evita cache del navegador al actualizar -->
-    <link rel="stylesheet" href="/static/styles.css?v=0.2.3" />
+    <link rel="stylesheet" href="/static/styles.css?v=0.2.4" />
   </head>
   <body>
     <!-- TikTok flotante (esquina) -->
@@ -38,14 +39,14 @@
         <div class="brand">
           <img
             class="logo"
-            src="/static/logo.png"
-            width="52"
-            height="52"
+            src="/static/logo.svg?v=0.2.4"
+            width="56"
+            height="56"
             alt="GasRadar"
             title="GasRadar"
           />
           <div class="brand-text">
-            <h1>GasRadar</h1>
+            <h1><span class="brand-gas">Gas</span><span class="brand-radar">Radar</span></h1>
             <p class="subtitle">Mejores precios cerca de ti · USA</p>
           </div>
         </div>
@@ -184,6 +185,6 @@
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-    <script src="/static/app.js?v=0.2.3"></script>
+    <script src="/static/app.js?v=0.2.4"></script>
   </body>
 </html>
