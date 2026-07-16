@@ -631,7 +631,10 @@ function render(data) {
     .map((s, i) => {
       const src = sourceBadgeHtml(s);
       const brandBit =
-        s.brand && s.brand !== s.name && s.brand !== "Gasolinera"
+        s.brand &&
+        s.brand !== s.name &&
+        s.brand !== "Gasolinera" &&
+        s.brand.toLowerCase() !== "gas station"
           ? `${escapeHtml(s.brand)} · `
           : "";
       const addr = s.address

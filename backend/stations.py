@@ -90,7 +90,8 @@ _STREET_WORDS = (
 )
 
 
-def _guess_brand(name: str) -> str:
+def _guess_brand(name: str) -> str | None:
+    """Devuelve marca conocida o None si no hay."""
     n = (name or "").lower()
     for needle, label in _BRAND_PATTERNS:
         # word-ish match: avoid "bp" matching random substrings mid-word
@@ -100,7 +101,7 @@ def _guess_brand(name: str) -> str:
             continue
         if needle in n:
             return label
-    return "Gasolinera"
+    return None
 
 
 def re_search_brand_bp(text: str) -> bool:
@@ -123,30 +124,73 @@ def _looks_like_street(name: str) -> bool:
     return False
 
 
-def _pretty_station_name(raw_name: str, brand: str, display: str = "") -> str:
-    """Evita nombres genéricos tipo 'Airport Road' cuando hay marca."""
+def _short_street(address: str | None, raw_name: str = "") -> str:
+    """Saca un trozo de calle legible para el nombre de pantalla."""
+    if raw_name and _looks_like_street(raw_name) and not raw_name.replace(" ", "").isdigit():
+        return raw_name.strip()
+    if not address:
+        return ""
+    # primera parte suele ser la calle
+    part = address.split(",")[0].strip()
+    if part and len(part) < 48:
+        return part
+    return part[:45] + "…" if part else ""
+
+
+def _pretty_station_name(
+    raw_name: str, brand: str | None, display: str = "", address: str | None = None
+) -> str:
+    """
+    Nombre para la app:
+    - Con marca → Shell, Circle K…
+    - Sin marca en OSM → 'Gas · Airport Road' (no 'Gasolinera' solo)
+    """
     name = (raw_name or "").strip() or "Gas Station"
-    brand = (brand or "Gasolinera").strip()
+    brand = (brand or "").strip() or None
+    if not brand or brand == "Gasolinera":
+        brand = _guess_brand(f"{name} {display}")
 
-    # Si el nombre ya es la marca, listo
-    if name.lower() == brand.lower():
-        return brand
+    generic = {
+        "gas station",
+        "fuel",
+        "petrol",
+        "gas",
+        "station",
+        "fuel station",
+        "gasolinera",
+    }
 
-    # Si el "nombre" es una calle y hay marca conocida → usar marca
-    if brand != "Gasolinera" and _looks_like_street(name):
-        return brand
-
-    # Si el nombre es genérico
-    generic = {"gas station", "fuel", "petrol", "gas", "station", "fuel station"}
-    if name.lower() in generic:
-        if brand != "Gasolinera":
+    # Marca conocida
+    if brand:
+        if name.lower() == brand.lower() or name.lower() in generic or _looks_like_street(name):
             return brand
-        # intentar marca desde display completo
-        guessed = _guess_brand(display or name)
-        return guessed if guessed != "Gasolinera" else "Gasolinera"
+        # "Shell Station" etc.
+        if brand.lower() in name.lower():
+            return brand
+        return name
 
-    # Nombre de marca + algo extra → mantener nombre
+    # Sin marca: no devolver "Gasolinera" ni solo un número
+    if name.lower() in generic or name.replace(" ", "").isdigit():
+        street = _short_street(address or display, name if _looks_like_street(name) else "")
+        if street and not street.replace(" ", "").isdigit():
+            return f"Gas · {street}"
+        return "Gas station"
+
+    if _looks_like_street(name):
+        return f"Gas · {name}"
+
+    # Nombre propio tipo "Everyday Fuel", "North Murray Gas"
     return name
+
+
+def _display_brand(brand: str | None, name: str) -> str | None:
+    """Brand para UI: None si genérico (no mostrar 'Gasolinera')."""
+    b = (brand or "").strip()
+    if not b or b.lower() in ("gasolinera", "gas station", "independent", "independiente"):
+        # si el nombre ES la marca conocida
+        guessed = _guess_brand(name)
+        return guessed
+    return b
 
 
 def _viewbox(lat: float, lon: float, radius_mi: float) -> str:
@@ -199,16 +243,17 @@ def _from_nominatim_item(item: dict, user_lat: float, user_lon: float) -> dict |
     display = (item.get("display_name") or "").strip()
     raw_name = display.split(",")[0].strip() if display else "Gas Station"
     brand = _guess_brand(raw_name + " " + display)
-    name = _pretty_station_name(raw_name, brand, display)
     # dirección: trozos del display (omitir el nombre corto si coincide)
     parts = [p.strip() for p in display.split(",") if p.strip()]
-    if parts and parts[0].lower() in (raw_name.lower(), name.lower()):
+    if parts and parts[0].lower() in (raw_name.lower(),):
         address = ", ".join(parts[1:5]) if len(parts) > 1 else display
     else:
         address = ", ".join(parts[:4]) if parts else display
     # limpiar dirección muy larga
     if address and len(address) > 90:
         address = address[:87] + "…"
+    name = _pretty_station_name(raw_name, brand, display, address)
+    brand = _display_brand(brand, name)
     maps_query = display if display else name
     dist = haversine_miles(user_lat, user_lon, slat, slon)
     return {
@@ -294,7 +339,6 @@ def _station_from_osm_tags(
     )
     brand_tag = (tags.get("brand") or "").strip()
     brand = brand_tag or _guess_brand(f"{raw_name} {tags.get('operator', '')}")
-    name = _pretty_station_name(raw_name, brand, raw_name)
     street = " ".join(
         p
         for p in [tags.get("addr:housenumber", ""), tags.get("addr:street", "")]
@@ -304,6 +348,8 @@ def _station_from_osm_tags(
     state = tags.get("addr:state", "")
     postcode = tags.get("addr:postcode", "")
     address = ", ".join(p for p in [street, city, state, postcode] if p) or None
+    name = _pretty_station_name(raw_name, brand, raw_name, address)
+    brand = _display_brand(brand, name)
     maps_query = name
     if street:
         maps_query = f"{name}, {street}"
@@ -440,7 +486,6 @@ def _fetch_photon(lat: float, lon: float, radius_mi: float) -> list[dict]:
                     ):
                         continue
                 brand = _guess_brand(name_raw + " " + str(props.get("type", "")))
-                name = _pretty_station_name(name_raw, brand, name_raw)
                 street = " ".join(
                     p
                     for p in [
@@ -455,6 +500,8 @@ def _fetch_photon(lat: float, lon: float, radius_mi: float) -> list[dict]:
                 address = (
                     ", ".join(p for p in [street, city, state, postcode] if p) or None
                 )
+                name = _pretty_station_name(name_raw, brand, name_raw, address)
+                brand = _display_brand(brand, name)
                 dist = haversine_miles(lat, lon, slat, slon)
                 if dist > radius_mi + 0.6:
                     continue
@@ -527,15 +574,17 @@ def stations_near(
                 lat_f, lon_f, float(s["lat"]), float(s["lon"])
             )
             s["is_demo"] = False
+            raw = s.get("name") or "Gas Station"
             brand = s.get("brand") or _guess_brand(
-                f"{s.get('name', '')} {s.get('address', '')}"
+                f"{raw} {s.get('address', '')}"
             )
-            s["brand"] = brand
             s["name"] = _pretty_station_name(
-                s.get("name") or "Gas Station",
+                raw,
                 brand,
-                f"{s.get('name', '')}, {s.get('address', '')}",
+                f"{raw}, {s.get('address', '')}",
+                s.get("address"),
             )
+            s["brand"] = _display_brand(brand, s["name"])
         cached = [s for s in cached if s["distance_mi"] <= radius_mi + 0.5]
         cached.sort(key=lambda x: x["distance_mi"])
         if cached:
