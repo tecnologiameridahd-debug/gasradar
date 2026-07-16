@@ -30,7 +30,7 @@ from backend.stations import stations_near
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.2.5"
+APP_VERSION = "0.2.6"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -198,3 +198,12 @@ def index():
     if not index_path.exists():
         return {"msg": "Frontend missing"}
     return FileResponse(index_path)
+
+
+@app.get("/privacy")
+def privacy():
+    """Política de privacidad (App Store / pie de página)."""
+    path = FRONTEND / "privacy.html"
+    if not path.exists():
+        raise HTTPException(404, "Privacy page missing")
+    return FileResponse(path)
