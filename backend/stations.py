@@ -171,8 +171,16 @@ def _pretty_station_name(
 
     # Sin marca: no devolver "Gasolinera" ni solo un número
     if name.lower() in generic or name.replace(" ", "").isdigit():
-        street = _short_street(address or display, name if _looks_like_street(name) else "")
-        if street and not street.replace(" ", "").isdigit():
+        street = _short_street(
+            address or display,
+            name if _looks_like_street(name) and name.lower() not in generic else "",
+        )
+        if (
+            street
+            and not street.replace(" ", "").isdigit()
+            and street.lower() not in generic
+            and "gas station" not in street.lower()
+        ):
             return f"Gas · {street}"
         return "Gas station"
 
