@@ -150,22 +150,51 @@ def _zyla_api_key() -> str:
     )
 
 
+# URLs fijas Gas Price Locator #4808 (los + en env de Render a veces se rompen)
+_ZYLA_DEFAULT_GAS_URL = (
+    "https://zylalabs.com/api/4808/gas+price+locator+api/5997/get+pices"
+)
+_ZYLA_DEFAULT_STATION_URL = (
+    "https://zylalabs.com/api/4808/gas+price+locator+api/23308/station+data"
+)
+
+
+def _fix_url_plus(url: str) -> str:
+    """Si Render convirtió + en espacios, restaurar path Zyla."""
+    if not url:
+        return url
+    # espacios donde deberían ir +
+    if "gas price locator" in url or "get pices" in url or "station data" in url:
+        url = (
+            url.replace("gas price locator api", "gas+price+locator+api")
+            .replace("get pices", "get+pices")
+            .replace("station data", "station+data")
+            .replace(" ", "+")
+        )
+    return url
+
+
 def _zyla_gas_url() -> str:
-    """
-    URL promedios por ZIP (get+pices Gas Price Locator 4808).
-    """
-    return _env_first("ZYLA_GAS_URL", "ZYLA_PRICES_URL") or _secret_from_local(
+    """URL promedios por ZIP (get+pices)."""
+    u = _env_first("ZYLA_GAS_URL", "ZYLA_PRICES_URL") or _secret_from_local(
         "ZYLA_GAS_URL", "ZYLA_PRICES_URL"
     )
+    u = _fix_url_plus(u)
+    if u:
+        return u
+    # si hay key, usar default del API 4808
+    return _ZYLA_DEFAULT_GAS_URL if _zyla_api_key() else ""
 
 
 def _zyla_station_url() -> str:
-    """
-    URL detalle estación (station+data).
-    """
-    return _env_first("ZYLA_STATION_URL", "ZYLA_STATIONS_URL") or _secret_from_local(
+    """URL detalle estación (station+data)."""
+    u = _env_first("ZYLA_STATION_URL", "ZYLA_STATIONS_URL") or _secret_from_local(
         "ZYLA_STATION_URL", "ZYLA_STATIONS_URL"
     )
+    u = _fix_url_plus(u)
+    if u:
+        return u
+    return _ZYLA_DEFAULT_STATION_URL if _zyla_api_key() else ""
 
 
 def _collect_api_key() -> str:
