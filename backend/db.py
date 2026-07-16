@@ -100,6 +100,26 @@ def init_schema() -> None:
                         ON price_reports (station_id, fuel, reported_at DESC)
                     """
                 )
+                cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS site_events (
+                        id BIGSERIAL PRIMARY KEY,
+                        event_type TEXT NOT NULL,
+                        path TEXT,
+                        referrer TEXT,
+                        lang TEXT,
+                        detail TEXT,
+                        day TEXT NOT NULL,
+                        created_at DOUBLE PRECISION NOT NULL
+                    )
+                    """
+                )
+                cur.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_events_day
+                        ON site_events (day, event_type)
+                    """
+                )
         else:
             conn.executescript(
                 """
@@ -113,6 +133,18 @@ def init_schema() -> None:
                 );
                 CREATE INDEX IF NOT EXISTS idx_reports_station
                     ON price_reports (station_id, fuel, reported_at DESC);
+                CREATE TABLE IF NOT EXISTS site_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    event_type TEXT NOT NULL,
+                    path TEXT,
+                    referrer TEXT,
+                    lang TEXT,
+                    detail TEXT,
+                    day TEXT NOT NULL,
+                    created_at REAL NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_events_day
+                    ON site_events (day, event_type);
                 """
             )
 

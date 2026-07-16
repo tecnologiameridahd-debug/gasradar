@@ -30,7 +30,7 @@ from backend.stations import stations_near
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.2.8"
+APP_VERSION = "0.2.9"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -153,6 +153,15 @@ def api_search(
 
     user_reports = sum(1 for s in priced if s.get("price_source") == "user")
 
+    # Stats anónimas (ZIP o "gps")
+    try:
+        from backend.analytics import track_event
+
+        detail = zip_code or (zip or "") or ("gps" if lat is not None else "")
+        track_event("search", path="/api/search", detail=str(detail)[:40])
+    except Exception:
+        pass
+
     return {
         "center": {
             "lat": lat,
@@ -187,6 +196,36 @@ def api_report(body: ReportBody):
         raise HTTPException(400, str(e)) from e
 
 
+class VisitBody(BaseModel):
+    path: str | None = "/"
+    referrer: str | None = None
+    lang: str | None = None
+
+
+@app.post("/api/visit")
+def api_visit(body: VisitBody):
+    """Registro anónimo de visita (sin IP ni nombre)."""
+    from backend.analytics import track_event
+
+    track_event(
+        "pageview",
+        path=body.path or "/",
+        referrer=body.referrer,
+        lang=body.lang,
+    )
+    return {"ok": True}
+
+
+@app.get("/api/stats")
+def api_stats(key: str | None = None, days: int = Query(14, ge=1, le=90)):
+    """Resumen de visitas — requiere ?key=STATS_KEY."""
+    from backend.analytics import check_stats_key, summary
+
+    if not check_stats_key(key):
+        raise HTTPException(401, "Clave incorrecta. Usa ?key= tu STATS_KEY")
+    return summary(days=days)
+
+
 # Static frontend
 if FRONTEND.is_dir():
     app.mount("/static", StaticFiles(directory=str(FRONTEND)), name="static")
@@ -206,4 +245,13 @@ def privacy():
     path = FRONTEND / "privacy.html"
     if not path.exists():
         raise HTTPException(404, "Privacy page missing")
+    return FileResponse(path)
+
+
+@app.get("/stats")
+def stats_page():
+    """Panel de visitas (protegido en el JS con la clave)."""
+    path = FRONTEND / "stats.html"
+    if not path.exists():
+        raise HTTPException(404, "Stats page missing")
     return FileResponse(path)

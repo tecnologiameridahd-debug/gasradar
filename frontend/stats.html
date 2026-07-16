@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>GasRadar — Stats</title>
+    <link rel="icon" href="/static/favicon-32.png?v=0.2.9" type="image/png" />
+    <link rel="stylesheet" href="/static/styles.css?v=0.2.9" />
+  </head>
+  <body>
+    <div class="app privacy-page">
+      <header class="top">
+        <div class="brand">
+          <a href="/" class="logo-link"><img class="logo" src="/static/logo.svg?v=0.2.9" width="48" height="48" alt="GasRadar" /></a>
+          <div class="brand-text">
+            <h1><span class="brand-gas">Gas</span><span class="brand-radar">Radar</span></h1>
+            <p class="subtitle">Visitas (solo tú)</p>
+          </div>
+        </div>
+      </header>
+
+      <section class="card">
+        <p class="loc-sub" style="margin:0 0 10px">
+          Clave de acceso (por defecto <code>gasradar2026</code> — cámbiala en Render con
+          <code>STATS_KEY</code>)
+        </p>
+        <div class="row">
+          <input id="keyInput" type="password" class="grow" placeholder="STATS_KEY" autocomplete="off" />
+          <button class="btn-primary" type="button" id="btnLoad">Ver stats</button>
+        </div>
+        <p class="hint" id="msg"></p>
+      </section>
+
+      <section class="card" id="summaryCard" hidden>
+        <h2 style="margin:0 0 10px;font-size:1.05rem">Resumen</h2>
+        <div class="stats-grid" id="totals"></div>
+        <p class="privacy-meta" id="note"></p>
+      </section>
+
+      <section class="card" id="daysCard" hidden>
+        <h2 style="margin:0 0 10px;font-size:1.05rem">Por día</h2>
+        <div id="byDay"></div>
+      </section>
+
+      <section class="card" id="refsCard" hidden>
+        <h2 style="margin:0 0 10px;font-size:1.05rem">De dónde vienen</h2>
+        <div id="refs"></div>
+      </section>
+
+      <section class="card" id="zipsCard" hidden>
+        <h2 style="margin:0 0 10px;font-size:1.05rem">Zonas / ZIP más buscados</h2>
+        <div id="zips"></div>
+      </section>
+
+      <section class="card" id="recentCard" hidden>
+        <h2 style="margin:0 0 10px;font-size:1.05rem">Actividad reciente</h2>
+        <div id="recent"></div>
+      </section>
+
+      <footer class="site-footer">
+        <a href="/">← GasRadar</a> · <a href="/privacy">Privacidad</a>
+      </footer>
+    </div>
+    <style>
+      .stats-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+      .stat-box {
+        background: #0d1526;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 12px;
+      }
+      .stat-box .n {
+        font-size: 1.6rem;
+        font-weight: 800;
+        color: var(--accent);
+        font-variant-numeric: tabular-nums;
+      }
+      .stat-box .l {
+        font-size: 0.78rem;
+        color: var(--muted);
+        margin-top: 2px;
+      }
+      .stat-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--line-soft);
+        font-size: 0.88rem;
+      }
+      .stat-row:last-child {
+        border-bottom: 0;
+      }
+      code {
+        color: var(--blue);
+        font-size: 0.85em;
+      }
+    </style>
+    <script>
+      const $ = (s) => document.querySelector(s);
+      const KEY_STORE = "gasradar_stats_key";
+
+      function loadSavedKey() {
+        try {
+          const u = new URL(location.href);
+          const q = u.searchParams.get("key");
+          if (q) {
+            $("#keyInput").value = q;
+            return q;
+          }
+          const s = localStorage.getItem(KEY_STORE);
+          if (s) $("#keyInput").value = s;
+          return s;
+        } catch (_) {
+          return null;
+        }
+      }
+
+      async function load() {
+        const key = ($("#keyInput").value || "").trim();
+        if (!key) {
+          $("#msg").textContent = "Escribe la clave";
+          return;
+        }
+        $("#msg").textContent = "Cargando…";
+        try {
+          localStorage.setItem(KEY_STORE, key);
+        } catch (_) {}
+        try {
+          const res = await fetch("/api/stats?key=" + encodeURIComponent(key) + "&days=14");
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            $("#msg").textContent = err.detail || "Clave incorrecta o error";
+            return;
+          }
+          const data = await res.json();
+          $("#msg").textContent = "Actualizado · " + (data.today || "");
+          render(data);
+        } catch (e) {
+          $("#msg").textContent = "Error de red";
+        }
+      }
+
+      function render(data) {
+        const t = data.totals || {};
+        $("#summaryCard").hidden = false;
+        $("#totals").innerHTML = `
+          <div class="stat-box"><div class="n">${t.pageviews_today || 0}</div><div class="l">Visitas hoy</div></div>
+          <div class="stat-box"><div class="n">${t.searches_today || 0}</div><div class="l">Búsquedas hoy</div></div>
+          <div class="stat-box"><div class="n">${t.pageviews || 0}</div><div class="l">Visitas total</div></div>
+          <div class="stat-box"><div class="n">${t.searches || 0}</div><div class="l">Búsquedas total</div></div>
+        `;
+        $("#note").textContent = data.note || "";
+
+        const days = data.by_day || [];
+        $("#daysCard").hidden = !days.length;
+        $("#byDay").innerHTML = days
+          .map(
+            (d) =>
+              `<div class="stat-row"><span>${d.day}</span><span>${d.pageviews || 0} visitas · ${d.searches || 0} búsquedas</span></div>`
+          )
+          .join("");
+
+        const refs = data.top_referrers || [];
+        $("#refsCard").hidden = !refs.length;
+        $("#refs").innerHTML = refs
+          .map((r) => `<div class="stat-row"><span>${r.source}</span><span>${r.n}</span></div>`)
+          .join("");
+
+        const zips = data.top_search_details || [];
+        $("#zipsCard").hidden = !zips.length;
+        $("#zips").innerHTML = zips
+          .map((z) => `<div class="stat-row"><span>${z.zip}</span><span>${z.n}</span></div>`)
+          .join("");
+
+        const recent = data.recent || [];
+        $("#recentCard").hidden = !recent.length;
+        $("#recent").innerHTML = recent
+          .map(
+            (r) =>
+              `<div class="stat-row"><span>${r.type} · ${r.detail} · ${r.from}</span><span>${r.day}</span></div>`
+          )
+          .join("");
+      }
+
+      $("#btnLoad").addEventListener("click", load);
+      $("#keyInput").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") load();
+      });
+      const k = loadSavedKey();
+      if (k) load();
+    </script>
+  </body>
+</html>

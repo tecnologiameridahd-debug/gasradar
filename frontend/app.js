@@ -885,5 +885,25 @@ function bind() {
   });
 }
 
+function trackVisit() {
+  try {
+    const body = {
+      path: location.pathname || "/",
+      referrer: document.referrer || "",
+      lang: state.lang || document.documentElement.lang || "",
+    };
+    // no bloquear la app si falla
+    fetch("/api/visit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      keepalive: true,
+    }).catch(() => {});
+  } catch (_) {
+    /* ignore */
+  }
+}
+
 bind();
+trackVisit();
 startApp();
