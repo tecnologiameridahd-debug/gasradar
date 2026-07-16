@@ -138,14 +138,25 @@ def _zyla_api_key() -> str:
 
 def _zyla_gas_url() -> str:
     """
-    URL completa del endpoint Zyla al que te suscribiste.
-    Ejemplo típico (ZIP):
+    URL promedios por ZIP (get+prices).
+    Ejemplo:
       https://zylalabs.com/api/3109/us+gas+prices+api/24537/get+prices
-    En dashboard Zyla: pestaña del API → cURL → copiar URL base (sin ?zip=).
     """
     return (
         (os.environ.get("ZYLA_GAS_URL") or "").strip()
         or _secret_from_local("ZYLA_GAS_URL")
+    )
+
+
+def _zyla_station_url() -> str:
+    """
+    URL de estaciones con precio (station+data).
+    Ejemplo:
+      https://zylalabs.com/api/3109/us+gas+prices+api/24538/station+data
+    """
+    return (
+        (os.environ.get("ZYLA_STATION_URL") or "").strip()
+        or _secret_from_local("ZYLA_STATION_URL")
     )
 
 
@@ -431,6 +442,203 @@ def _extract_fuel_prices(obj) -> dict | None:
         "premium": round(premium if premium is not None else regular + SPREAD_PREMIUM, 3),
         "diesel": round(diesel if diesel is not None else regular + SPREAD_DIESEL, 3),
     }
+
+
+def _normalize_station_name(name: str) -> str:
+    n = (name or "").lower()
+    for ch in ("#", ".", ",", "-", "_", "'"):
+        n = n.replace(ch, " ")
+    return " ".join(n.split())
+
+
+def fetch_zyla_stations(zip_code: str, fuel: str = "regular") -> list[dict]:
+    """
+    Lista estaciones con precio desde Zyla station+data.
+    Cada item: name, brand, lat, lon, address, price, fuel, distance_mi?
+    """
+    key = _zyla_api_key()
+    base = _zyla_station_url()
+    if not key or not base:
+        return []
+    z = "".join(c for c in str(zip_code) if c.isdigit())[:5]
+    if len(z) != 5:
+        return []
+    cache_key = f"stations:{z}:{fuel}"
+    now = time.time()
+    cached = _zyla_mem["by_key"].get(cache_key)
+    if cached and now - cached.get("ts", 0) < ZYLA_CACHE_TTL and cached.get("ok"):
+        return list(cached.get("stations") or [])
+
+    params = {"zip": z, "type": fuel or "regular"}
+    headers = {"Authorization": f"Bearer {key}", "Accept": "application/json"}
+    try:
+        r = httpx.get(base, params=params, headers=headers, timeout=18.0)
+        if r.status_code != 200:
+            print(f"[zyla stations] status={r.status_code} body={r.text[:220]}")
+            return []
+        data = r.json()
+        raw_list = []
+        if isinstance(data, list):
+            raw_list = data
+        elif isinstance(data, dict):
+            for k in ("stations", "results", "data", "result", "items"):
+                v = data.get(k)
+                if isinstance(v, list):
+                    raw_list = v
+                    break
+                if isinstance(v, dict):
+                    for k2 in ("stations", "results", "items"):
+                        if isinstance(v.get(k2), list):
+                            raw_list = v[k2]
+                            break
+        out: list[dict] = []
+        for s in raw_list:
+            if not isinstance(s, dict):
+                continue
+            name = (
+                s.get("name")
+                or s.get("station")
+                or s.get("station_name")
+                or s.get("title")
+                or "Gas Station"
+            )
+            brand = s.get("brand") or s.get("company") or None
+            lat = s.get("lat") or s.get("latitude") or s.get("Latitude")
+            lon = s.get("lon") or s.get("lng") or s.get("longitude") or s.get("Longitude")
+            try:
+                lat_f = float(lat) if lat is not None else None
+                lon_f = float(lon) if lon is not None else None
+            except (TypeError, ValueError):
+                lat_f = lon_f = None
+            addr = (
+                s.get("address")
+                or s.get("street")
+                or s.get("addr")
+                or s.get("location")
+            )
+            if isinstance(addr, dict):
+                addr = ", ".join(
+                    str(addr.get(k))
+                    for k in ("street", "city", "state", "zip", "zipcode")
+                    if addr.get(k)
+                )
+            price = _parse_price_val(
+                s.get(fuel)
+                or s.get("regular")
+                or s.get("gasoline")
+                or s.get("price")
+                or s.get("gas_price")
+                or s.get("reg_price")
+            )
+            if price is None and isinstance(s.get("prices"), dict):
+                pr = s["prices"]
+                price = _parse_price_val(
+                    pr.get(fuel) or pr.get("regular") or pr.get("gasoline") or pr.get("price")
+                )
+            if price is None:
+                continue
+            out.append(
+                {
+                    "name": str(name).strip(),
+                    "name_norm": _normalize_station_name(str(name)),
+                    "brand": (str(brand).strip() if brand else None),
+                    "lat": lat_f,
+                    "lon": lon_f,
+                    "address": str(addr).strip() if addr else None,
+                    "price": round(price, 3),
+                    "fuel": fuel,
+                    "source": "zyla",
+                }
+            )
+        _zyla_mem["by_key"][cache_key] = {
+            "ok": True,
+            "ts": now,
+            "stations": out,
+        }
+        print(f"[zyla stations] OK zip={z} n={len(out)}")
+        return out
+    except Exception as e:
+        print(f"[zyla stations] fail: {e}")
+        return []
+
+
+def merge_zyla_prices_into_stations(
+    stations: list[dict], zyla_stations: list[dict], fuel: str = "regular"
+) -> list[dict]:
+    """
+    Pone precio Zyla en estaciones OSM cuando coincide nombre/marca/coords.
+    """
+    if not stations or not zyla_stations:
+        return stations
+    from backend.geo import haversine_miles
+
+    used: set[int] = set()
+    for st in stations:
+        if st.get("price_source") == "user":
+            continue
+        best_i = None
+        best_score = 999.0
+        sn = _normalize_station_name(st.get("name") or "")
+        sb = _normalize_station_name(st.get("brand") or "")
+        for i, zs in enumerate(zyla_stations):
+            if i in used:
+                continue
+            score = 50.0
+            zn = zs.get("name_norm") or _normalize_station_name(zs.get("name") or "")
+            zb = _normalize_station_name(zs.get("brand") or "")
+            if sn and zn and (sn in zn or zn in sn):
+                score = 1.0
+            elif sb and zn and (sb in zn or zn in sb):
+                score = 2.0
+            elif sb and zb and sb == zb:
+                score = 3.0
+            # coords cercanas
+            if (
+                st.get("lat") is not None
+                and zs.get("lat") is not None
+                and zs.get("lon") is not None
+            ):
+                try:
+                    d = haversine_miles(
+                        float(st["lat"]),
+                        float(st["lon"]),
+                        float(zs["lat"]),
+                        float(zs["lon"]),
+                    )
+                    if d <= 0.15:
+                        score = min(score, d)
+                    elif d <= 0.4 and score < 10:
+                        score = min(score, 5.0 + d)
+                except (TypeError, ValueError):
+                    pass
+            if score < best_score:
+                best_score = score
+                best_i = i
+        if best_i is not None and best_score <= 6.0:
+            zs = zyla_stations[best_i]
+            used.add(best_i)
+            st["price"] = zs["price"]
+            st["price_source"] = "zyla"
+            st["price_confidence"] = "high"
+            st["reports_count"] = st.get("reports_count") or 0
+            if isinstance(st.get("prices"), dict):
+                st["prices"][fuel] = {
+                    "price": zs["price"],
+                    "source": "zyla",
+                    "age_hours": None,
+                    "reports_count": 0,
+                    "confidence": "high",
+                }
+    # reordenar
+    stations.sort(
+        key=lambda x: (
+            round(float(x.get("price") or 99), 3),
+            0 if x.get("price_source") == "user" else 1,
+            0 if x.get("price_source") == "zyla" else 1,
+            float(x.get("distance_mi") or 99),
+        )
+    )
+    return stations
 
 
 def fetch_zyla_zip_prices(zip_code: str, fuel: str = "regular") -> dict | None:

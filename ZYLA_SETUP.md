@@ -1,18 +1,28 @@
 # Conectar precios Zyla Labs a GasRadar
 
-## Endpoint que configuramos
+## Endpoints configurados (API #3109 US Gas Prices)
 
 ```text
-GET https://zylalabs.com/api/3109/us+gas+prices+api/24537/get+prices
-```
+# Promedios por ZIP
+GET https://zylalabs.com/api/3109/us+gas+prices+api/24537/get+prices?zip=80903&type=regular
 
-Parámetros que usa la app: `?zip=80903&type=regular`
+# Estaciones con precio (station data)
+GET https://zylalabs.com/api/3109/us+gas+prices+api/24538/station+data?zip=80903&type=regular
+```
 
 Auth:
 
 ```http
 Authorization: Bearer 14765|tu_token
 ```
+
+Variables:
+
+| Env / config_local | Uso |
+|--------------------|-----|
+| `ZYLA_API_KEY` | Bearer token |
+| `ZYLA_GAS_URL` | .../24537/get+prices |
+| `ZYLA_STATION_URL` | .../24538/station+data |
 
 ## Importante
 

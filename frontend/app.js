@@ -453,6 +453,12 @@ function sourceBadgeHtml(s) {
     const age = s.price_age_hours != null ? ` · ${s.price_age_hours}h` : "";
     return `<span class="badge user">${t("reported")}${n}${age}</span>`;
   }
+  if (s.price_source === "zyla") {
+    return `<span class="badge eia">${state.lang === "en" ? "live" : "en vivo"}</span>`;
+  }
+  if (s.price_source === "zyla_estimate") {
+    return `<span class="badge eia">Zyla</span>`;
+  }
   return `<span class="badge estimate">${t("estimated")}</span>`;
 }
 
