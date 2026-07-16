@@ -48,7 +48,7 @@ header {
   gap: 12px;
 }
 
-/* Logo: imagen en frontend/logo.svg o logo.png */
+/* Logo: imagen en frontend/logo.png (fondo negro) */
 .logo {
   width: 48px;
   height: 48px;
@@ -56,7 +56,7 @@ header {
   object-fit: cover;
   display: block;
   box-shadow: var(--shadow);
-  background: linear-gradient(145deg, var(--accent), #0ea5e9);
+  background: #000;
   flex-shrink: 0;
 }
 
