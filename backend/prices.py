@@ -522,7 +522,7 @@ def _fetch_zyla_station_detail(station_id: str) -> dict | None:
             base,
             params={"station_id": station_id},
             headers=_zyla_headers(),
-            timeout=12.0,
+            timeout=8.0,
         )
         if r.status_code != 200:
             return None
@@ -596,32 +596,46 @@ def fetch_zyla_stations(zip_code: str, fuel: str = "regular") -> list[dict]:
         if averages:
             _zyla_mem["by_key"][f"zip:{z}:{fuel}"] = {**averages, "ts": now, "zip": z}
 
-        # Enriquecer top 12 más baratas (evitar demasiadas llamadas)
+        # Enriquecer top 8 más baratas en paralelo (Render free es lento)
         priced_ids.sort(key=lambda x: x["price"])
+        top = priced_ids[:8]
         out: list[dict] = []
-        for row in priced_ids[:12]:
+
+        def _one(row: dict) -> dict:
             detail = _fetch_zyla_station_detail(row["station_id"])
             if detail:
                 detail["price"] = row["price"]
                 detail["fuel"] = fuel
-                out.append(detail)
-            else:
-                out.append(
-                    {
-                        "station_id": row["station_id"],
-                        "name": f"Station {row['station_id']}",
-                        "name_norm": f"station {row['station_id']}",
-                        "brand": None,
-                        "lat": None,
-                        "lon": None,
-                        "address": None,
-                        "price": row["price"],
-                        "fuel": fuel,
-                        "source": "zyla",
-                    }
-                )
-            time.sleep(0.12)
+                return detail
+            return {
+                "station_id": row["station_id"],
+                "name": f"Station {row['station_id']}",
+                "name_norm": f"station {row['station_id']}",
+                "brand": None,
+                "lat": None,
+                "lon": None,
+                "address": None,
+                "price": row["price"],
+                "fuel": fuel,
+                "source": "zyla",
+            }
 
+        try:
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=4) as ex:
+                futs = [ex.submit(_one, row) for row in top]
+                for f in concurrent.futures.as_completed(futs, timeout=25):
+                    try:
+                        out.append(f.result())
+                    except Exception as e:
+                        print(f"[zyla stations] worker: {e}")
+        except Exception as e:
+            print(f"[zyla stations] parallel fail {e}, sequential")
+            for row in top[:5]:
+                out.append(_one(row))
+
+        out.sort(key=lambda x: float(x.get("price") or 99))
         _zyla_mem["by_key"][cache_key] = {"ok": True, "ts": now, "stations": out}
         print(f"[zyla stations] OK zip={z} n={len(out)} avg={averages}")
         return out
