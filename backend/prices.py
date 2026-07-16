@@ -111,7 +111,16 @@ def _eia_api_key() -> str:
 
 
 def _collect_api_key() -> str:
-    return (os.environ.get("COLLECT_API_KEY") or os.environ.get("GAS_API_KEY") or "").strip()
+    """CollectAPI (formato id|token). Env o config_local — nunca en git."""
+    k = (os.environ.get("COLLECT_API_KEY") or os.environ.get("GAS_API_KEY") or "").strip()
+    if k:
+        return k
+    try:
+        import config_local as _cfg  # type: ignore
+
+        return (getattr(_cfg, "COLLECT_API_KEY", None) or getattr(_cfg, "GAS_API_KEY", None) or "").strip()
+    except ImportError:
+        return ""
 
 
 def _state_to_duoarea(state: str) -> str:
@@ -314,20 +323,150 @@ def fetch_eia_state_averages(state: str = "CO") -> dict:
     return result
 
 
+# Caché CollectAPI (promedios / estado)
+_collect_mem: dict = {"ts": 0.0, "by_state": {}}
+COLLECT_CACHE_TTL = 3 * 3600  # 3h
+
+
+def fetch_collect_state_averages(state: str = "CO") -> dict | None:
+    """
+    Promedios por estado vía CollectAPI gasPrice/stateUsaPrice.
+    Requiere COLLECT_API_KEY (env o config_local).
+    """
+    key = _collect_api_key()
+    if not key:
+        return None
+    st = (state or "CO").upper().strip()
+    if st in ("DEFAULT", "US", "USA"):
+        st = "CO"
+    now = time.time()
+    cached = _collect_mem["by_state"].get(st)
+    if cached and now - cached.get("ts", 0) < COLLECT_CACHE_TTL and cached.get("ok"):
+        return cached
+
+    headers = {
+        "authorization": f"apikey {key}",
+        "content-type": "application/json",
+    }
+    try:
+        r = httpx.get(
+            "https://api.collectapi.com/gasPrice/stateUsaPrice",
+            params={"state": st},
+            headers=headers,
+            timeout=14.0,
+        )
+        if r.status_code != 200:
+            print(f"[collectapi] status={r.status_code} body={r.text[:180]}")
+            return None
+        data = r.json() or {}
+        if data.get("success") is False:
+            print(f"[collectapi] success=false {str(data)[:180]}")
+            return None
+        result = data.get("result") or data
+        # Formatos posibles: result.state / result.cities / result como dict de precios
+        regular = mid = premium = diesel = None
+        if isinstance(result, dict):
+            state_block = result.get("state") or result.get("gasoline") or result
+            if isinstance(state_block, dict):
+                # claves comunes: gasoline, midGrade, premium, diesel
+                for k, target in (
+                    ("gasoline", "regular"),
+                    ("regular", "regular"),
+                    ("midGrade", "mid"),
+                    ("mid", "mid"),
+                    ("premium", "premium"),
+                    ("diesel", "diesel"),
+                ):
+                    v = state_block.get(k)
+                    if v is None and isinstance(state_block.get("prices"), dict):
+                        v = state_block["prices"].get(k)
+                    if v is not None:
+                        try:
+                            val = float(str(v).replace("$", "").strip())
+                            if target == "regular":
+                                regular = val
+                            elif target == "mid":
+                                mid = val
+                            elif target == "premium":
+                                premium = val
+                            else:
+                                diesel = val
+                        except (TypeError, ValueError):
+                            pass
+            # a veces result es lista de ciudades con average
+            if regular is None and isinstance(result, list) and result:
+                try:
+                    regular = float(str(result[0].get("gasoline") or result[0].get("price")).replace("$", ""))
+                except (TypeError, ValueError, AttributeError):
+                    pass
+            if regular is None and isinstance(result.get("cities"), list) and result["cities"]:
+                try:
+                    c0 = result["cities"][0]
+                    regular = float(str(c0.get("gasoline") or c0.get("price")).replace("$", ""))
+                except (TypeError, ValueError, AttributeError, IndexError):
+                    pass
+
+        if regular is None:
+            print(f"[collectapi] no pude parsear precios: {str(data)[:240]}")
+            return None
+
+        out = {
+            "regular": round(regular, 3),
+            "mid": round(mid if mid is not None else regular + SPREAD_MID, 3),
+            "premium": round(premium if premium is not None else regular + SPREAD_PREMIUM, 3),
+            "diesel": round(diesel if diesel is not None else regular + SPREAD_DIESEL, 3),
+            "source": "collectapi",
+            "ok": True,
+            "ts": now,
+            "state": st,
+        }
+        _collect_mem["by_state"][st] = out
+        print(f"[collectapi] OK {st} regular={out['regular']}")
+        return out
+    except Exception as e:
+        print(f"[collectapi] fail: {e}")
+        return None
+
+
 def state_averages(state: str = "CO") -> dict:
-    """Promedios listos para la API: prefiere EIA, si no fallback estático."""
+    """Promedios: EIA → CollectAPI → fallback estático."""
     st = (state or "DEFAULT").upper()
     eia = fetch_eia_state_averages(st)
     base = dict(BASE_STATE_AVG.get(st) or BASE_STATE_AVG["DEFAULT"])
+    collect = None
+    if not eia.get("ok"):
+        collect = fetch_collect_state_averages(st if st != "DEFAULT" else "CO")
+
+    if eia.get("ok"):
+        source = "eia"
+        regular, mid, premium, diesel = eia["regular"], eia["mid"], eia["premium"], eia["diesel"]
+        period = eia.get("period")
+        eia_ok = True
+    elif collect and collect.get("ok"):
+        source = "collectapi"
+        regular, mid, premium, diesel = (
+            collect["regular"],
+            collect["mid"],
+            collect["premium"],
+            collect["diesel"],
+        )
+        period = None
+        eia_ok = False
+    else:
+        source = "fallback"
+        regular, mid, premium, diesel = base["regular"], base["mid"], base["premium"], base["diesel"]
+        period = None
+        eia_ok = False
 
     out = {
-        "regular": eia["regular"] if eia.get("regular") is not None else base["regular"],
-        "mid": eia["mid"] if eia.get("mid") is not None else base["mid"],
-        "premium": eia["premium"] if eia.get("premium") is not None else base["premium"],
-        "diesel": eia["diesel"] if eia.get("diesel") is not None else base["diesel"],
-        "source": "eia" if eia.get("ok") else "fallback",
-        "eia_period": eia.get("period"),
-        "eia_ok": bool(eia.get("ok")),
+        "regular": regular,
+        "mid": mid,
+        "premium": premium,
+        "diesel": diesel,
+        "source": source,
+        "eia_period": period,
+        "eia_ok": eia_ok,
+        "collect_ok": bool(collect and collect.get("ok")),
     }
     return out
 
@@ -495,7 +634,7 @@ def price_meta(state: str = "CO", fast: bool = True) -> dict:
         "collect_api_configured": bool(_collect_api_key()),
         "how_it_works": (
             "1) Reportes de la comunidad (prioridad). "
-            "2) Estimacion EIA oficial + ajuste por marca. "
-            "3) Precios exactos de bomba requieren API de pago o mas reportes."
+            "2) EIA oficial o CollectAPI + ajuste por marca. "
+            "3) Precios exactos de bomba: mas reportes o API de estaciones."
         ),
     }
