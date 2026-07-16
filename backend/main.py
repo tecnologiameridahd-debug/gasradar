@@ -33,7 +33,7 @@ from backend.stations import stations_near
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.3.2"
+APP_VERSION = "0.3.3"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -129,19 +129,20 @@ def api_search(
     except Exception:
         pass
 
-    # Zyla Labs: estaciones con precio + promedio ZIP
+    # Zyla Labs (Gas Price Locator): precios reales por ZIP
     zyla = None
     zyla_stations: list = []
     if zip_code:
         try:
             zyla_stations = fetch_zyla_stations(str(zip_code), fuel=fuel) or []
-        except Exception:
+        except Exception as e:
+            print(f"[search] zyla stations: {e}")
             zyla_stations = []
         try:
             zyla = fetch_zyla_zip_prices(str(zip_code), fuel=fuel)
-        except Exception:
+        except Exception as e:
+            print(f"[search] zyla avg: {e}")
             zyla = None
-        # Si solo hay station+data, sacar promedio de esas estaciones
         if (not zyla or not zyla.get("ok")) and zyla_stations:
             vals = [float(s["price"]) for s in zyla_stations if s.get("price")]
             if vals:
@@ -155,27 +156,19 @@ def api_search(
                     "ok": True,
                 }
 
-    stations = stations_near(float(lat), float(lon), radius_mi=radius_mi, limit=limit)
-    priced = attach_prices(stations, state=state, fuel=fuel) if stations else []
+    # Si hay estaciones Zyla con precio real, priorizarlas en la lista
+    from backend.geo import haversine_miles
+    from backend.stations import _display_brand, _pretty_station_name, _station_id
 
-    # Precios reales Zyla sobre OSM + añadir estaciones Zyla que no estén en el mapa
+    priced: list = []
     if zyla_stations:
-        if priced:
-            priced = merge_zyla_prices_into_stations(priced, zyla_stations, fuel=fuel)
-        # Estaciones Zyla con coords que no matchearon OSM
-        from backend.geo import haversine_miles
-        from backend.stations import _station_id, _pretty_station_name, _display_brand
-
-        existing_ids = {s.get("id") for s in priced}
         for zs in zyla_stations:
-            if zs.get("lat") is None or zs.get("lon") is None:
-                continue
-            if zs.get("price") is None:
+            if zs.get("lat") is None or zs.get("lon") is None or zs.get("price") is None:
                 continue
             dist = haversine_miles(
                 float(lat), float(lon), float(zs["lat"]), float(zs["lon"])
             )
-            if dist > float(radius_mi) + 0.5:
+            if dist > float(radius_mi) + 1.0:
                 continue
             name = _pretty_station_name(
                 zs.get("name") or "Gas Station",
@@ -183,27 +176,12 @@ def api_search(
                 zs.get("name") or "",
                 zs.get("address"),
             )
+            # filtrar no-gasolina
+            low = f"{name} {zs.get('brand') or ''}".lower()
+            if any(x in low for x in ("dispensary", "cannabis", "marijuana", "weed")):
+                continue
             brand = _display_brand(zs.get("brand"), name)
             sid = _station_id(float(zs["lat"]), float(zs["lon"]), name)
-            # evitar duplicado por coords/nombre
-            dup = False
-            for s in priced:
-                if s.get("id") == sid:
-                    dup = True
-                    break
-                if s.get("price_source") == "zyla" and s.get("name") == name:
-                    try:
-                        d2 = haversine_miles(
-                            float(s["lat"]), float(s["lon"]), float(zs["lat"]), float(zs["lon"])
-                        )
-                        if d2 < 0.1:
-                            dup = True
-                            break
-                    except Exception:
-                        pass
-            if dup or sid in existing_ids:
-                continue
-            existing_ids.add(sid)
             priced.append(
                 {
                     "id": sid,
@@ -236,42 +214,72 @@ def api_search(
                 }
             )
         priced.sort(
+            key=lambda x: (round(float(x["price"]), 3), float(x["distance_mi"]))
+        )
+
+    # Completar con OSM solo si faltan resultados
+    if len(priced) < 8:
+        stations = stations_near(float(lat), float(lon), radius_mi=radius_mi, limit=limit)
+        osm_priced = attach_prices(stations, state=state, fuel=fuel) if stations else []
+        if zyla_stations and osm_priced:
+            osm_priced = merge_zyla_prices_into_stations(
+                osm_priced, zyla_stations, fuel=fuel
+            )
+        seen = {s["id"] for s in priced}
+        for item in osm_priced:
+            low = f"{item.get('name')} {item.get('brand') or ''}".lower()
+            if any(x in low for x in ("dispensary", "cannabis", "marijuana", "weed")):
+                continue
+            if item["id"] in seen:
+                continue
+            # no duplicar cerca de una Zyla ya listada
+            near_z = False
+            for z in priced:
+                try:
+                    if (
+                        haversine_miles(
+                            float(item["lat"]),
+                            float(item["lon"]),
+                            float(z["lat"]),
+                            float(z["lon"]),
+                        )
+                        < 0.12
+                    ):
+                        near_z = True
+                        break
+                except Exception:
+                    pass
+            if near_z:
+                continue
+            seen.add(item["id"])
+            # si hay promedio Zyla, anclar estimaciones restantes
+            if (
+                zyla
+                and zyla.get("ok")
+                and item.get("price_source") not in ("user", "zyla")
+            ):
+                zreg = float(zyla.get(fuel) or zyla.get("regular") or 0)
+                if zreg > 1:
+                    meta_avg = (price_meta(state, fast=True).get("state_avg") or {}).get(
+                        fuel
+                    )
+                    old = float(item.get("price") or zreg)
+                    adj = old - float(meta_avg) if meta_avg else 0.0
+                    item["price"] = round(zreg + adj, 3)
+                    item["price_source"] = "zyla_estimate"
+                    item["price_confidence"] = "medium"
+            priced.append(item)
+        priced.sort(
             key=lambda x: (
                 round(float(x.get("price") or 99), 3),
-                0 if x.get("price_source") == "user" else 1,
                 0 if x.get("price_source") == "zyla" else 1,
                 float(x.get("distance_mi") or 99),
             )
         )
 
-    # Si Zyla trajo promedio del ZIP, re-anclar estimaciones restantes
-    if zyla and zyla.get("ok") and priced:
-        zreg = float(zyla.get(fuel) or zyla.get("regular") or 0)
-        if zreg > 1:
-            meta_avg = (price_meta(state, fast=True).get("state_avg") or {}).get(fuel)
-            for item in priced:
-                if item.get("price_source") in ("user", "zyla"):
-                    continue
-                old = float(item.get("price") or zreg)
-                if meta_avg:
-                    adj = old - float(meta_avg)
-                else:
-                    adj = 0.0
-                new_p = round(float(zreg) + adj, 3)
-                item["price"] = new_p
-                item["price_source"] = "zyla_estimate"
-                item["price_confidence"] = "medium"
-                if isinstance(item.get("prices"), dict) and fuel in item["prices"]:
-                    item["prices"][fuel]["price"] = new_p
-                    item["prices"][fuel]["source"] = "zyla_estimate"
-            priced.sort(
-                key=lambda x: (
-                    round(float(x["price"]), 3),
-                    0 if x.get("price_source") == "user" else 1,
-                    0 if x.get("price_source") == "zyla" else 1,
-                    float(x["distance_mi"]),
-                )
-            )
+    if not priced:
+        stations = stations_near(float(lat), float(lon), radius_mi=radius_mi, limit=limit)
+        priced = attach_prices(stations, state=state, fuel=fuel) if stations else []
 
     best = cheapest_summary(priced) if priced else None
     meta = price_meta(state, fast=True)

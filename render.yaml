@@ -11,7 +11,14 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.12.8"
-      # Pegar en el Dashboard de Render (Environment):
-      # DATABASE_URL = connection string de Neon/Supabase (Postgres gratis)
+      # Pegar en Dashboard Render → Environment (no van en git):
       - key: DATABASE_URL
+        sync: false
+      - key: ZYLA_API_KEY
+        sync: false
+      - key: ZYLA_GAS_URL
+        sync: false
+      - key: ZYLA_STATION_URL
+        sync: false
+      - key: STATS_KEY
         sync: false

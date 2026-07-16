@@ -1,0 +1,29 @@
+========================================
+  PEGAR EN RENDER (para que la WEB use Zyla)
+========================================
+
+1) Entra: https://dashboard.render.com
+2) Abre el servicio: gasradar
+3) Menú izquierdo: Environment
+4) Add Environment Variable — crea ESTAS 3 (copiar/pegar):
+
+----------------------------------------
+Key:   ZYLA_API_KEY
+Value: 14766|3DaynPcHCtVP0OMi2016VM6GQpyN0KAGKjnjdlol
+----------------------------------------
+Key:   ZYLA_GAS_URL
+Value: https://zylalabs.com/api/4808/gas+price+locator+api/5997/get+pices
+----------------------------------------
+Key:   ZYLA_STATION_URL
+Value: https://zylalabs.com/api/4808/gas+price+locator+api/23308/station+data
+----------------------------------------
+
+5) Save Changes
+6) Espera 2–5 min a que diga Live (redeploy automático)
+7) Abre: https://gasradarapp.com
+8) Busca ZIP 80903 → debes ver Sam's Club $3.66, Circle K $3.69, badge "en vivo"
+
+Sin estos 3 valores, la web pública SOLO muestra estimaciones
+(en tu PC sí funciona porque usa config_local.py).
+
+========================================
