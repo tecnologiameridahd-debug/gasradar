@@ -250,15 +250,12 @@ function sourceBadgeHtml(s) {
       s.price_age_hours != null ? ` · ${s.price_age_hours}h` : "";
     return `<span class="badge user">reportado${n}${age}</span>`;
   }
-  if (s.price_source === "eia_estimate") {
-    return `<span class="badge eia">EIA + marca</span>`;
-  }
+  // Sin "EIA + marca" — texto simple
   return `<span class="badge estimate">estimado</span>`;
 }
 
 function sourceLabel(source) {
   if (source === "user") return "reportado";
-  if (source === "eia_estimate") return "EIA + marca";
   return "estimado";
 }
 
@@ -356,17 +353,10 @@ function render(data) {
   setLocDot("on");
 
   const avg = data.state_avg || {};
-  const meta = data.price_meta || {};
   const fuelAvg = avg[state.fuel] != null ? avg[state.fuel] : avg.regular;
-  let src;
-  if (meta.avg_source === "eia") {
-    src = `EIA oficial${meta.eia_period ? " · " + meta.eia_period : ""}`;
-  } else {
-    src = "referencia";
-  }
-  $("#stateAvg").textContent = `Promedio ${data.center.state || ""}: ${money(
-    fuelAvg
-  )} (${src}) · ${fuelLabel(state.fuel)}`;
+  const st = data.center.state ? ` ${data.center.state}` : "";
+  // Solo promedio de estado — sin "EIA oficial" ni fecha
+  $("#stateAvg").textContent = `Promedio del estado${st}: ${money(fuelAvg)} · ${fuelLabel(state.fuel)}`;
 
   // Best card
   if (data.cheapest) {
@@ -376,22 +366,18 @@ function render(data) {
     $("#bestPrice").textContent = money(b.price);
     $("#bestName").textContent = b.name;
     const conf =
-      b.source === "user"
-        ? "precio reportado"
-        : b.source === "eia_estimate"
-          ? "estimado EIA + marca"
-          : "estimado";
+      b.source === "user" ? "precio reportado" : "estimado";
     $("#bestMeta").textContent = `${b.distance_mi} mi · ${conf}`;
     const badge = $("#bestSourceBadge");
     if (badge) {
-      badge.textContent = sourceLabel(b.source);
-      badge.className =
-        "badge " +
-        (b.source === "user"
-          ? "user"
-          : b.source === "eia_estimate"
-            ? "eia"
-            : "estimate");
+      // Sin texto EIA/fecha — solo reportado o estimado
+      if (b.source === "user") {
+        badge.textContent = "reportado";
+        badge.className = "badge user";
+      } else {
+        badge.textContent = "estimado";
+        badge.className = "badge estimate";
+      }
     }
 
     const saveEl = $("#bestSave");
