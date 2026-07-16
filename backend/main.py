@@ -33,7 +33,7 @@ from backend.stations import stations_near
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.3.6"
+APP_VERSION = "0.3.7"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -98,6 +98,50 @@ def api_geocode(zip_code: str):
     if not g:
         raise HTTPException(404, "ZIP no encontrado")
     return g
+
+
+@app.get("/api/zyla/test")
+def api_zyla_test(zip: str = Query("80903")):
+    """Diagnóstico Zyla (sin exponer la key)."""
+    import httpx
+
+    from backend.prices import (
+        _zyla_api_key,
+        _zyla_gas_url,
+        _zyla_headers,
+        _zyla_station_url,
+        fetch_zyla_zip_prices,
+    )
+
+    key = _zyla_api_key()
+    gas_url = _zyla_gas_url()
+    st_url = _zyla_station_url()
+    out: dict = {
+        "key_ok": bool(key),
+        "key_len": len(key),
+        "key_has_pipe": ("|" in key) if key else False,
+        "gas_url": gas_url,
+        "station_url": st_url,
+    }
+    if not key or not gas_url:
+        out["error"] = "Falta ZYLA_API_KEY o URL"
+        return out
+    z = "".join(c for c in zip if c.isdigit())[:5] or "80903"
+    try:
+        r = httpx.get(
+            gas_url,
+            params={"zip": z, "type": "regular"},
+            headers=_zyla_headers(),
+            timeout=20.0,
+        )
+        out["http_status"] = r.status_code
+        out["body_preview"] = (r.text or "")[:300]
+        if r.status_code == 200:
+            prices = fetch_zyla_zip_prices(z, "regular")
+            out["parsed"] = prices
+    except Exception as e:
+        out["exception"] = f"{type(e).__name__}: {e}"
+    return out
 
 
 @app.get("/api/search")
