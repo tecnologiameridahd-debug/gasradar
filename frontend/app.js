@@ -97,7 +97,7 @@ function buildShareText(station) {
   lines.push(`📍 Cómo llegar: ${maps}`);
   lines.push(``);
   lines.push(`App: ${appUrl}`);
-  lines.push(`Por Alberto · contact@gasradarapp.com`);
+  lines.push(`Contacto: contact@gasradarapp.com`);
   return lines.join("\n");
 }
 

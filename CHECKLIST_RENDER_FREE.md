@@ -74,7 +74,7 @@ git push origin main
 
 ## Contacto en la app
 
-- Alberto · contact@gasradarapp.com  
+- Contacto: contact@gasradarapp.com  
 
 ---
 
