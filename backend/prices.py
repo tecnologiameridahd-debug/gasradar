@@ -123,40 +123,48 @@ def _secret_from_local(*names: str) -> str:
     return ""
 
 
+def _env_first(*names: str) -> str:
+    for n in names:
+        v = (os.environ.get(n) or "").strip()
+        # quitar comillas si las pegaron en Render
+        if len(v) >= 2 and ((v[0] == v[-1] == '"') or (v[0] == v[-1] == "'")):
+            v = v[1:-1].strip()
+        if v:
+            return v
+    return ""
+
+
 def _zyla_api_key() -> str:
     """
     Zyla Labs API key (formato id|token).
-    Env: ZYLA_API_KEY o COLLECT_API_KEY / GAS_API_KEY (compat).
+    Env: ZYLA_API_KEY (u aliases) o config_local.
     """
-    return (
-        (os.environ.get("ZYLA_API_KEY") or "").strip()
-        or (os.environ.get("COLLECT_API_KEY") or "").strip()
-        or (os.environ.get("GAS_API_KEY") or "").strip()
-        or _secret_from_local("ZYLA_API_KEY", "COLLECT_API_KEY", "GAS_API_KEY")
+    return _env_first(
+        "ZYLA_API_KEY",
+        "ZYLA_KEY",
+        "ZYLA_TOKEN",
+        "COLLECT_API_KEY",
+        "GAS_API_KEY",
+    ) or _secret_from_local(
+        "ZYLA_API_KEY", "ZYLA_KEY", "COLLECT_API_KEY", "GAS_API_KEY"
     )
 
 
 def _zyla_gas_url() -> str:
     """
-    URL promedios por ZIP (get+prices).
-    Ejemplo:
-      https://zylalabs.com/api/3109/us+gas+prices+api/24537/get+prices
+    URL promedios por ZIP (get+pices Gas Price Locator 4808).
     """
-    return (
-        (os.environ.get("ZYLA_GAS_URL") or "").strip()
-        or _secret_from_local("ZYLA_GAS_URL")
+    return _env_first("ZYLA_GAS_URL", "ZYLA_PRICES_URL") or _secret_from_local(
+        "ZYLA_GAS_URL", "ZYLA_PRICES_URL"
     )
 
 
 def _zyla_station_url() -> str:
     """
-    URL de estaciones con precio (station+data).
-    Ejemplo:
-      https://zylalabs.com/api/3109/us+gas+prices+api/24538/station+data
+    URL detalle estación (station+data).
     """
-    return (
-        (os.environ.get("ZYLA_STATION_URL") or "").strip()
-        or _secret_from_local("ZYLA_STATION_URL")
+    return _env_first("ZYLA_STATION_URL", "ZYLA_STATIONS_URL") or _secret_from_local(
+        "ZYLA_STATION_URL", "ZYLA_STATIONS_URL"
     )
 
 

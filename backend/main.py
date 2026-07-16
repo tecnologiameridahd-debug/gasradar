@@ -33,7 +33,7 @@ from backend.stations import stations_near
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.3.3"
+APP_VERSION = "0.3.4"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -70,7 +70,11 @@ def health():
     from datetime import datetime, timezone
 
     from backend.db import db_status
+    from backend.prices import _zyla_api_key, _zyla_gas_url, _zyla_station_url
 
+    zkey = _zyla_api_key()
+    zurl = _zyla_gas_url()
+    zst = _zyla_station_url()
     return {
         "ok": True,
         "app": "gasradar",
@@ -78,6 +82,13 @@ def health():
         "utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "status": "alive",
         "db": db_status(),
+        "zyla": {
+            "key": bool(zkey),
+            "key_len": len(zkey) if zkey else 0,
+            "gas_url": bool(zurl),
+            "station_url": bool(zst),
+            "ready": bool(zkey and zurl and zst),
+        },
     }
 
 
