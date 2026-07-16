@@ -1,18 +1,31 @@
 # Conectar precios Zyla Labs a GasRadar
 
+## Endpoint que configuramos
+
+```text
+GET https://zylalabs.com/api/3109/us+gas+prices+api/24537/get+prices
+```
+
+Parámetros que usa la app: `?zip=80903&type=regular`
+
+Auth:
+
+```http
+Authorization: Bearer 14765|tu_token
+```
+
 ## Importante
 
 Tu key **sí es de Zyla** (formato `12345|xxxx`).
 
-Al probarla, Zyla responde:
+Al probarla ahora, Zyla responde:
 
 > **"You are not authorized to access this API. Please subscribe to this API."**
 
 Eso significa:
 
 1. La key es válida (Bearer funciona).
-2. **Todavía no estás suscrito** al producto de gasolina concreto, o  
-3. Te suscribiste a uno, pero hay que usar **esa** URL exacta.
+2. **Falta suscribirte al API #3109 — US Gas Prices API** en el dashboard de Zyla.
 
 ---
 

@@ -22,6 +22,7 @@ from backend.prices import (
     attach_prices,
     cheapest_summary,
     fetch_eia_state_averages,
+    fetch_zyla_zip_prices,
     price_meta,
     report_price,
 )
@@ -30,7 +31,7 @@ from backend.stations import stations_near
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.2.9"
+APP_VERSION = "0.3.0"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -126,11 +127,70 @@ def api_search(
     except Exception:
         pass
 
+    # Zyla Labs (precios por ZIP) si hay key + URL + zip
+    zyla = None
+    if zip_code:
+        try:
+            zyla = fetch_zyla_zip_prices(str(zip_code), fuel=fuel)
+        except Exception:
+            zyla = None
+
     stations = stations_near(float(lat), float(lon), radius_mi=radius_mi, limit=limit)
     priced = attach_prices(stations, state=state, fuel=fuel) if stations else []
+
+    # Si Zyla trajo promedio del ZIP, re-anclar estimaciones a ese promedio
+    if zyla and zyla.get("ok") and priced:
+        zreg = float(zyla.get("regular") or 0)
+        if zreg > 1:
+            for item in priced:
+                if item.get("price_source") == "user":
+                    continue
+                # mantener ranking por marca relativo al promedio Zyla
+                delta = float(item.get("price") or zreg) - float(
+                    (price_meta(state, fast=True).get("state_avg") or {}).get(fuel)
+                    or zreg
+                )
+                # si no hay delta útil, pequeña variación por estación ya viene del estimate
+                src_p = zyla.get(fuel) or zreg
+                # re-escalar: precio ≈ zyla_fuel + (old - old_avg)
+                old = float(item.get("price") or src_p)
+                meta_avg = (price_meta(state, fast=True).get("state_avg") or {}).get(
+                    fuel
+                )
+                if meta_avg:
+                    adj = old - float(meta_avg)
+                else:
+                    adj = 0.0
+                new_p = round(float(src_p) + adj, 3)
+                item["price"] = new_p
+                item["price_source"] = "zyla_estimate"
+                item["price_confidence"] = "medium"
+                if isinstance(item.get("prices"), dict) and fuel in item["prices"]:
+                    item["prices"][fuel]["price"] = new_p
+                    item["prices"][fuel]["source"] = "zyla_estimate"
+            priced.sort(
+                key=lambda x: (
+                    round(float(x["price"]), 3),
+                    0 if x.get("price_source") == "user" else 1,
+                    float(x["distance_mi"]),
+                )
+            )
+
     best = cheapest_summary(priced) if priced else None
     meta = price_meta(state, fast=True)
-    avg = meta["state_avg"]
+    if zyla and zyla.get("ok"):
+        meta = dict(meta)
+        meta["avg_source"] = "zyla"
+        meta["zyla_ok"] = True
+        meta["state_avg"] = {
+            "regular": zyla.get("regular"),
+            "mid": zyla.get("mid"),
+            "premium": zyla.get("premium"),
+            "diesel": zyla.get("diesel"),
+        }
+        avg = meta["state_avg"]
+    else:
+        avg = meta["state_avg"]
     avg_fuel = avg.get(fuel) or avg.get("regular")
 
     # Ahorro vs promedio del estado en la más barata
@@ -139,10 +199,12 @@ def api_search(
         best["state_avg_fuel"] = avg_fuel
 
     eia_txt = ""
-    if meta.get("eia_ok") and meta.get("eia_period"):
+    if zyla and zyla.get("ok"):
+        eia_txt = " Promedio de zona vía Zyla Labs."
+    elif meta.get("eia_ok") and meta.get("eia_period"):
         eia_txt = f" Promedio estatal EIA (semana {meta['eia_period']})."
     elif not meta.get("eia_ok"):
-        eia_txt = " Promedio de referencia (EIA no disponible ahora)."
+        eia_txt = " Promedio de referencia (EIA/Zyla no disponible ahora)."
 
     note = ""
     if not priced:
