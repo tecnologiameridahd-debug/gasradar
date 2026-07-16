@@ -1,10 +1,12 @@
 """
 Estaciones de gasolina REALES cerca de un punto.
 
-Fuente principal: OpenStreetMap vía Nominatim (rápido y fiable).
-Respaldo: Overpass (si responde).
-Caché en disco para no repetir llamadas.
-Nunca inventa coordenadas falsas tipo "demo".
+Orden de fuentes (nube / Render):
+1) Overpass OSM (POST, varios mirrors) — principal en servidores
+2) Photon (Komoot) — respaldo rápido
+3) Nominatim — suele fallar desde IPs de datacenter
+
+Caché en disco. Nunca inventa coordenadas demo.
 """
 from __future__ import annotations
 
@@ -12,7 +14,6 @@ import hashlib
 import json
 import math
 import time
-from functools import lru_cache
 from pathlib import Path
 
 import httpx
@@ -23,11 +24,18 @@ DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 CACHE_DIR = DATA_DIR / "stations_cache"
 CACHE_TTL = 6 * 3600  # 6 horas
 
-USER_AGENT = "GasRadar/1.1 (https://github.com/tecnologiameridahd-debug/gasradar; contact@gasradarapp.com)"
+USER_AGENT = (
+    "GasRadar/1.3 (https://gasradarapp.com; contact@gasradarapp.com)"
+)
+HTTP_HEADERS = {
+    "User-Agent": USER_AGENT,
+    "Accept": "application/json",
+    "Accept-Language": "en",
+}
 
 OVERPASS_URLS = [
     "https://overpass-api.de/api/interpreter",
-    "https://overpass.osm.ch/api/interpreter",
+    "https://lz4.overpass-api.de/api/interpreter",
 ]
 
 
@@ -222,21 +230,11 @@ def _from_nominatim_item(item: dict, user_lat: float, user_lon: float) -> dict |
 
 
 def _fetch_nominatim(lat: float, lon: float, radius_mi: float) -> list[dict]:
-    """POIs reales de gas cerca del usuario."""
+    """POIs reales de gas cerca del usuario (a menudo bloqueado en la nube)."""
     vb = _viewbox(lat, lon, radius_mi)
-    headers = {"User-Agent": USER_AGENT, "Accept-Language": "en"}
     queries = [
         {"q": "gas station", "viewbox": vb, "bounded": 1, "countrycodes": "us", "limit": 30},
         {"q": "fuel", "viewbox": vb, "bounded": 1, "countrycodes": "us", "limit": 20},
-        # amenity search (algunos servidores lo soportan)
-        {
-            "amenity": "fuel",
-            "viewbox": vb,
-            "bounded": 1,
-            "countrycodes": "us",
-            "limit": 30,
-            "format": "json",
-        },
     ]
     seen: set[str] = set()
     out: list[dict] = []
@@ -248,10 +246,11 @@ def _fetch_nominatim(lat: float, lon: float, radius_mi: float) -> list[dict]:
             r = httpx.get(
                 "https://nominatim.openstreetmap.org/search",
                 params=params,
-                headers=headers,
-                timeout=8.0,
+                headers=HTTP_HEADERS,
+                timeout=12.0,
             )
             if r.status_code != 200:
+                print(f"[stations] nominatim status={r.status_code}")
                 continue
             items = r.json()
             if not isinstance(items, list):
@@ -269,32 +268,92 @@ def _fetch_nominatim(lat: float, lon: float, radius_mi: float) -> list[dict]:
         except Exception as e:
             print(f"[stations] nominatim fail: {e}")
             continue
-        # política Nominatim: ~1 req/s
         time.sleep(1.05)
         if len(out) >= 12:
             break
 
     out.sort(key=lambda x: x["distance_mi"])
+    if out:
+        print(f"[stations] nominatim OK {len(out)}")
     return out
 
 
+def _station_from_osm_tags(
+    lat: float,
+    lon: float,
+    slat: float,
+    slon: float,
+    tags: dict,
+    osm_id=None,
+) -> dict | None:
+    raw_name = (
+        tags.get("name")
+        or tags.get("brand")
+        or tags.get("operator")
+        or "Gas Station"
+    )
+    brand_tag = (tags.get("brand") or "").strip()
+    brand = brand_tag or _guess_brand(f"{raw_name} {tags.get('operator', '')}")
+    name = _pretty_station_name(raw_name, brand, raw_name)
+    street = " ".join(
+        p
+        for p in [tags.get("addr:housenumber", ""), tags.get("addr:street", "")]
+        if p
+    ).strip()
+    city = tags.get("addr:city", "")
+    state = tags.get("addr:state", "")
+    postcode = tags.get("addr:postcode", "")
+    address = ", ".join(p for p in [street, city, state, postcode] if p) or None
+    maps_query = name
+    if street:
+        maps_query = f"{name}, {street}"
+        if city:
+            maps_query += f", {city}"
+    dist = haversine_miles(lat, lon, float(slat), float(slon))
+    return {
+        "id": _station_id(float(slat), float(slon), name),
+        "name": name,
+        "brand": brand,
+        "lat": float(slat),
+        "lon": float(slon),
+        "address": address,
+        "maps_query": maps_query,
+        "distance_mi": dist,
+        "phone": tags.get("phone") or tags.get("contact:phone"),
+        "website": tags.get("website"),
+        "osm_id": osm_id,
+        "source": "openstreetmap",
+        "is_demo": False,
+        "nav_mode": "coords",
+    }
+
+
 def _fetch_overpass(lat: float, lon: float, radius_mi: float) -> list[dict]:
-    radius_m = int(min(max(radius_mi, 1) * 1609.34, 20000))
+    """Overpass POST — más fiable desde Render que Nominatim."""
+    radius_m = int(min(max(radius_mi, 1) * 1609.34, 25000))
+    # timeout moderado: si un mirror tarda, pasamos al siguiente / Photon
     query = (
-        f'[out:json][timeout:12];'
+        f'[out:json][timeout:18];'
         f'('
         f'node["amenity"="fuel"](around:{radius_m},{lat},{lon});'
         f'way["amenity"="fuel"](around:{radius_m},{lat},{lon});'
         f');'
-        f"out center tags 40;"
+        f"out center tags 50;"
     )
     for url in OVERPASS_URLS:
         try:
-            r = httpx.get(url, params={"data": query}, timeout=10.0)
+            r = httpx.post(
+                url,
+                data={"data": query},
+                headers=HTTP_HEADERS,
+                timeout=16.0,
+            )
             if r.status_code != 200:
+                print(f"[stations] overpass {url} status={r.status_code}")
                 continue
-            elements = r.json().get("elements") or []
+            elements = (r.json() or {}).get("elements") or []
             if not elements:
+                print(f"[stations] overpass {url} empty")
                 continue
             stations = []
             for el in elements:
@@ -306,62 +365,149 @@ def _fetch_overpass(lat: float, lon: float, radius_mi: float) -> list[dict]:
                     slat, slon = el.get("lat"), el.get("lon")
                 if slat is None or slon is None:
                     continue
-                raw_name = (
-                    tags.get("name")
-                    or tags.get("brand")
-                    or tags.get("operator")
-                    or "Gas Station"
+                st = _station_from_osm_tags(
+                    lat, lon, float(slat), float(slon), tags, el.get("id")
                 )
-                brand_tag = (tags.get("brand") or "").strip()
-                brand = brand_tag or _guess_brand(
-                    f"{raw_name} {tags.get('operator', '')}"
-                )
-                name = _pretty_station_name(raw_name, brand, raw_name)
+                if st and st["distance_mi"] <= radius_mi + 0.6:
+                    stations.append(st)
+            if stations:
+                stations.sort(key=lambda x: x["distance_mi"])
+                print(f"[stations] overpass OK {len(stations)} via {url.split('/')[2]}")
+                return stations
+        except Exception as e:
+            print(f"[stations] overpass fail {url}: {e}")
+            continue
+    return []
+
+
+def _fetch_photon(lat: float, lon: float, radius_mi: float) -> list[dict]:
+    """Photon (Komoot) — respaldo cuando Overpass/Nominatim fallan en la nube."""
+    out: list[dict] = []
+    seen: set[str] = set()
+    queries = ("gas station", "fuel", "petrol")
+    for q in queries:
+        try:
+            r = httpx.get(
+                "https://photon.komoot.io/api/",
+                params={
+                    "q": q,
+                    "lat": lat,
+                    "lon": lon,
+                    "limit": 25,
+                    "lang": "en",
+                },
+                headers=HTTP_HEADERS,
+                timeout=12.0,
+            )
+            if r.status_code != 200:
+                continue
+            for feat in (r.json() or {}).get("features") or []:
+                props = feat.get("properties") or {}
+                geom = feat.get("geometry") or {}
+                coords = geom.get("coordinates") or []
+                if len(coords) < 2:
+                    continue
+                slon, slat = float(coords[0]), float(coords[1])
+                # filtrar amenity fuel si viene en osm
+                osm_key = (props.get("osm_key") or "").lower()
+                osm_val = (props.get("osm_value") or "").lower()
+                name_raw = props.get("name") or props.get("street") or "Gas Station"
+                blob = f"{name_raw} {props.get('type', '')} {osm_key} {osm_val}".lower()
+                if osm_val and osm_val not in ("fuel", "gas", "fuel_station"):
+                    # permitir si el nombre parece gasolinera
+                    if not any(
+                        k in blob
+                        for k in (
+                            "gas",
+                            "fuel",
+                            "shell",
+                            "chevron",
+                            "exxon",
+                            "mobil",
+                            "circle",
+                            "costco",
+                            "valero",
+                            "conoco",
+                            "phillips",
+                            "arco",
+                            "maverik",
+                            "quik",
+                            "murphy",
+                            "7-eleven",
+                            "bp",
+                            "sinclair",
+                        )
+                    ):
+                        continue
+                brand = _guess_brand(name_raw + " " + str(props.get("type", "")))
+                name = _pretty_station_name(name_raw, brand, name_raw)
                 street = " ".join(
                     p
                     for p in [
-                        tags.get("addr:housenumber", ""),
-                        tags.get("addr:street", ""),
+                        str(props.get("housenumber") or ""),
+                        str(props.get("street") or ""),
                     ]
                     if p
                 ).strip()
-                city = tags.get("addr:city", "")
-                state = tags.get("addr:state", "")
-                postcode = tags.get("addr:postcode", "")
+                city = props.get("city") or props.get("town") or ""
+                state = props.get("state") or ""
+                postcode = props.get("postcode") or ""
                 address = (
                     ", ".join(p for p in [street, city, state, postcode] if p) or None
                 )
+                dist = haversine_miles(lat, lon, slat, slon)
+                if dist > radius_mi + 0.6:
+                    continue
+                sid = _station_id(slat, slon, name)
+                if sid in seen:
+                    continue
+                seen.add(sid)
                 maps_query = name
                 if street:
-                    maps_query = f"{name}, {street}"
-                    if city:
-                        maps_query += f", {city}"
-                dist = haversine_miles(lat, lon, float(slat), float(slon))
-                stations.append(
+                    maps_query = f"{name}, {street}" + (f", {city}" if city else "")
+                out.append(
                     {
-                        "id": _station_id(float(slat), float(slon), name),
+                        "id": sid,
                         "name": name,
                         "brand": brand,
-                        "lat": float(slat),
-                        "lon": float(slon),
+                        "lat": slat,
+                        "lon": slon,
                         "address": address,
                         "maps_query": maps_query,
                         "distance_mi": dist,
-                        "phone": tags.get("phone") or tags.get("contact:phone"),
-                        "website": tags.get("website"),
-                        "osm_id": el.get("id"),
-                        "source": "openstreetmap",
+                        "phone": None,
+                        "website": None,
+                        "osm_id": props.get("osm_id"),
+                        "source": "photon",
                         "is_demo": False,
                         "nav_mode": "coords",
                     }
                 )
-            if stations:
-                stations.sort(key=lambda x: x["distance_mi"])
-                return stations
         except Exception as e:
-            print(f"[stations] overpass fail: {e}")
+            print(f"[stations] photon fail: {e}")
             continue
-    return []
+        if len(out) >= 12:
+            break
+        time.sleep(0.15)
+    out.sort(key=lambda x: x["distance_mi"])
+    if out:
+        print(f"[stations] photon OK {len(out)}")
+    return out
+
+
+def _merge_stations(*lists: list[dict], radius_mi: float) -> list[dict]:
+    seen: set[str] = set()
+    out: list[dict] = []
+    for lst in lists:
+        for s in lst or []:
+            if s["id"] in seen:
+                continue
+            if s.get("distance_mi", 999) > radius_mi + 0.6:
+                continue
+            seen.add(s["id"])
+            out.append(s)
+    out.sort(key=lambda x: x["distance_mi"])
+    return out
 
 
 def stations_near(
@@ -369,14 +515,13 @@ def stations_near(
 ) -> list[dict]:
     """
     Lista estaciones REALES cerca de lat/lon.
-    Orden: caché → Nominatim → Overpass.
+    Orden: caché → Overpass → Photon → Nominatim.
     """
     lat_f, lon_f = float(lat), float(lon)
     radius_mi = float(radius_mi)
 
     cached = _load_cache(lat_f, lon_f, radius_mi)
     if cached:
-        # recalcular distancias y normalizar nombres antiguos en caché
         for s in cached:
             s["distance_mi"] = haversine_miles(
                 lat_f, lon_f, float(s["lat"]), float(s["lon"])
@@ -396,22 +541,23 @@ def stations_near(
         if cached:
             return cached[:limit]
 
-    stations = _fetch_nominatim(lat_f, lon_f, radius_mi)
+    # Parallel-ish fail-over rápido: Photon primero (rápido en nube),
+    # luego Overpass, luego Nominatim.
+    stations = _fetch_photon(lat_f, lon_f, radius_mi)
+
+    if len(stations) < 8:
+        stations = _merge_stations(
+            stations, _fetch_overpass(lat_f, lon_f, radius_mi), radius_mi=radius_mi
+        )
 
     if len(stations) < 5:
-        # sumar Overpass si hay pocos
-        extra = _fetch_overpass(lat_f, lon_f, radius_mi)
-        seen = {s["id"] for s in stations}
-        for s in extra:
-            if s["id"] not in seen and s["distance_mi"] <= radius_mi + 0.5:
-                stations.append(s)
-                seen.add(s["id"])
-        stations.sort(key=lambda x: x["distance_mi"])
+        stations = _merge_stations(
+            stations, _fetch_nominatim(lat_f, lon_f, radius_mi), radius_mi=radius_mi
+        )
 
     if stations:
         _save_cache(lat_f, lon_f, radius_mi, stations[:60])
         return stations[:limit]
 
-    # Sin inventar: lista vacía (el frontend/API mostrará mensaje claro)
-    print("[stations] sin resultados reales en Nominatim/Overpass")
+    print("[stations] sin resultados: overpass/photon/nominatim vacíos")
     return []
