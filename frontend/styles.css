@@ -1104,6 +1104,13 @@ a.btn-secondary:hover {
   margin-top: 4px;
 }
 
+.footer-social {
+  margin-top: 4px;
+  font-size: 0.7rem;
+  color: var(--muted2);
+  letter-spacing: 0.02em;
+}
+
 /* Trustpilot en el pie (abajo) */
 .footer-trustpilot {
   margin-top: 12px;
