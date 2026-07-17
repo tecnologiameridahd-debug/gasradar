@@ -982,17 +982,13 @@ a.btn-secondary:hover {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  width: 68px;
-  height: 42px;
+  width: 46px;
+  height: 46px;
   padding: 0;
   box-sizing: border-box;
-  border-radius: 999px;
+  border-radius: 50%;
   color: #fff;
   text-decoration: none;
-  font-weight: 700;
-  font-size: 0.78rem;
-  letter-spacing: 0.02em;
   border: 1px solid rgba(255, 255, 255, 0.14);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4);
   transition: transform 0.15s ease, filter 0.15s ease;
@@ -1012,10 +1008,6 @@ a.btn-secondary:hover {
 .social-ico {
   flex-shrink: 0;
   display: block;
-}
-
-.social-txt {
-  line-height: 1;
 }
 
 .tiktok-fab {
