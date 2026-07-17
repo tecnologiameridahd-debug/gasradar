@@ -46,7 +46,28 @@ https://gasradarapp.com/api/telegram/setup?key=TU_ALERTS_SECRET
 
 Debe devolver `"ok": true` y el username del bot.
 
-3. Abre https://t.me/GasRadar_bot → `/start` → `/zona 80903` → `/alerta 3.50`
+3. Diagnóstico:
+
+```
+https://gasradarapp.com/api/telegram/status?key=TU_ALERTS_SECRET
+```
+
+Mira `webhook_url`, `last_error_message`, `pending_update_count`.
+
+4. Abre https://t.me/GasRadar_bot → **Start**  
+   - Escribe `80903` (ZIP) → te devuelve precios  
+   - O usa los **botones** del teclado  
+   - Escribe `3.50` para alerta de tope  
+
+## Si el bot “no sirve”
+
+| Síntoma | Qué hacer |
+|---------|-----------|
+| No responde nada | Corre de nuevo `/api/telegram/setup?key=...` |
+| setup 401 | `ALERTS_SECRET` no coincide con `?key=` |
+| Responde pero sin precios | Zyla/límite API; la web puede fallar igual |
+| Pierde alertas al redeploy | SQLite se borra → usa Postgres `DATABASE_URL` |
+| No avisa solo | Falta cron a `/api/alerts/run?key=...` cada hora |
 
 ## Cron de alertas (cada hora)
 

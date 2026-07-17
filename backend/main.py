@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -16,7 +16,7 @@ from backend.prices import report_price
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.7.1"
+APP_VERSION = "0.7.2"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -165,36 +165,50 @@ def api_report(body: ReportBody):
 @app.post("/api/telegram/webhook")
 async def api_telegram_webhook(
     request: Request,
-    background_tasks: BackgroundTasks,
     key: str | None = None,
 ):
     """
     Recibe updates de Telegram.
-    Responde YA (ok) y procesa en segundo plano — evita bot 'pegado'
-    cuando la búsqueda de precios tarda.
+    Procesa EN ESTA petición (más fiable en Render free que BackgroundTasks).
     """
-    from backend.telegram_bot import alerts_secret, bot_ready, handle_update_safe
+    from backend.telegram_bot import (
+        alerts_secret,
+        bot_ready,
+        handle_update_safe,
+        webhook_secret_token,
+    )
 
     if not bot_ready():
         raise HTTPException(503, "TELEGRAM_BOT_TOKEN no configurado")
+
     secret = alerts_secret()
-    if secret and key != secret:
+    header_tok = request.headers.get("X-Telegram-Bot-Api-Secret-Token") or ""
+    tok_ok = header_tok == webhook_secret_token() if secret else True
+    key_ok = (not secret) or (key == secret)
+    # Acepta header oficial O ?key=ALERTS_SECRET
+    if secret and not (tok_ok or key_ok):
         raise HTTPException(401, "Clave webhook incorrecta")
+
     try:
         update = await request.json()
     except Exception as e:
         raise HTTPException(400, f"JSON inválido: {e}") from e
-    # No bloquear la respuesta a Telegram (timeout ~60s; en free se corta antes)
-    background_tasks.add_task(
-        handle_update_safe, update if isinstance(update, dict) else {}
-    )
+
+    # Síncrono: en Render free el background a veces se corta
+    handle_update_safe(update if isinstance(update, dict) else {})
     return {"ok": True}
 
 
 @app.get("/api/telegram/setup")
 def api_telegram_setup(key: str | None = None, base: str | None = None):
     """Registra el webhook en Telegram. ?key=ALERTS_SECRET"""
-    from backend.telegram_bot import alerts_secret, bot_ready, get_me, set_webhook
+    from backend.telegram_bot import (
+        alerts_secret,
+        bot_ready,
+        get_me,
+        get_webhook_info,
+        set_webhook,
+    )
 
     if not bot_ready():
         raise HTTPException(503, "Falta TELEGRAM_BOT_TOKEN en Render")
@@ -203,11 +217,42 @@ def api_telegram_setup(key: str | None = None, base: str | None = None):
         raise HTTPException(401, "Clave incorrecta (ALERTS_SECRET o STATS_KEY)")
     me = get_me()
     wh = set_webhook(base)
+    info = get_webhook_info()
     return {
         "ok": bool(wh.get("ok")),
         "bot": me,
-        "webhook": wh,
-        "hint": "Abre t.me/GasRadar_bot y envía /start",
+        "webhook_set": wh,
+        "webhook_info": info,
+        "hint": "Abre t.me/GasRadar_bot → /start → escribe 80903",
+        "next": "Cron alertas: GET /api/alerts/run?key=TU_ALERTS_SECRET cada hora",
+    }
+
+
+@app.get("/api/telegram/status")
+def api_telegram_status(key: str | None = None):
+    """Diagnóstico del bot (sin exponer el token)."""
+    from backend.telegram_bot import (
+        alerts_secret,
+        bot_ready,
+        get_me,
+        get_webhook_info,
+    )
+
+    secret = alerts_secret()
+    if secret and key != secret:
+        raise HTTPException(401, "Clave incorrecta")
+    me = get_me() if bot_ready() else {}
+    info = get_webhook_info() if bot_ready() else {}
+    result = (info or {}).get("result") or {}
+    return {
+        "bot_ready": bot_ready(),
+        "has_alerts_secret": bool(secret),
+        "me_ok": bool((me or {}).get("ok")),
+        "username": ((me or {}).get("result") or {}).get("username"),
+        "webhook_url": result.get("url"),
+        "pending_update_count": result.get("pending_update_count"),
+        "last_error_message": result.get("last_error_message"),
+        "last_error_date": result.get("last_error_date"),
     }
 
 

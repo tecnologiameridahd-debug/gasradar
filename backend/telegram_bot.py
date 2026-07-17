@@ -1,12 +1,13 @@
 """
 Bot Telegram GasRadar — @GasRadar_bot
-Webhook + envío de alertas (sin python-telegram-bot; solo httpx).
+Webhook fiable (procesa en la misma petición) + teclado + alertas.
 """
 from __future__ import annotations
 
 import os
 import re
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -53,6 +54,13 @@ def alerts_secret() -> str:
     )
 
 
+def webhook_secret_token() -> str:
+    """Telegram solo permite A-Z a-z 0-9 _ - en secret_token."""
+    raw = alerts_secret() or "gasradar"
+    cleaned = re.sub(r"[^A-Za-z0-9_-]", "", raw)[:256]
+    return cleaned or "gasradar"
+
+
 def bot_ready() -> bool:
     return bool(telegram_token())
 
@@ -63,19 +71,54 @@ def _api(method: str, **payload: Any) -> dict:
         return {"ok": False, "error": "no_token"}
     url = f"https://api.telegram.org/bot{token}/{method}"
     try:
-        r = httpx.post(url, json=payload, timeout=25.0)
-        return r.json() if r.content else {"ok": False, "status": r.status_code}
+        r = httpx.post(url, json=payload, timeout=30.0)
+        data = r.json() if r.content else {"ok": False, "status": r.status_code}
+        if not data.get("ok"):
+            print(f"[telegram {method}] {data}")
+        return data
     except Exception as e:
+        print(f"[telegram {method}] {type(e).__name__}: {e}")
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
 
 
-def send_message(chat_id: str | int, text: str, *, disable_preview: bool = False) -> dict:
-    return _api(
-        "sendMessage",
-        chat_id=chat_id,
-        text=text[:4000],
-        disable_web_page_preview=disable_preview,
-    )
+def _keyboard(lang: str = "es") -> dict:
+    """Botones siempre visibles (más fácil que memorizar comandos)."""
+    if lang == "en":
+        rows = [
+            [{"text": "⛽ Prices now"}, {"text": "📍 Set ZIP"}],
+            [{"text": "🔔 My alert"}, {"text": "⚙️ Status"}],
+            [{"text": "❓ Help"}],
+        ]
+    else:
+        rows = [
+            [{"text": "⛽ Precios ahora"}, {"text": "📍 Poner ZIP"}],
+            [{"text": "🔔 Mi alerta"}, {"text": "⚙️ Estado"}],
+            [{"text": "❓ Ayuda"}],
+        ]
+    return {
+        "keyboard": rows,
+        "resize_keyboard": True,
+        "is_persistent": True,
+    }
+
+
+def send_message(
+    chat_id: str | int,
+    text: str,
+    *,
+    disable_preview: bool = True,
+    lang: str | None = None,
+    with_keyboard: bool = True,
+) -> dict:
+    payload: dict[str, Any] = {
+        "chat_id": chat_id,
+        "text": (text or "")[:4000],
+        "disable_web_page_preview": disable_preview,
+    }
+    if with_keyboard:
+        lg = lang or _lang(chat_id)
+        payload["reply_markup"] = _keyboard(lg)
+    return _api("sendMessage", **payload)
 
 
 def send_typing(chat_id: str | int) -> None:
@@ -86,7 +129,7 @@ def send_typing(chat_id: str | int) -> None:
 
 
 def handle_update_safe(update: dict) -> None:
-    """Wrapper para BackgroundTasks: nunca tumba el worker."""
+    """Nunca tumba el worker."""
     try:
         handle_update(update if isinstance(update, dict) else {})
     except Exception as e:
@@ -97,7 +140,7 @@ def handle_update_safe(update: dict) -> None:
             if chat_id is not None:
                 send_message(
                     chat_id,
-                    "⚠️ Error interno. Prueba /ahora de nuevo o /help",
+                    "⚠️ Error interno. Toca ⛽ Precios ahora o escribe /ahora",
                 )
         except Exception:
             pass
@@ -106,10 +149,17 @@ def handle_update_safe(update: dict) -> None:
 def set_webhook(public_base: str | None = None) -> dict:
     base = (public_base or APP_URL).rstrip("/")
     secret = alerts_secret()
+    # URL + key (por si el header no llega) y secret_token oficial de Telegram
     wh = f"{base}/api/telegram/webhook"
     if secret:
-        wh = f"{wh}?key={secret}"
-    return _api("setWebhook", url=wh, drop_pending_updates=True)
+        wh = f"{wh}?key={quote(secret, safe='')}"
+    return _api(
+        "setWebhook",
+        url=wh,
+        drop_pending_updates=True,
+        allowed_updates=["message"],
+        secret_token=webhook_secret_token(),
+    )
 
 
 def delete_webhook() -> dict:
@@ -120,47 +170,40 @@ def get_me() -> dict:
     return _api("getMe")
 
 
-HELP_ES = """⛽ GasRadar — alertas de gasolina
+def get_webhook_info() -> dict:
+    return _api("getWebhookInfo")
 
-1) Elige zona (ZIP USA)
-   /zona 80903
 
-2) Precio tope (Regular)
-   /alerta 3.50
-   → te aviso si el más barato baja de $3.50
+HELP_ES = """⛽ *GasRadar* — gasolina barata
 
-Otros
-/fuel regular|mid|premium|diesel
-/radio 5
-/ahora — precios ya
-/mis — tu configuración
-/pausa · /activar
-/borrar — quitar alerta
-/help — esta ayuda
+Usa los *botones* de abajo o escribe:
 
-App: https://gasradarapp.com
-Bot: t.me/GasRadar_bot
+1️⃣ ZIP de 5 dígitos → `80903`
+2️⃣ Tope de precio → `3.50` o `/alerta 3.50`
+3️⃣ `⛽ Precios ahora` → ver la más barata
+
+También:
+/zona 80903 · /alerta 3.50 · /ahora
+/mis · /pausa · /activar · /borrar
+/es · /en
+
+App: gasradarapp.com
 """
 
-HELP_EN = """⛽ GasRadar — gas price alerts
+HELP_EN = """⛽ *GasRadar* — cheap gas alerts
 
-1) Set zone (US ZIP)
-   /zona 80903
+Use the *buttons* below or type:
 
-2) Max price (Regular)
-   /alerta 3.50
-   → alert when cheapest is under $3.50
+1️⃣ 5-digit ZIP → `80903`
+2️⃣ Max price → `3.50` or `/alerta 3.50`
+3️⃣ `⛽ Prices now` → cheapest station
 
-Other
-/fuel regular|mid|premium|diesel
-/radio 5
-/ahora — prices now
-/mis — your settings
-/pausa · /activar
-/borrar — remove alert
-/help
+Also:
+/zona 80903 · /alerta 3.50 · /ahora
+/mis · /pausa · /activar · /borrar
+/es · /en
 
-App: https://gasradarapp.com
+App: gasradarapp.com
 """
 
 
@@ -187,46 +230,90 @@ def _money(p: float | None) -> str:
     return f"${float(p):.2f}"
 
 
+def _map_button(text: str, lang: str) -> tuple[str, str] | None:
+    """Convierte texto de botón en comando."""
+    t = (text or "").strip().lower()
+    # ES
+    if t in ("⛽ precios ahora", "precios ahora", "precios", "ahora"):
+        return "/ahora", ""
+    if t in ("📍 poner zip", "poner zip", "zip", "zona"):
+        return "/pedir_zip", ""
+    if t in ("🔔 mi alerta", "mi alerta", "alerta"):
+        return "/pedir_alerta", ""
+    if t in ("⚙️ estado", "estado", "mis", "config"):
+        return "/mis", ""
+    if t in ("❓ ayuda", "ayuda", "help"):
+        return "/help", ""
+    # EN
+    if t in ("⛽ prices now", "prices now", "prices", "now"):
+        return "/ahora", ""
+    if t in ("📍 set zip", "set zip"):
+        return "/pedir_zip", ""
+    if t in ("🔔 my alert", "my alert"):
+        return "/pedir_alerta", ""
+    if t in ("⚙️ status", "status"):
+        return "/mis", ""
+    if t in ("❓ help",):
+        return "/help", ""
+    return None
+
+
 def _format_now(data: dict, lang: str) -> str:
     center = data.get("center") or {}
     best = data.get("cheapest") or {}
     fuel = data.get("fuel") or "regular"
-    n = data.get("count") or 0
+    n = int(data.get("count") or 0)
     label = center.get("label") or center.get("zip") or "—"
     zip_c = center.get("zip") or ""
-    if not best:
+    cached = " ⚡" if data.get("cached") else ""
+
+    if not best or best.get("price") is None:
         return (
-            f"Sin estaciones en {label}. Prueba /radio 10"
+            f"Sin precios claros en {label}.\n"
+            f"Prueba otro ZIP o abre la app:\n{APP_URL}/?zip={zip_c}"
             if lang != "en"
-            else f"No stations in {label}. Try /radio 10"
+            else f"No clear prices in {label}.\n"
+            f"Try another ZIP or open the app:\n{APP_URL}/?zip={zip_c}"
         )
+
     price = best.get("price")
     name = best.get("name") or "—"
     dist = best.get("distance_mi")
     maps = ""
     if best.get("lat") is not None and best.get("lon") is not None:
-        maps = f"https://www.google.com/maps/dir/?api=1&destination={best['lat']},{best['lon']}"
+        maps = (
+            f"https://www.google.com/maps/dir/?api=1"
+            f"&destination={best['lat']},{best['lon']}"
+        )
     app = f"{APP_URL}/?zip={zip_c}" if zip_c else APP_URL
+    save = best.get("savings_vs_avg")
+
     if lang == "en":
         lines = [
-            f"⛽ GasRadar · {label}",
-            f"Cheapest {fuel}: {_money(price)}",
-            f"★ {name}" + (f" · {float(dist):.1f} mi" if dist is not None else ""),
-            f"{n} stations nearby",
+            f"⛽ GasRadar · {label}{cached}",
+            f"Cheapest ({fuel}): {_money(price)}",
+            f"★ {name}" + (f" · ~{float(dist):.1f} mi" if dist is not None else ""),
         ]
+        if save is not None and float(save) > 0.01:
+            lines.append(f"💰 ~{_money(float(save))}/gal under area avg")
+        lines.append(f"{n} stations")
         if maps:
-            lines.append(f"📍 {maps}")
-        lines.append(f"🌐 {app}")
+            lines.append(f"📍 Directions:\n{maps}")
+        lines.append(f"🌐 App: {app}")
+        lines.append("\n🔔 Alert: type e.g. 3.50")
     else:
         lines = [
-            f"⛽ GasRadar · {label}",
+            f"⛽ GasRadar · {label}{cached}",
             f"Más barata ({fuel}): {_money(price)}",
-            f"★ {name}" + (f" · {float(dist):.1f} mi" if dist is not None else ""),
-            f"{n} estaciones cerca",
+            f"★ {name}" + (f" · ~{float(dist):.1f} mi" if dist is not None else ""),
         ]
+        if save is not None and float(save) > 0.01:
+            lines.append(f"💰 Ahorras ~{_money(float(save))}/gal vs promedio")
+        lines.append(f"{n} estaciones")
         if maps:
-            lines.append(f"📍 {maps}")
-        lines.append(f"🌐 {app}")
+            lines.append(f"📍 Cómo llegar:\n{maps}")
+        lines.append(f"🌐 App: {app}")
+        lines.append("\n🔔 Alerta: escribe ej. 3.50")
     return "\n".join(lines)
 
 
@@ -239,34 +326,109 @@ def handle_update(update: dict) -> None:
     chat_id = chat.get("id")
     if chat_id is None:
         return
-    text = msg.get("text") or ""
-    cmd, arg = _parse_cmd(text)
+
+    # Idioma del usuario de Telegram la primera vez
+    from_user = msg.get("from") or {}
+    lc = (from_user.get("language_code") or "").lower()
+    row0 = get_alert(chat_id)
+    if not row0 and lc.startswith("en"):
+        upsert_alert(chat_id, lang="en")
+
+    text = (msg.get("text") or "").strip()
+    if not text:
+        send_message(
+            chat_id,
+            "Escribe un ZIP (80903) o toca un botón 👇"
+            if _lang(chat_id) != "en"
+            else "Type a ZIP (80903) or tap a button 👇",
+        )
+        return
+
     lang = _lang(chat_id)
+    mapped = _map_button(text, lang)
+    if mapped:
+        cmd, arg = mapped
+    else:
+        cmd, arg = _parse_cmd(text)
+
     send_typing(chat_id)
 
     # deep-link /start 80903
     if cmd == "/start":
-        if arg and re.fullmatch(r"\d{5}", arg.strip()):
-            _cmd_zona(chat_id, arg.strip(), lang)
+        payload = (arg or "").strip()
+        if payload.startswith("zip_"):
+            payload = payload[4:]
+        if re.fullmatch(r"\d{5}", payload):
+            _cmd_zona(chat_id, payload, lang, auto_prices=True)
             return
-        send_message(chat_id, HELP_ES if lang != "en" else HELP_EN)
+        welcome = (
+            "¡Hola! ⛽ Soy *GasRadar*.\n\n"
+            "Te ayudo a ver la gasolina más barata y a avisarte si baja.\n\n"
+            "👉 Escribe tu *ZIP* (ej. 80903)\n"
+            "o toca un botón abajo."
+            if lang != "en"
+            else "Hi! ⛽ I'm *GasRadar*.\n\n"
+            "I show the cheapest gas nearby and can alert you when it drops.\n\n"
+            "👉 Type your *ZIP* (e.g. 80903)\n"
+            "or tap a button below."
+        )
+        # Telegram no parsea markdown a menos que parse_mode; enviamos sin *
+        welcome = welcome.replace("*", "")
+        send_message(chat_id, welcome + "\n\n" + (HELP_ES if lang != "en" else HELP_EN).replace("*", ""), lang=lang)
         return
 
-    if cmd in ("/help", "/ayuda", "/start"):
-        send_message(chat_id, HELP_ES if lang != "en" else HELP_EN)
+    if cmd in ("/help", "/ayuda"):
+        send_message(
+            chat_id,
+            (HELP_ES if lang != "en" else HELP_EN).replace("*", ""),
+            lang=lang,
+        )
+        return
+
+    if cmd == "/pedir_zip":
+        send_message(
+            chat_id,
+            "📍 Escribe tu ZIP de 5 dígitos\nEjemplo: 80903"
+            if lang != "en"
+            else "📍 Type your 5-digit ZIP\nExample: 80903",
+            lang=lang,
+        )
+        return
+
+    if cmd == "/pedir_alerta":
+        row = get_alert(chat_id)
+        z = (row or {}).get("zip")
+        if not z:
+            send_message(
+                chat_id,
+                "Primero pon tu ZIP (ej. 80903), luego el tope (ej. 3.50)"
+                if lang != "en"
+                else "First set your ZIP (e.g. 80903), then max price (e.g. 3.50)",
+                lang=lang,
+            )
+            return
+        send_message(
+            chat_id,
+            f"🔔 Zona {z}.\nEscribe el precio tope, ej: 3.50\n"
+            f"(Te aviso si baja de ese precio)"
+            if lang != "en"
+            else f"🔔 Zone {z}.\nType max price, e.g. 3.50\n"
+            f"(I'll alert if gas goes under that)",
+            lang=lang,
+        )
         return
 
     if cmd in ("/en",):
         upsert_alert(chat_id, lang="en")
-        send_message(chat_id, "Language: English. /help for commands.")
+        send_message(chat_id, "Language: English ✅", lang="en")
         return
     if cmd in ("/es",):
         upsert_alert(chat_id, lang="es")
-        send_message(chat_id, "Idioma: español. /help para comandos.")
+        send_message(chat_id, "Idioma: español ✅", lang="es")
         return
 
     if cmd in ("/zona", "/zip", "/city", "/ciudad"):
-        _cmd_zona(chat_id, arg, lang)
+        _cmd_zona(chat_id, arg, lang, auto_prices=True)
         return
 
     if cmd in ("/alerta", "/alert", "/tope", "/max"):
@@ -282,7 +444,7 @@ def handle_update(update: dict) -> None:
         return
 
     if cmd in ("/mis", "/me", "/status", "/config"):
-        send_message(chat_id, format_alert_summary(get_alert(chat_id), lang))
+        send_message(chat_id, format_alert_summary(get_alert(chat_id), lang), lang=lang)
         return
 
     if cmd in ("/pausa", "/pause", "/stop"):
@@ -292,6 +454,7 @@ def handle_update(update: dict) -> None:
             "⏸️ Alerta pausada. /activar para reanudar"
             if lang != "en"
             else "⏸️ Alert paused. /activar to resume",
+            lang=lang,
         )
         return
 
@@ -300,6 +463,7 @@ def handle_update(update: dict) -> None:
         send_message(
             chat_id,
             "▶️ Alerta activa." if lang != "en" else "▶️ Alert ON.",
+            lang=lang,
         )
         return
 
@@ -307,7 +471,10 @@ def handle_update(update: dict) -> None:
         delete_alert(chat_id)
         send_message(
             chat_id,
-            "🗑️ Alerta eliminada." if lang != "en" else "🗑️ Alert removed.",
+            "🗑️ Alerta eliminada. Escribe un ZIP para empezar de nuevo."
+            if lang != "en"
+            else "🗑️ Alert removed. Type a ZIP to start again.",
+            lang=lang,
         )
         return
 
@@ -315,63 +482,81 @@ def handle_update(update: dict) -> None:
         _cmd_ahora(chat_id, lang)
         return
 
-    # texto libre: si parece ZIP
-    if re.fullmatch(r"\d{5}", text.strip()):
-        _cmd_zona(chat_id, text.strip(), lang)
+    # texto libre: ZIP
+    if re.fullmatch(r"\d{5}", text):
+        _cmd_zona(chat_id, text, lang, auto_prices=True)
         return
 
-    # precio suelto tipo 3.50
-    m = re.fullmatch(r"\$?\s*(\d{1,2}([.,]\d{1,3})?)", text.strip())
+    # precio suelto 3.50 / $3.50
+    m = re.fullmatch(r"\$?\s*(\d{1,2}([.,]\d{1,3})?)", text)
     if m:
         _cmd_alerta(chat_id, m.group(1), lang)
         return
 
     send_message(
         chat_id,
-        "No entendí. Prueba /help\nEj: /zona 80903  ·  /alerta 3.50  ·  /ahora"
+        "No entendí 😅\n\n"
+        "• ZIP: 80903\n"
+        "• Tope: 3.50\n"
+        "• O toca ⛽ Precios ahora"
         if lang != "en"
-        else "Didn't get that. Try /help\nEx: /zona 80903  ·  /alerta 3.50  ·  /ahora",
+        else "Didn't get that 😅\n\n"
+        "• ZIP: 80903\n"
+        "• Max: 3.50\n"
+        "• Or tap ⛽ Prices now",
+        lang=lang,
     )
 
 
-def _cmd_zona(chat_id: int, arg: str, lang: str) -> None:
+def _cmd_zona(
+    chat_id: int, arg: str, lang: str, *, auto_prices: bool = False
+) -> None:
     raw = (arg or "").strip()
-    # deep link payload
     if raw.startswith("zip_"):
         raw = raw[4:]
     digits = re.sub(r"\D", "", raw)[:5]
     if len(digits) != 5:
         send_message(
             chat_id,
-            "Usa un ZIP de 5 dígitos.\nEj: /zona 80903"
+            "ZIP de 5 dígitos, ej: 80903"
             if lang != "en"
-            else "Use a 5-digit US ZIP.\nEx: /zona 80903",
+            else "5-digit ZIP, e.g. 80903",
+            lang=lang,
         )
         return
     g = geocode_zip(digits)
     if not g:
         send_message(
             chat_id,
-            f"ZIP {digits} no encontrado." if lang != "en" else f"ZIP {digits} not found.",
+            f"ZIP {digits} no encontrado. Prueba otro."
+            if lang != "en"
+            else f"ZIP {digits} not found. Try another.",
+            lang=lang,
         )
         return
     label = g.get("label") or digits
     upsert_alert(chat_id, zip=digits, label=label, active=1)
     row = get_alert(chat_id)
     mx = row.get("max_price") if row else None
+
     if lang == "en":
-        msg = f"✅ Zone set: {label} ({digits})"
+        msg = f"✅ Zone: {label}\nZIP {digits}"
         if mx:
-            msg += f"\nMax price: ${_money(float(mx)).lstrip('$')}\n/ahora for prices now."
+            msg += f"\n🔔 Alert under {_money(float(mx))}"
         else:
-            msg += "\nNow set max price: /alerta 3.50"
+            msg += "\n🔔 Optional: type a max price e.g. 3.50"
     else:
-        msg = f"✅ Zona: {label} ({digits})"
+        msg = f"✅ Zona: {label}\nZIP {digits}"
         if mx:
-            msg += f"\nTope: {_money(float(mx))}\n/ahora para ver precios."
+            msg += f"\n🔔 Alerta bajo {_money(float(mx))}"
         else:
-            msg += "\nAhora pon el tope: /alerta 3.50"
-    send_message(chat_id, msg)
+            msg += "\n🔔 Opcional: escribe un tope ej. 3.50"
+
+    send_message(chat_id, msg, lang=lang)
+
+    # Tras poner ZIP, buscar precios al momento (lo que la gente espera)
+    if auto_prices:
+        _cmd_ahora(chat_id, lang)
 
 
 def _cmd_alerta(chat_id: int, arg: str, lang: str) -> None:
@@ -381,13 +566,15 @@ def _cmd_alerta(chat_id: int, arg: str, lang: str) -> None:
     except Exception:
         send_message(
             chat_id,
-            "Ejemplo: /alerta 3.50" if lang != "en" else "Example: /alerta 3.50",
+            "Ejemplo de tope: 3.50" if lang != "en" else "Example max: 3.50",
+            lang=lang,
         )
         return
     if price < 1.0 or price > 12.0:
         send_message(
             chat_id,
-            "Precio entre 1 y 12 USD." if lang != "en" else "Price between $1 and $12.",
+            "Precio entre $1 y $12." if lang != "en" else "Price between $1 and $12.",
+            lang=lang,
         )
         return
     row = get_alert(chat_id)
@@ -395,34 +582,38 @@ def _cmd_alerta(chat_id: int, arg: str, lang: str) -> None:
         upsert_alert(chat_id, max_price=round(price, 3), active=1)
         send_message(
             chat_id,
-            f"✅ Tope {_money(price)}. Falta la zona: /zona 80903"
+            f"✅ Tope {_money(price)}.\nAhora escribe tu ZIP (ej. 80903)"
             if lang != "en"
-            else f"✅ Max {_money(price)}. Set zone: /zona 80903",
+            else f"✅ Max {_money(price)}.\nNow type your ZIP (e.g. 80903)",
+            lang=lang,
         )
         return
     upsert_alert(chat_id, max_price=round(price, 3), active=1)
     send_message(
         chat_id,
-        f"✅ Te aviso si el más barato en {row.get('zip')} baja de {_money(price)}.\n"
-        f"(Máx. 1 aviso por día)\n/ahora · /mis · /pausa"
+        f"✅ Alerta activa en {row.get('zip')}\n"
+        f"Te aviso si el más barato baja de {_money(price)}\n"
+        f"(Máx. 1 aviso al día · necesita cron en el servidor)\n\n"
+        f"Toca ⛽ Precios ahora para ver el precio actual"
         if lang != "en"
-        else f"✅ Alert if cheapest in {row.get('zip')} goes under {_money(price)}.\n"
-        f"(Max 1 alert/day)\n/ahora · /mis · /pausa",
+        else f"✅ Alert ON for {row.get('zip')}\n"
+        f"I'll notify if cheapest goes under {_money(price)}\n"
+        f"(Max 1 alert/day · server cron required)\n\n"
+        f"Tap ⛽ Prices now for current price",
+        lang=lang,
     )
 
 
 def _cmd_fuel(chat_id: int, arg: str, lang: str) -> None:
     fuel = (arg or "regular").strip().lower()
     if fuel not in ("regular", "mid", "premium", "diesel"):
-        send_message(
-            chat_id,
-            "Usa: /fuel regular|mid|premium|diesel",
-        )
+        send_message(chat_id, "Usa: /fuel regular|mid|premium|diesel", lang=lang)
         return
     upsert_alert(chat_id, fuel=fuel)
     send_message(
         chat_id,
         f"✅ Combustible: {fuel}" if lang != "en" else f"✅ Fuel: {fuel}",
+        lang=lang,
     )
 
 
@@ -430,13 +621,14 @@ def _cmd_radio(chat_id: int, arg: str, lang: str) -> None:
     try:
         r = float((arg or "5").strip())
     except Exception:
-        send_message(chat_id, "Ej: /radio 5")
+        send_message(chat_id, "Ej: /radio 5", lang=lang)
         return
     r = max(1.0, min(25.0, r))
     upsert_alert(chat_id, radius_mi=r)
     send_message(
         chat_id,
         f"✅ Radio: {r:g} mi" if lang != "en" else f"✅ Radius: {r:g} mi",
+        lang=lang,
     )
 
 
@@ -445,18 +637,25 @@ def _cmd_ahora(chat_id: int, lang: str) -> None:
     if not row or not row.get("zip"):
         send_message(
             chat_id,
-            "Primero /zona 80903" if lang != "en" else "First /zona 80903",
+            "📍 Primero tu ZIP.\nEscribe ej: 80903"
+            if lang != "en"
+            else "📍 First your ZIP.\nType e.g. 80903",
+            lang=lang,
         )
         return
+
     send_message(
         chat_id,
-        "🔎 Buscando precios… (unos segundos)"
+        f"🔎 Buscando en {row.get('label') or row.get('zip')}…"
         if lang != "en"
-        else "🔎 Searching prices… (a few seconds)",
+        else f"🔎 Searching {row.get('label') or row.get('zip')}…",
+        lang=lang,
     )
     send_typing(chat_id)
+
     try:
-        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
+        from concurrent.futures import ThreadPoolExecutor
+        from concurrent.futures import TimeoutError as FuturesTimeout
 
         from backend.search_core import run_search
 
@@ -470,29 +669,35 @@ def _cmd_ahora(chat_id: int, lang: str) -> None:
                 quick=True,
             )
 
-        # Evita colgar el bot más de 25s (Render free + Zyla)
         with ThreadPoolExecutor(max_workers=1) as pool:
             fut = pool.submit(_job)
             try:
-                data = fut.result(timeout=25)
+                data = fut.result(timeout=18)
             except FuturesTimeout:
                 send_message(
                     chat_id,
-                    "⏱️ Tardó mucho. Prueba de nuevo /ahora o otro ZIP."
+                    "⏱️ Tardó mucho. Prueba otra vez ⛽ o abre:\n"
+                    f"{APP_URL}/?zip={row.get('zip')}"
                     if lang != "en"
-                    else "⏱️ Timed out. Try /ahora again or another ZIP.",
+                    else "⏱️ Timed out. Try ⛽ again or open:\n"
+                    f"{APP_URL}/?zip={row.get('zip')}",
+                    lang=lang,
                 )
                 return
-        send_message(chat_id, _format_now(data, lang), disable_preview=True)
+
+        send_message(chat_id, _format_now(data, lang), lang=lang, disable_preview=True)
     except ValueError as e:
-        send_message(chat_id, str(e))
+        send_message(chat_id, str(e), lang=lang)
     except Exception as e:
         print(f"[telegram /ahora] {type(e).__name__}: {e}")
         send_message(
             chat_id,
-            f"Error al buscar: {type(e).__name__}. Prueba /ahora otra vez."
+            f"No pude buscar ahora ({type(e).__name__}).\n"
+            f"Abre la app: {APP_URL}/?zip={row.get('zip')}"
             if lang != "en"
-            else f"Search error: {type(e).__name__}. Try /ahora again.",
+            else f"Search failed ({type(e).__name__}).\n"
+            f"Open the app: {APP_URL}/?zip={row.get('zip')}",
+            lang=lang,
         )
 
 
@@ -507,7 +712,6 @@ def run_alert_checks(*, force: bool = False) -> dict:
 
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     rows = list_active_alerts()
-    # cache por (zip, fuel, radius)
     cache: dict[tuple, dict] = {}
     sent = 0
     skipped = 0
@@ -560,7 +764,7 @@ def run_alert_checks(*, force: bool = False) -> dict:
             header = f"🚨 Price alert!\nYour max: {_money(float(max_p))}\n\n"
         else:
             header = f"🚨 ¡Alerta de precio!\nTu tope: {_money(float(max_p))}\n\n"
-        res = send_message(chat_id, header + body, disable_preview=True)
+        res = send_message(chat_id, header + body, lang=lang, disable_preview=True)
         if res.get("ok"):
             mark_sent(chat_id, float(price))
             sent += 1
