@@ -72,12 +72,42 @@ body {
 .header-right {
   display: flex;
   flex-direction: row;
-  align-items: center;
+  align-items: flex-start;
   justify-content: flex-end;
   gap: 6px;
   flex-shrink: 0;
   margin-top: 4px;
   flex-wrap: nowrap;
+}
+
+/* Columna: prom. sem. + link mini Telegram debajo */
+.header-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  min-width: 0;
+}
+
+.tg-mini {
+  display: inline-flex;
+  align-items: center;
+  max-width: 120px;
+  padding: 1px 0;
+  font-size: 0.58rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: #6ec8f0;
+  text-decoration: none;
+  opacity: 0.92;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tg-mini:hover {
+  color: #9adcf7;
+  text-decoration: underline;
 }
 
 /* Chip "prom. sem." — botón mini al lado de ES/EN (siempre visible) */
@@ -321,31 +351,6 @@ a.btn-secondary:hover {
   color: var(--blue);
   padding: 8px 10px;
   border: 1px solid transparent;
-}
-
-/* Telegram alertas */
-.btn-telegram {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  width: 100%;
-  margin-top: 8px;
-  padding: 11px 16px;
-  border-radius: 999px !important;
-  border: 1px solid rgba(56, 189, 248, 0.25) !important;
-  background: linear-gradient(180deg, #2aabee 0%, #229ed9 100%);
-  color: #fff !important;
-  font-weight: 700;
-  font-size: 0.92rem;
-  text-decoration: none !important;
-  box-sizing: border-box;
-  line-height: 1.25;
-  box-shadow: 0 4px 14px rgba(34, 158, 217, 0.28);
-}
-
-.btn-telegram:hover {
-  filter: brightness(1.05);
 }
 
 /* PWA: Instalar app */

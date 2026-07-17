@@ -16,7 +16,7 @@
     <link rel="icon" href="/static/favicon-64.png?v=0.2.9" type="image/png" sizes="64x64" />
     <link rel="apple-touch-icon" href="/static/logo-192.png?v=0.5.0" sizes="192x192" />
     <link rel="apple-touch-icon" href="/static/logo-512.png?v=0.5.0" sizes="512x512" />
-    <link rel="stylesheet" href="/static/styles.css?v=0.6.0" />
+    <link rel="stylesheet" href="/static/styles.css?v=0.6.1" />
   </head>
   <body>
     <a
@@ -53,14 +53,26 @@
           </div>
         </div>
         <div class="header-right">
-          <div
-            class="eia-chip"
-            id="eiaBanner"
-            title="Promedio del estado esta semana"
-            aria-label="Promedio semanal del estado"
-          >
-            <span class="eia-chip-label" id="eiaBadge" data-i18n="eiaChipLabel">prom. sem.</span>
-            <span class="eia-chip-text" id="eiaChipText">$—</span>
+          <div class="header-meta">
+            <div
+              class="eia-chip"
+              id="eiaBanner"
+              title="Promedio del estado esta semana"
+              aria-label="Promedio semanal del estado"
+            >
+              <span class="eia-chip-label" id="eiaBadge" data-i18n="eiaChipLabel">prom. sem.</span>
+              <span class="eia-chip-text" id="eiaChipText">$—</span>
+            </div>
+            <a
+              class="tg-mini"
+              id="btnTelegram"
+              href="https://t.me/GasRadar_bot"
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Alertas en Telegram @GasRadar_bot"
+            >
+              <span data-i18n="telegramAlerts">TG alertas</span>
+            </a>
           </div>
           <div class="lang-switch" role="group" aria-label="Language">
             <button type="button" class="lang-btn active" id="btnLangEs" data-lang="es">ES</button>
@@ -122,16 +134,6 @@
           <span class="btn-ico" aria-hidden="true">⬇️</span>
           <span data-i18n="installApp">Instalar app</span>
         </button>
-        <a
-          class="btn-telegram"
-          id="btnTelegram"
-          href="https://t.me/GasRadar_bot"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <span class="btn-ico" aria-hidden="true">✈️</span>
-          <span data-i18n="telegramAlerts">Alertas en Telegram</span>
-        </a>
       </section>
 
       <section class="card best" id="bestCard" hidden>
@@ -214,6 +216,6 @@
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-    <script src="/static/app.js?v=0.6.0"></script>
+    <script src="/static/app.js?v=0.6.1"></script>
   </body>
 </html>
