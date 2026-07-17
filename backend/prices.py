@@ -106,10 +106,6 @@ EIA_PRODUCTS = {
 }
 
 
-def _eia_api_key() -> str:
-    return (os.environ.get("EIA_API_KEY") or "").strip() or "DEMO_KEY"
-
-
 def _secret_from_local(*names: str) -> str:
     try:
         import config_local as _cfg  # type: ignore
@@ -132,6 +128,15 @@ def _env_first(*names: str) -> str:
         if v:
             return v
     return ""
+
+
+def _eia_api_key() -> str:
+    """Key oficial EIA (gratis). Env, config_local, o DEMO_KEY."""
+    return (
+        _env_first("EIA_API_KEY")
+        or _secret_from_local("EIA_API_KEY")
+        or "DEMO_KEY"
+    )
 
 
 def _zyla_api_key() -> str:
