@@ -75,9 +75,13 @@ const I18N = {
     gpsUnavailable: "GPS no disponible. Usa un ZIP (ej. 80903).",
     gpsHttps: "GPS solo funciona con HTTPS. Usa un ZIP.",
     gettingLoc: "Obteniendo tu ubicación…",
-    gpsDenied: "Permiso de ubicación denegado. Usa un ZIP.",
-    gpsTimeout: "GPS tardó mucho. Usa un ZIP (ej. 80903).",
-    noGps: "Sin GPS. Usa un ZIP (Colorado Springs: 80903).",
+    gpsRetrying: "Afinando GPS… un momento",
+    gpsDenied: "Permiso de ubicación denegado. Actívalo en el navegador o usa un ZIP.",
+    gpsTimeout: "GPS tardó mucho. Prueba de nuevo o escribe un ZIP.",
+    noGps: "No se pudo ubicar. Escribe un ZIP (ej. 80903).",
+    gpsOk: (m) => `Ubicación OK (±${m} m)`,
+    gpsWeak: "Ubicación poco precisa — si falla, usa un ZIP",
+    gpsBusy: "Ya estamos obteniendo la ubicación…",
     reportOf: (name) => `Reportar · ${name}`,
     disclaimerFallback:
       "Estaciones reales. Precios: reportes o estimación. No es precio de bomba en vivo.",
@@ -161,9 +165,13 @@ const I18N = {
     gpsUnavailable: "GPS unavailable. Use a ZIP (e.g. 80903).",
     gpsHttps: "GPS needs HTTPS. Use a ZIP.",
     gettingLoc: "Getting your location…",
-    gpsDenied: "Location permission denied. Use a ZIP.",
-    gpsTimeout: "GPS timed out. Use a ZIP (e.g. 80903).",
-    noGps: "No GPS. Use a ZIP (Colorado Springs: 80903).",
+    gpsRetrying: "Refining GPS… one moment",
+    gpsDenied: "Location denied. Enable it in the browser or use a ZIP.",
+    gpsTimeout: "GPS timed out. Try again or enter a ZIP.",
+    noGps: "Couldn't locate you. Enter a ZIP (e.g. 80903).",
+    gpsOk: (m) => `Location OK (±${m} m)`,
+    gpsWeak: "Location is rough — if results look wrong, use a ZIP",
+    gpsBusy: "Already getting your location…",
     reportOf: (name) => `Report · ${name}`,
     disclaimerFallback:
       "Real stations. Prices: user reports or estimates. Not live pump prices.",
@@ -823,34 +831,137 @@ async function submitReport() {
   }
 }
 
-function useGps() {
+/** GPS mejorado: rápido → preciso → feedback de precisión → ZIP si falla */
+let gpsBusy = false;
+
+function gpsSecureOk() {
+  return (
+    window.isSecureContext === true ||
+    ["localhost", "127.0.0.1"].includes(location.hostname)
+  );
+}
+
+function getGpsPosition(options) {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject({ code: 0, message: "no geolocation" });
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(resolve, reject, options);
+  });
+}
+
+function focusZipFallback() {
+  const zip = $("#zipInput");
+  if (zip) {
+    try {
+      zip.focus({ preventScroll: false });
+    } catch (_) {
+      zip.focus();
+    }
+  }
+}
+
+function handleGpsError(err) {
+  setLocDot("off");
+  const code = err && err.code;
+  if (code === 1) setStatus(t("gpsDenied"), "error");
+  else if (code === 3) setStatus(t("gpsTimeout"), "error");
+  else setStatus(t("noGps"), "error");
+  focusZipFallback();
+}
+
+async function useGps() {
+  if (gpsBusy) {
+    showToast(t("gpsBusy"));
+    return;
+  }
   if (!navigator.geolocation) {
     setStatus(t("gpsUnavailable"), "error");
+    focusZipFallback();
     return;
   }
-  if (
-    window.isSecureContext !== true &&
-    !["localhost", "127.0.0.1"].includes(location.hostname)
-  ) {
+  if (!gpsSecureOk()) {
     setStatus(t("gpsHttps"), "error");
+    focusZipFallback();
     return;
   }
+
+  const btn = $("#btnGps");
+  gpsBusy = true;
+  if (btn) btn.disabled = true;
   setStatus(t("gettingLoc"), "loading");
   setLocDot("loading");
-  navigator.geolocation.getCurrentPosition(
-    (pos) => {
-      state.zip = null;
-      search({ lat: pos.coords.latitude, lon: pos.coords.longitude });
-    },
-    (err) => {
-      setLocDot("off");
-      const code = err && err.code;
-      if (code === 1) setStatus(t("gpsDenied"), "error");
-      else if (code === 3) setStatus(t("gpsTimeout"), "error");
-      else setStatus(t("noGps"), "error");
-    },
-    { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
-  );
+
+  try {
+    let pos = null;
+
+    // 1) Rápido: red/wifi, cache reciente (mejor en ciudad)
+    try {
+      pos = await getGpsPosition({
+        enableHighAccuracy: false,
+        timeout: 8000,
+        maximumAge: 60000,
+      });
+    } catch (e1) {
+      if (e1 && e1.code === 1) {
+        // Permiso denegado: no reintentar
+        handleGpsError(e1);
+        return;
+      }
+      // 2) Preciso: GPS del chip
+      setStatus(t("gpsRetrying"), "loading");
+      pos = await getGpsPosition({
+        enableHighAccuracy: true,
+        timeout: 14000,
+        maximumAge: 0,
+      });
+    }
+
+    let lat = pos.coords.latitude;
+    let lon = pos.coords.longitude;
+    let accuracy =
+      typeof pos.coords.accuracy === "number" ? pos.coords.accuracy : null;
+
+    // 3) Si la precisión es muy mala (> ~1.5 km), un reintento de alta precisión
+    if (accuracy != null && accuracy > 1500) {
+      setStatus(t("gpsRetrying"), "loading");
+      try {
+        const pos2 = await getGpsPosition({
+          enableHighAccuracy: true,
+          timeout: 12000,
+          maximumAge: 0,
+        });
+        const a2 =
+          typeof pos2.coords.accuracy === "number"
+            ? pos2.coords.accuracy
+            : null;
+        if (a2 == null || a2 < accuracy) {
+          lat = pos2.coords.latitude;
+          lon = pos2.coords.longitude;
+          accuracy = a2;
+        }
+      } catch (_) {
+        /* nos quedamos con la primera */
+      }
+    }
+
+    state.zip = null;
+    state.gpsAccuracy = accuracy;
+
+    if (accuracy != null && accuracy <= 80) {
+      showToast(t("gpsOk", Math.round(accuracy)));
+    } else if (accuracy != null && accuracy > 500) {
+      showToast(t("gpsWeak"));
+    }
+
+    await search({ lat, lon });
+  } catch (err) {
+    handleGpsError(err);
+  } finally {
+    gpsBusy = false;
+    if (btn) btn.disabled = false;
+  }
 }
 
 function startApp() {
@@ -870,20 +981,24 @@ function startApp() {
   $("#stateAvg").textContent = t("locHint");
   setLocDot("off");
 
-  if (
-    navigator.geolocation &&
-    (window.isSecureContext === true ||
-      ["localhost", "127.0.0.1"].includes(location.hostname))
-  ) {
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        if (!state.stations.length && state.lat == null && !state.searching) {
-          search({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+  // Auto-GPS silencioso solo si no hay zona guardada (rápido, no molesta)
+  if (navigator.geolocation && gpsSecureOk()) {
+    getGpsPosition({
+      enableHighAccuracy: false,
+      timeout: 7000,
+      maximumAge: 180000,
+    })
+      .then((pos) => {
+        if (!state.stations.length && state.lat == null && !state.searching && !gpsBusy) {
+          search({
+            lat: pos.coords.latitude,
+            lon: pos.coords.longitude,
+          });
         }
-      },
-      () => {},
-      { enableHighAccuracy: false, timeout: 6000, maximumAge: 120000 }
-    );
+      })
+      .catch(() => {
+        /* silencioso: el usuario puede tocar el botón o usar ZIP */
+      });
   }
 }
 
