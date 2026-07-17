@@ -87,6 +87,7 @@ const I18N = {
     installIos:
       "En iPhone: toca Compartir → Añadir a pantalla de inicio",
     installAlready: "Ya está instalada o ábrela desde el icono del teléfono",
+    telegramAlerts: "Alertas en Telegram",
   },
   en: {
     subtitle: "Best prices near you · USA",
@@ -170,6 +171,7 @@ const I18N = {
     installDone: "App installed — find it on your home screen",
     installIos: "On iPhone: tap Share → Add to Home Screen",
     installAlready: "Already installed, or open it from the home screen icon",
+    telegramAlerts: "Telegram alerts",
   },
 };
 
@@ -615,6 +617,12 @@ function render(data) {
     ? `${data.center.state} · ${fuel}`
     : fuel;
   renderEiaBanner(data);
+
+  // Deep-link al bot con ZIP actual
+  const tg = $("#btnTelegram");
+  if (tg && data.center && data.center.zip) {
+    tg.href = `https://t.me/GasRadar_bot?start=${encodeURIComponent(data.center.zip)}`;
+  }
 
   if (data.cheapest) {
     const b = data.cheapest;

@@ -323,6 +323,31 @@ a.btn-secondary:hover {
   border: 1px solid transparent;
 }
 
+/* Telegram alertas */
+.btn-telegram {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 8px;
+  padding: 11px 16px;
+  border-radius: 999px !important;
+  border: 1px solid rgba(56, 189, 248, 0.25) !important;
+  background: linear-gradient(180deg, #2aabee 0%, #229ed9 100%);
+  color: #fff !important;
+  font-weight: 700;
+  font-size: 0.92rem;
+  text-decoration: none !important;
+  box-sizing: border-box;
+  line-height: 1.25;
+  box-shadow: 0 4px 14px rgba(34, 158, 217, 0.28);
+}
+
+.btn-telegram:hover {
+  filter: brightness(1.05);
+}
+
 /* PWA: Instalar app */
 .btn-install {
   display: inline-flex;

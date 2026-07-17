@@ -1,9 +1,9 @@
 /* GasRadar service worker — cache de shell para PWA */
-const CACHE = "gasradar-v0.5.0";
+const CACHE = "gasradar-v0.6.0";
 const PRECACHE = [
   "/",
-  "/static/styles.css?v=0.5.0",
-  "/static/app.js?v=0.5.0",
+  "/static/styles.css?v=0.6.0",
+  "/static/app.js?v=0.6.0",
   "/static/logo.svg?v=0.2.9",
   "/static/logo-192.png?v=0.5.0",
   "/static/logo-512.png?v=0.5.0",
