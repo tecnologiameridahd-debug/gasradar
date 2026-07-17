@@ -71,30 +71,34 @@ body {
 
 .header-right {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
   gap: 6px;
   flex-shrink: 0;
-  margin-top: 2px;
+  margin-top: 4px;
+  flex-wrap: nowrap;
 }
 
-/* Chip pequeño EIA al lado del idioma */
+/* Chip mini EIA — en línea con ES/EN, no apilado */
 .eia-chip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  max-width: 148px;
-  padding: 4px 8px;
+  gap: 3px;
+  max-width: 92px;
+  padding: 3px 7px;
   border-radius: 999px;
   background: rgba(56, 189, 248, 0.12);
-  border: 1px solid rgba(56, 189, 248, 0.35);
-  font-size: 0.68rem;
+  border: 1px solid rgba(56, 189, 248, 0.32);
+  font-size: 0.62rem;
   font-weight: 700;
-  line-height: 1.2;
+  line-height: 1.15;
   color: var(--blue);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  height: 26px;
+  box-sizing: border-box;
 }
 
 .eia-chip[hidden] {
@@ -102,10 +106,10 @@ body {
 }
 
 .eia-chip-label {
-  font-size: 0.62rem;
-  letter-spacing: 0.04em;
+  font-size: 0.55rem;
+  letter-spacing: 0.03em;
   text-transform: uppercase;
-  opacity: 0.9;
+  opacity: 0.88;
   flex-shrink: 0;
 }
 
@@ -114,6 +118,7 @@ body {
   font-variant-numeric: tabular-nums;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-size: 0.62rem;
 }
 
 /* Botón idioma ES | EN */

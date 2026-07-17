@@ -580,17 +580,14 @@ function renderEiaBanner(data) {
 
   const badge = $("#eiaBadge");
   const text = $("#eiaChipText");
+  // Chip mini: solo "EIA $3.72" (estado y semana van en el title)
   if (badge) badge.textContent = eiaOk ? "EIA" : state.lang === "en" ? "Avg" : "Ref";
-  // Ej: CO $3.72 · 07-13
-  let line = `${stCode || "—"} ${money(fuelAvg)}`;
-  if (eiaOk && period) {
-    // solo mes-día si viene YYYY-MM-DD
-    const short = String(period).length >= 10 ? String(period).slice(5) : period;
-    line += ` · ${short}`;
-  }
-  if (text) text.textContent = line;
+  if (text) text.textContent = money(fuelAvg);
+  const weekBit = period
+    ? ` · ${state.lang === "en" ? "week of" : "semana"} ${period}`
+    : "";
   chip.title = eiaOk
-    ? t("eiaNote") + (period ? ` (${period})` : "")
+    ? `${stCode || ""} ${t("eiaNote")}${weekBit}`.trim()
     : t("eiaNote");
 }
 
