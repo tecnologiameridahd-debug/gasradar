@@ -18,7 +18,7 @@ def geocode_zip(zip_code: str) -> dict | None:
     if len(z) != 5:
         return None
     try:
-        r = httpx.get(f"https://api.zippopotam.us/us/{z}", timeout=12.0)
+        r = httpx.get(f"https://api.zippopotam.us/us/{z}", timeout=6.0)
         if r.status_code != 200:
             return None
         data = r.json()

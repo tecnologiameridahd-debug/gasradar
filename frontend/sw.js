@@ -1,9 +1,9 @@
 /* GasRadar service worker — cache de shell para PWA */
-const CACHE = "gasradar-v0.6.1";
+const CACHE = "gasradar-v0.7.1";
 const PRECACHE = [
   "/",
-  "/static/styles.css?v=0.6.1",
-  "/static/app.js?v=0.6.1",
+  "/static/styles.css?v=0.7.1",
+  "/static/app.js?v=0.7.1",
   "/static/logo.svg?v=0.2.9",
   "/static/logo-192.png?v=0.5.0",
   "/static/logo-512.png?v=0.5.0",
@@ -37,7 +37,6 @@ self.addEventListener("fetch", (event) => {
   if (req.method !== "GET") return;
 
   const url = new URL(req.url);
-  // Solo mismo origen
   if (url.origin !== self.location.origin) return;
 
   // API siempre de red (precios vivos)
@@ -54,7 +53,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // HTML: red primero, cache de respaldo
+  // HTML: red primero
   if (req.mode === "navigate" || url.pathname === "/" || url.pathname.endsWith(".html")) {
     event.respondWith(
       fetch(req)
@@ -68,7 +67,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Estáticos: cache primero, luego red
+  // Estáticos: cache primero
   if (url.pathname.startsWith("/static/") || url.pathname === "/manifest.webmanifest") {
     event.respondWith(
       caches.match(req).then((cached) => {

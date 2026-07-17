@@ -533,8 +533,46 @@ function vsAvgHtml(vs) {
   return `<div class="station-vs pricier">+${money(v)}</div>`;
 }
 
+/* Cache local: misma búsqueda = respuesta al instante (8 min) */
+const _searchMem = new Map();
+const SEARCH_MEM_MS = 8 * 60 * 1000;
+
+function searchMemKey({ lat, lon, zip }) {
+  const z = zip || state.zip || "";
+  const la = lat != null ? Number(lat).toFixed(3) : "";
+  const lo = lon != null ? Number(lon).toFixed(3) : "";
+  return `${z}|${la}|${lo}|${state.fuel}|${state.radius}`;
+}
+
+function applySearchData(data, { zip } = {}) {
+  state.lat = data.center.lat;
+  state.lon = data.center.lon;
+  state.label = data.center.label;
+  state.stations = data.stations || [];
+  state.lastData = data;
+  if (zip) state.zip = zip;
+  if (data.center && data.center.zip) state.zip = data.center.zip;
+  saveLocation({
+    lat: state.lat,
+    lon: state.lon,
+    label: state.label,
+    zip: state.zip || zip || null,
+  });
+  if (state.zip && $("#zipInput") && !$("#zipInput").value) {
+    $("#zipInput").value = state.zip;
+  }
+  render(data);
+}
+
 async function search({ lat, lon, zip } = {}) {
   if (state.searching) return;
+
+  const memKey = searchMemKey({ lat, lon, zip });
+  const memHit = _searchMem.get(memKey);
+  if (memHit && Date.now() - memHit.ts < SEARCH_MEM_MS && memHit.data) {
+    applySearchData(memHit.data, { zip });
+    return;
+  }
 
   setBusy(true);
   setStatus(t("searching"), "loading");
@@ -547,7 +585,7 @@ async function search({ lat, lon, zip } = {}) {
   const params = new URLSearchParams();
   params.set("fuel", state.fuel);
   params.set("radius_mi", String(state.radius));
-  params.set("limit", "25");
+  params.set("limit", "20");
   if (zip) params.set("zip", zip);
   if (lat != null && lon != null) {
     params.set("lat", String(lat));
@@ -555,7 +593,7 @@ async function search({ lat, lon, zip } = {}) {
   }
 
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 25000);
+  const timer = setTimeout(() => ctrl.abort(), 22000);
 
   try {
     const res = await fetch(`/api/search?${params.toString()}`, {
@@ -573,23 +611,16 @@ async function search({ lat, lon, zip } = {}) {
       throw new Error(detail || `Error ${res.status}`);
     }
     const data = await res.json();
-    state.lat = data.center.lat;
-    state.lon = data.center.lon;
-    state.label = data.center.label;
-    state.stations = data.stations || [];
-    state.lastData = data;
-    if (zip) state.zip = zip;
-    if (data.center && data.center.zip) state.zip = data.center.zip;
-    saveLocation({
-      lat: state.lat,
-      lon: state.lon,
-      label: state.label,
-      zip: state.zip || zip || null,
-    });
-    if (state.zip && $("#zipInput") && !$("#zipInput").value) {
-      $("#zipInput").value = state.zip;
+    try {
+      _searchMem.set(memKey, { ts: Date.now(), data });
+      if (_searchMem.size > 40) {
+        const first = _searchMem.keys().next().value;
+        _searchMem.delete(first);
+      }
+    } catch (_) {
+      /* ignore */
     }
-    render(data);
+    applySearchData(data, { zip });
   } catch (e) {
     clearTimeout(timer);
     setLocDot("off");

@@ -1,7 +1,11 @@
 """
 Búsqueda de precios reutilizable (web API + bot Telegram).
+Optimizado: cache en memoria + Zyla en paralelo + menos bloqueos.
 """
 from __future__ import annotations
+
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from backend.geo import (
     DEFAULT_LABEL,
@@ -13,13 +17,60 @@ from backend.geo import (
 from backend.prices import (
     attach_prices,
     cheapest_summary,
-    fetch_eia_state_averages,
     fetch_zyla_stations,
     fetch_zyla_zip_prices,
     merge_zyla_prices_into_stations,
     price_meta,
 )
 from backend.stations import stations_near
+
+# Cache de resultados completos (misma zona / fuel / radio)
+_SEARCH_CACHE: dict[str, dict] = {}
+_SEARCH_CACHE_TTL = 10 * 60  # 10 min
+_SEARCH_CACHE_MAX = 80
+
+
+def _search_cache_key(
+    *,
+    zip_code: str | None,
+    lat: float | None,
+    lon: float | None,
+    radius_mi: float,
+    fuel: str,
+    limit: int,
+    quick: bool,
+) -> str:
+    if zip_code:
+        loc = f"z:{zip_code}"
+    elif lat is not None and lon is not None:
+        loc = f"g:{round(float(lat), 3)},{round(float(lon), 3)}"
+    else:
+        loc = "default"
+    return f"{loc}|{fuel}|{round(float(radius_mi), 1)}|{int(limit)}|{'q' if quick else 'f'}"
+
+
+def _cache_get(key: str) -> dict | None:
+    hit = _SEARCH_CACHE.get(key)
+    if not hit:
+        return None
+    if time.time() - float(hit.get("ts") or 0) > _SEARCH_CACHE_TTL:
+        _SEARCH_CACHE.pop(key, None)
+        return None
+    data = hit.get("data")
+    if isinstance(data, dict):
+        out = dict(data)
+        out["cached"] = True
+        return out
+    return None
+
+
+def _cache_put(key: str, data: dict) -> None:
+    if len(_SEARCH_CACHE) >= _SEARCH_CACHE_MAX:
+        # borrar entradas más viejas
+        oldest = sorted(_SEARCH_CACHE.items(), key=lambda kv: kv[1].get("ts") or 0)
+        for k, _ in oldest[: max(1, _SEARCH_CACHE_MAX // 4)]:
+            _SEARCH_CACHE.pop(k, None)
+    _SEARCH_CACHE[key] = {"ts": time.time(), "data": data}
 
 
 def run_search(
@@ -62,28 +113,58 @@ def run_search(
         label = DEFAULT_LABEL
         state = "CO"
 
-    if not quick:
-        try:
-            fetch_eia_state_averages(state)
-        except Exception:
-            pass
-
     if quick:
         limit = min(int(limit), 12)
+    else:
+        limit = min(int(limit), 22)
+
+    # Respuesta instantánea si ya buscamos esta zona hace poco
+    ck = _search_cache_key(
+        zip_code=str(zip_code) if zip_code else None,
+        lat=float(lat) if lat is not None else None,
+        lon=float(lon) if lon is not None else None,
+        radius_mi=radius_mi,
+        fuel=fuel,
+        limit=limit,
+        quick=quick,
+    )
+    cached = _cache_get(ck)
+    if cached is not None:
+        if track:
+            try:
+                from backend.analytics import track_event
+
+                track_event(
+                    "search_cache",
+                    path="/api/search",
+                    detail=str(zip_code or "gps")[:40],
+                )
+            except Exception:
+                pass
+        return cached
+
+    # EIA no bloquea: se lee de caché en price_meta(fast=True) más abajo
 
     zyla = None
     zyla_stations: list = []
     if zip_code:
+        # Zyla stations + averages EN PARALELO (antes era 1 + 1 secuencial)
         try:
-            zyla_stations = fetch_zyla_stations(str(zip_code), fuel=fuel) or []
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                f_st = pool.submit(fetch_zyla_stations, str(zip_code), fuel)
+                f_av = pool.submit(fetch_zyla_zip_prices, str(zip_code), fuel)
+                try:
+                    zyla_stations = f_st.result(timeout=16) or []
+                except Exception as e:
+                    print(f"[search] zyla stations: {e}")
+                    zyla_stations = []
+                try:
+                    zyla = f_av.result(timeout=16)
+                except Exception as e:
+                    print(f"[search] zyla avg: {e}")
+                    zyla = None
         except Exception as e:
-            print(f"[search] zyla stations: {e}")
-            zyla_stations = []
-        try:
-            zyla = fetch_zyla_zip_prices(str(zip_code), fuel=fuel)
-        except Exception as e:
-            print(f"[search] zyla avg: {e}")
-            zyla = None
+            print(f"[search] zyla parallel: {e}")
         if (not zyla or not zyla.get("ok")) and zyla_stations:
             vals = [float(s["price"]) for s in zyla_stations if s.get("price")]
             if vals:
@@ -97,18 +178,21 @@ def run_search(
                     "ok": True,
                 }
 
+    # GasBuddy solo si está activado y faltan resultados (lento / Cloudflare)
     gb_stations: list = []
-    if not quick:
+    if not quick and len(zyla_stations) < 6:
         try:
+            from backend.gasbuddy_src import _enabled as gasbuddy_enabled
             from backend.gasbuddy_src import fetch_gasbuddy_stations
 
-            gb_stations = fetch_gasbuddy_stations(
-                zip_code=str(zip_code) if zip_code else None,
-                lat=float(lat) if lat is not None else None,
-                lon=float(lon) if lon is not None else None,
-                fuel=fuel,
-                limit=min(int(limit), 15),
-            )
+            if gasbuddy_enabled():
+                gb_stations = fetch_gasbuddy_stations(
+                    zip_code=str(zip_code) if zip_code else None,
+                    lat=float(lat) if lat is not None else None,
+                    lon=float(lon) if lon is not None else None,
+                    fuel=fuel,
+                    limit=min(int(limit), 10),
+                )
         except Exception as e:
             print(f"[search] gasbuddy: {e}")
             gb_stations = []
@@ -213,8 +297,10 @@ def run_search(
             )
         )
 
-    if len(priced) < 8:
-        stations = stations_near(float(lat), float(lon), radius_mi=radius_mi, limit=limit)
+    if len(priced) < 6:
+        stations = stations_near(
+            float(lat), float(lon), radius_mi=radius_mi, limit=min(int(limit), 18)
+        )
         osm_priced = attach_prices(stations, state=state, fuel=fuel) if stations else []
         if zyla_stations and osm_priced:
             osm_priced = merge_zyla_prices_into_stations(
@@ -327,7 +413,7 @@ def run_search(
         except Exception:
             pass
 
-    return {
+    out = {
         "center": {
             "lat": lat,
             "lon": lon,
@@ -343,6 +429,7 @@ def run_search(
         "user_reports_count": user_reports,
         "cheapest": best,
         "stations": priced,
+        "cached": False,
         "disclaimer": (
             "Estaciones reales (OpenStreetMap). "
             "Precios: reportes de la comunidad o estimación EIA + marca."
@@ -351,3 +438,8 @@ def run_search(
             f"{note}"
         ),
     }
+    try:
+        _cache_put(ck, out)
+    except Exception:
+        pass
+    return out
