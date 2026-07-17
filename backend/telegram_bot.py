@@ -46,11 +46,64 @@ def telegram_token() -> str:
     )
 
 
+def _normalize_secret(value: str | None) -> str:
+    """Quita espacios, comillas y decodifica URL (?key=...)."""
+    from urllib.parse import unquote
+
+    if value is None:
+        return ""
+    s = unquote(str(value)).strip()
+    # Render a veces guarda "mi_clave" con comillas
+    if (s.startswith('"') and s.endswith('"')) or (s.startswith("'") and s.endswith("'")):
+        s = s[1:-1].strip()
+    # Espacios raros / saltos
+    s = s.replace("\r", "").replace("\n", "").strip()
+    return s
+
+
 def alerts_secret() -> str:
-    return (
+    raw = (
         (os.environ.get("ALERTS_SECRET") or os.environ.get("STATS_KEY") or "")
-        .strip()
         or _secret_from_local("ALERTS_SECRET", "STATS_KEY")
+    )
+    return _normalize_secret(raw)
+
+
+def check_alerts_key(key: str | None) -> bool:
+    """True si la clave del URL coincide con ALERTS_SECRET o STATS_KEY."""
+    secret = alerts_secret()
+    if not secret:
+        # Sin secret en servidor: permitir (solo para setup inicial)
+        return True
+    provided = _normalize_secret(key)
+    if not provided:
+        return False
+    if provided == secret:
+        return True
+    # Aceptar también la versión “limpia” (solo letras/números) por si copió mal
+    clean_secret = re.sub(r"[^A-Za-z0-9_-]", "", secret)
+    clean_key = re.sub(r"[^A-Za-z0-9_-]", "", provided)
+    if clean_secret and clean_key and clean_secret == clean_key:
+        return True
+    return False
+
+
+def key_error_hint(key: str | None) -> str:
+    """Mensaje de error sin revelar la clave real."""
+    secret = alerts_secret()
+    provided = _normalize_secret(key)
+    if not secret:
+        return "No hay ALERTS_SECRET en Render. Crea la variable y redeploy."
+    if not provided:
+        return (
+            "Falta ?key= en la URL. "
+            "Ejemplo: /api/telegram/setup?key=TU_ALERTS_SECRET"
+        )
+    return (
+        f"Clave incorrecta. "
+        f"Enviaste {len(provided)} caracteres; en Render ALERTS_SECRET tiene {len(secret)}. "
+        f"Deben ser iguales (copia-pega desde Environment). "
+        f"Recomendado: solo letras y números, ej. gasradar2026"
     )
 
 

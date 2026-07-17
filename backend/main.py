@@ -16,7 +16,7 @@ from backend.prices import report_price
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.7.2"
+APP_VERSION = "0.7.3"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -174,7 +174,9 @@ async def api_telegram_webhook(
     from backend.telegram_bot import (
         alerts_secret,
         bot_ready,
+        check_alerts_key,
         handle_update_safe,
+        key_error_hint,
         webhook_secret_token,
     )
 
@@ -182,12 +184,12 @@ async def api_telegram_webhook(
         raise HTTPException(503, "TELEGRAM_BOT_TOKEN no configurado")
 
     secret = alerts_secret()
-    header_tok = request.headers.get("X-Telegram-Bot-Api-Secret-Token") or ""
-    tok_ok = header_tok == webhook_secret_token() if secret else True
-    key_ok = (not secret) or (key == secret)
+    header_tok = (request.headers.get("X-Telegram-Bot-Api-Secret-Token") or "").strip()
+    tok_ok = (not secret) or (header_tok == webhook_secret_token())
+    key_ok = check_alerts_key(key)
     # Acepta header oficial O ?key=ALERTS_SECRET
     if secret and not (tok_ok or key_ok):
-        raise HTTPException(401, "Clave webhook incorrecta")
+        raise HTTPException(401, key_error_hint(key))
 
     try:
         update = await request.json()
@@ -205,16 +207,17 @@ def api_telegram_setup(key: str | None = None, base: str | None = None):
     from backend.telegram_bot import (
         alerts_secret,
         bot_ready,
+        check_alerts_key,
         get_me,
         get_webhook_info,
+        key_error_hint,
         set_webhook,
     )
 
     if not bot_ready():
         raise HTTPException(503, "Falta TELEGRAM_BOT_TOKEN en Render")
-    secret = alerts_secret()
-    if secret and key != secret:
-        raise HTTPException(401, "Clave incorrecta (ALERTS_SECRET o STATS_KEY)")
+    if not check_alerts_key(key):
+        raise HTTPException(401, key_error_hint(key))
     me = get_me()
     wh = set_webhook(base)
     info = get_webhook_info()
@@ -225,6 +228,7 @@ def api_telegram_setup(key: str | None = None, base: str | None = None):
         "webhook_info": info,
         "hint": "Abre t.me/GasRadar_bot → /start → escribe 80903",
         "next": "Cron alertas: GET /api/alerts/run?key=TU_ALERTS_SECRET cada hora",
+        "secret_configured": bool(alerts_secret()),
     }
 
 
@@ -234,19 +238,22 @@ def api_telegram_status(key: str | None = None):
     from backend.telegram_bot import (
         alerts_secret,
         bot_ready,
+        check_alerts_key,
         get_me,
         get_webhook_info,
+        key_error_hint,
     )
 
+    if not check_alerts_key(key):
+        raise HTTPException(401, key_error_hint(key))
     secret = alerts_secret()
-    if secret and key != secret:
-        raise HTTPException(401, "Clave incorrecta")
     me = get_me() if bot_ready() else {}
     info = get_webhook_info() if bot_ready() else {}
     result = (info or {}).get("result") or {}
     return {
         "bot_ready": bot_ready(),
         "has_alerts_secret": bool(secret),
+        "secret_length": len(secret) if secret else 0,
         "me_ok": bool((me or {}).get("ok")),
         "username": ((me or {}).get("result") or {}).get("username"),
         "webhook_url": result.get("url"),
@@ -262,7 +269,13 @@ def api_alerts_run(key: str | None = None, force: bool = False):
     Cron: revisa alertas y envía Telegram si el precio <= tope.
     Protegido con ALERTS_SECRET o STATS_KEY.
     """
-    from backend.telegram_bot import alerts_secret, bot_ready, run_alert_checks
+    from backend.telegram_bot import (
+        alerts_secret,
+        bot_ready,
+        check_alerts_key,
+        key_error_hint,
+        run_alert_checks,
+    )
 
     if not bot_ready():
         raise HTTPException(503, "TELEGRAM_BOT_TOKEN no configurado")
@@ -272,8 +285,8 @@ def api_alerts_run(key: str | None = None, force: bool = False):
             503,
             "Configura ALERTS_SECRET (o STATS_KEY) para proteger el cron de alertas",
         )
-    if key != secret:
-        raise HTTPException(401, "Clave incorrecta")
+    if not check_alerts_key(key):
+        raise HTTPException(401, key_error_hint(key))
     return run_alert_checks(force=force)
 
 
