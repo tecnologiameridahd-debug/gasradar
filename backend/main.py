@@ -16,7 +16,7 @@ from backend.prices import report_price
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.6.9"
+APP_VERSION = "0.7.0"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -273,6 +273,22 @@ def index():
     if not index_path.exists():
         return {"msg": "Frontend missing"}
     return FileResponse(index_path)
+
+
+@app.get("/robots.txt")
+def robots_txt():
+    path = FRONTEND / "robots.txt"
+    if not path.exists():
+        raise HTTPException(404, "robots.txt missing")
+    return FileResponse(path, media_type="text/plain")
+
+
+@app.get("/sitemap.xml")
+def sitemap_xml():
+    path = FRONTEND / "sitemap.xml"
+    if not path.exists():
+        raise HTTPException(404, "sitemap missing")
+    return FileResponse(path, media_type="application/xml")
 
 
 @app.get("/manifest.webmanifest")

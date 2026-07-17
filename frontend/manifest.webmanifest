@@ -1,7 +1,7 @@
 {
-  "name": "GasRadar — Precios de gasolina",
+  "name": "GasRadar — Gas prices USA",
   "short_name": "GasRadar",
-  "description": "Encuentra la gasolina más barata cerca de ti en USA",
+  "description": "Gasolina más barata cerca de ti · Cheapest gas near you in the USA",
   "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",

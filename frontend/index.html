@@ -4,19 +4,51 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#0b1220" />
-    <meta name="description" content="GasRadar — find the cheapest gas near you in the USA" />
+    <meta
+      name="description"
+      id="metaDesc"
+      content="Gasolina más barata cerca de ti en USA. Compara precios por GPS o ZIP con GasRadar. Encuentra la estación más barata al instante."
+    />
+    <meta
+      name="keywords"
+      content="gasolina barata, gas prices, cheapest gas, gasolinera cerca, ZIP, USA, Colorado, GasRadar"
+    />
+    <meta name="author" content="GasRadar" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://gasradarapp.com/" />
+    <!-- Open Graph (WhatsApp / Facebook / redes) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="GasRadar" />
+    <meta property="og:url" content="https://gasradarapp.com/" />
+    <meta property="og:title" content="GasRadar — Gas prices USA" />
+    <meta
+      property="og:description"
+      content="Find the cheapest gas near you. GPS or ZIP · USA. Gasolina más barata cerca de ti."
+    />
+    <meta property="og:image" content="https://gasradarapp.com/static/logo-512.png?v=0.7.0" />
+    <meta property="og:locale" content="es_US" />
+    <meta property="og:locale:alternate" content="en_US" />
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="GasRadar — Gas prices USA" />
+    <meta
+      name="twitter:description"
+      content="Cheapest gas near you · GPS or ZIP · USA"
+    />
+    <meta name="twitter:image" content="https://gasradarapp.com/static/logo-512.png?v=0.7.0" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="GasRadar" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="application-name" content="GasRadar" />
+    <!-- Título pedido: no cambiar "GasRadar — Gas prices USA" -->
     <title>GasRadar — Gas prices USA</title>
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/static/favicon-32.png?v=0.2.9" type="image/png" sizes="32x32" />
     <link rel="icon" href="/static/favicon-64.png?v=0.2.9" type="image/png" sizes="64x64" />
     <link rel="apple-touch-icon" href="/static/logo-192.png?v=0.5.0" sizes="192x192" />
     <link rel="apple-touch-icon" href="/static/logo-512.png?v=0.5.0" sizes="512x512" />
-    <link rel="stylesheet" href="/static/styles.css?v=0.6.9" />
+    <link rel="stylesheet" href="/static/styles.css?v=0.7.0" />
   </head>
   <body>
     <div class="social-fabs" aria-label="Redes sociales">
@@ -65,7 +97,7 @@
           />
           <div class="brand-text">
             <h1><span class="brand-gas">Gas</span><span class="brand-radar">Radar</span></h1>
-            <p class="subtitle" data-i18n="subtitle">Mejores precios cerca de ti · USA</p>
+            <p class="subtitle" data-i18n="subtitle">Gasolina más barata cerca de ti</p>
           </div>
         </div>
         <div class="header-right">
@@ -189,7 +221,10 @@
       </section>
 
       <footer class="site-footer">
-        <div><strong>GasRadar</strong> · beta</div>
+        <div><strong>GasRadar</strong> · USA</div>
+        <p class="footer-value" data-i18n="footerValue">
+          Gasolina más barata cerca de ti · compara por GPS o ZIP
+        </p>
         <div>
           <span data-i18n="contact">Contacto:</span>
           <a href="mailto:contact@gasradarapp.com">contact@gasradarapp.com</a>
@@ -262,6 +297,6 @@
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-    <script src="/static/app.js?v=0.6.9"></script>
+    <script src="/static/app.js?v=0.7.0"></script>
   </body>
 </html>

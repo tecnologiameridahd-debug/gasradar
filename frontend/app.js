@@ -5,7 +5,8 @@ const LANG_KEY = "gasradar_lang";
 
 const I18N = {
   es: {
-    subtitle: "Mejores precios cerca de ti · USA",
+    subtitle: "Gasolina más barata cerca de ti",
+    footerValue: "Gasolina más barata cerca de ti · compara por GPS o ZIP",
     btnGps: "Usar mi ubicación",
     zipLabel: "Código ZIP",
     zipPlaceholder: "ZIP (ej. 80903)",
@@ -95,7 +96,8 @@ const I18N = {
     trustpilotReview: "Deja una reseña",
   },
   en: {
-    subtitle: "Best prices near you · USA",
+    subtitle: "Cheapest gas near you",
+    footerValue: "Cheapest gas near you · search by GPS or ZIP",
     btnGps: "Use my location",
     zipLabel: "ZIP code",
     zipPlaceholder: "ZIP (e.g. 80903)",
@@ -240,10 +242,17 @@ function applyStaticI18n() {
   const en = $("#btnLangEn");
   if (es) es.classList.toggle("active", state.lang === "es");
   if (en) en.classList.toggle("active", state.lang === "en");
-  document.title =
-    state.lang === "en"
-      ? "GasRadar — Gas prices USA"
-      : "GasRadar — Precios de gasolina USA";
+  // Título fijo (no cambiar): GasRadar — Gas prices USA
+  document.title = "GasRadar — Gas prices USA";
+  const metaDesc = document.getElementById("metaDesc");
+  if (metaDesc) {
+    metaDesc.setAttribute(
+      "content",
+      state.lang === "en"
+        ? "Find the cheapest gas near you in the USA. Compare prices by GPS or ZIP with GasRadar."
+        : "Gasolina más barata cerca de ti en USA. Compara precios por GPS o ZIP con GasRadar. Encuentra la estación más barata al instante."
+    );
+  }
   // Actualiza chip "prom. sem." / "wk avg" al cambiar idioma
   if (state.lastData) renderEiaBanner(state.lastData);
   else {

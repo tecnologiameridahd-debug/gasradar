@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+
+# No indexar APIs ni paneles internos
+Disallow: /api/
+Disallow: /stats
+
+Sitemap: https://gasradarapp.com/sitemap.xml
