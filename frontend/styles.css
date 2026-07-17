@@ -323,6 +323,45 @@ a.btn-secondary:hover {
   border: 1px solid transparent;
 }
 
+/* PWA: Instalar app */
+.btn-install {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 10px;
+  padding: 11px 16px;
+  border-radius: 999px !important;
+  border: 1px solid rgba(56, 189, 248, 0.4) !important;
+  background: rgba(56, 189, 248, 0.1);
+  color: var(--blue);
+  font-weight: 700;
+  font-size: 0.92rem;
+  box-shadow: none;
+}
+
+.btn-install[hidden] {
+  display: none !important;
+}
+
+.btn-install:hover {
+  background: rgba(56, 189, 248, 0.18);
+  filter: none;
+}
+
+.btn-install .btn-ico {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+/* Ocultar FAB TikTok si la app ya está en modo standalone (pantalla de inicio) */
+@media (display-mode: standalone) {
+  .tiktok-fab {
+    bottom: 18px;
+  }
+}
+
 .btn-ghost:hover {
   background: var(--blue-soft);
   border-color: rgba(56, 189, 248, 0.2);

@@ -33,7 +33,7 @@ from backend.stations import stations_near
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.4.3"
+APP_VERSION = "0.5.0"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -525,6 +525,35 @@ def index():
     if not index_path.exists():
         return {"msg": "Frontend missing"}
     return FileResponse(index_path)
+
+
+@app.get("/manifest.webmanifest")
+def web_manifest():
+    """Manifest PWA (iconos + modo standalone)."""
+    path = FRONTEND / "manifest.webmanifest"
+    if not path.exists():
+        raise HTTPException(404, "Manifest missing")
+    return FileResponse(
+        path,
+        media_type="application/manifest+json",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
+@app.get("/sw.js")
+def service_worker():
+    """Service worker en la raíz para scope /."""
+    path = FRONTEND / "sw.js"
+    if not path.exists():
+        raise HTTPException(404, "Service worker missing")
+    return FileResponse(
+        path,
+        media_type="application/javascript",
+        headers={
+            "Cache-Control": "no-cache, must-revalidate",
+            "Service-Worker-Allowed": "/",
+        },
+    )
 
 
 @app.get("/privacy")

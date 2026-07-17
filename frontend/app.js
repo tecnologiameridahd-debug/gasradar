@@ -81,6 +81,12 @@ const I18N = {
     reportOf: (name) => `Reportar · ${name}`,
     disclaimerFallback:
       "Estaciones reales. Precios: reportes o estimación. No es precio de bomba en vivo.",
+    installApp: "Instalar app",
+    installOk: "GasRadar listo para instalar",
+    installDone: "App instalada — búscala en tu pantalla de inicio",
+    installIos:
+      "En iPhone: toca Compartir → Añadir a pantalla de inicio",
+    installAlready: "Ya está instalada o ábrela desde el icono del teléfono",
   },
   en: {
     subtitle: "Best prices near you · USA",
@@ -159,6 +165,11 @@ const I18N = {
     reportOf: (name) => `Report · ${name}`,
     disclaimerFallback:
       "Real stations. Prices: user reports or estimates. Not live pump prices.",
+    installApp: "Install app",
+    installOk: "GasRadar is ready to install",
+    installDone: "App installed — find it on your home screen",
+    installIos: "On iPhone: tap Share → Add to Home Screen",
+    installAlready: "Already installed, or open it from the home screen icon",
   },
 };
 
@@ -955,6 +966,95 @@ function trackVisit() {
   }
 }
 
+/* ——— PWA: instalar + service worker ——— */
+let deferredInstallPrompt = null;
+
+function isStandaloneApp() {
+  return (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    window.navigator.standalone === true
+  );
+}
+
+function isIos() {
+  return /iphone|ipad|ipod/i.test(navigator.userAgent || "");
+}
+
+function showInstallButton(show) {
+  const btn = $("#btnInstall");
+  if (!btn) return;
+  if (isStandaloneApp()) {
+    btn.hidden = true;
+    return;
+  }
+  btn.hidden = !show;
+}
+
+function setupPwaInstall() {
+  const btn = $("#btnInstall");
+  if (!btn) return;
+
+  // Android/Chrome: evento nativo de instalar
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    showInstallButton(true);
+  });
+
+  window.addEventListener("appinstalled", () => {
+    deferredInstallPrompt = null;
+    showInstallButton(false);
+    showToast(t("installDone"));
+  });
+
+  // iOS: mostrar botón con instrucciones (no hay prompt nativo)
+  if (isIos() && !isStandaloneApp()) {
+    showInstallButton(true);
+  }
+
+  btn.addEventListener("click", async () => {
+    if (deferredInstallPrompt) {
+      deferredInstallPrompt.prompt();
+      try {
+        const choice = await deferredInstallPrompt.userChoice;
+        if (choice && choice.outcome === "accepted") {
+          showToast(t("installDone"));
+        }
+      } catch (_) {
+        /* ignore */
+      }
+      deferredInstallPrompt = null;
+      showInstallButton(false);
+      return;
+    }
+    if (isIos()) {
+      showToast(t("installIos"));
+      return;
+    }
+    if (isStandaloneApp()) {
+      showToast(t("installAlready"));
+      return;
+    }
+    showToast(t("installAlready"));
+  });
+}
+
+function registerServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+  // solo en https o localhost
+  const ok =
+    window.isSecureContext ||
+    ["localhost", "127.0.0.1"].includes(location.hostname);
+  if (!ok) return;
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {
+      /* ignore: PWA opcional */
+    });
+  });
+}
+
 bind();
+setupPwaInstall();
+registerServiceWorker();
 trackVisit();
 startApp();
