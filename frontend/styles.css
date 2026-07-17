@@ -1104,6 +1104,55 @@ a.btn-secondary:hover {
   margin-top: 4px;
 }
 
+/* Trustpilot en el pie (abajo) */
+.footer-trustpilot {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.tp-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none !important;
+  color: var(--muted) !important;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.tp-link:hover {
+  color: var(--text) !important;
+}
+
+.tp-stars {
+  color: #00b67a;
+  font-size: 0.78rem;
+  letter-spacing: 0.5px;
+  line-height: 1;
+}
+
+.tp-name {
+  color: #00b67a;
+  font-weight: 700;
+}
+
+.tp-review {
+  font-size: 0.68rem !important;
+  color: var(--muted2) !important;
+  text-decoration: none !important;
+}
+
+.tp-review:hover {
+  color: var(--blue) !important;
+  text-decoration: underline !important;
+}
+
 /* ——— A11y ——— */
 .sr-only {
   position: absolute;
