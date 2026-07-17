@@ -41,10 +41,11 @@ const I18N = {
     searchError: "Error de búsqueda. Prueba un ZIP.",
     stateAvg: (st, price) => `Promedio del estado${st}: ${price}`,
     eiaTitle: "Promedio esta semana",
-    eiaNote: "Promedio oficial del estado · no es el precio de cada bomba",
-    eiaWeek: (period) => (period ? `Semana del ${period}` : "Dato semanal EIA"),
+    eiaNote: "Promedio del estado esta semana · no es el precio de cada bomba",
+    eiaWeek: (period) => (period ? `Semana del ${period}` : "Promedio semanal"),
     eiaStateLine: (st, fuel) => `${st} · ${fuel}`,
-    eiaBadge: "EIA oficial",
+    eiaBadge: "prom. sem.",
+    eiaChipLabel: "prom. sem.",
     reported: "reportado",
     estimated: "estimado",
     reportedPrice: "precio reportado",
@@ -118,10 +119,11 @@ const I18N = {
     searchError: "Search error. Try a ZIP.",
     stateAvg: (st, price) => `State average${st}: ${price}`,
     eiaTitle: "This week's average",
-    eiaNote: "Official state average · not the price at each pump",
-    eiaWeek: (period) => (period ? `Week of ${period}` : "EIA weekly data"),
+    eiaNote: "State average this week · not the price at each pump",
+    eiaWeek: (period) => (period ? `Week of ${period}` : "Weekly average"),
     eiaStateLine: (st, fuel) => `${st} · ${fuel}`,
-    eiaBadge: "Official EIA",
+    eiaBadge: "wk avg",
+    eiaChipLabel: "wk avg",
     reported: "reported",
     estimated: "estimated",
     reportedPrice: "reported price",
@@ -562,15 +564,12 @@ async function search({ lat, lon, zip } = {}) {
 }
 
 function renderEiaBanner(data) {
-  // Chip pequeño arriba (junto a ES/EN) — no card grande
+  // Chip mini: "prom. sem. $3.72" — sin EIA ni fecha
   const chip = $("#eiaBanner");
   if (!chip) return;
-  const meta = data.price_meta || {};
   const avg = data.state_avg || {};
   const fuelAvg = avg[state.fuel] != null ? avg[state.fuel] : avg.regular;
   const stCode = (data.center && data.center.state) || "";
-  const eiaOk = !!meta.eia_ok || meta.avg_source === "eia";
-  const period = meta.eia_period || "";
 
   if (fuelAvg == null || Number.isNaN(Number(fuelAvg))) {
     chip.hidden = true;
@@ -580,14 +579,11 @@ function renderEiaBanner(data) {
 
   const badge = $("#eiaBadge");
   const text = $("#eiaChipText");
-  // Chip mini: solo "EIA $3.72" (estado y semana van en el title)
-  if (badge) badge.textContent = eiaOk ? "EIA" : state.lang === "en" ? "Avg" : "Ref";
+  if (badge) badge.textContent = t("eiaChipLabel");
   if (text) text.textContent = money(fuelAvg);
-  const weekBit = period
-    ? ` · ${state.lang === "en" ? "week of" : "semana"} ${period}`
-    : "";
-  chip.title = eiaOk
-    ? `${stCode || ""} ${t("eiaNote")}${weekBit}`.trim()
+  // Tooltip sin fecha: promedio esta semana + estado
+  chip.title = stCode
+    ? `${stCode} · ${t("eiaNote")}`
     : t("eiaNote");
 }
 

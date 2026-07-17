@@ -80,13 +80,13 @@ body {
   flex-wrap: nowrap;
 }
 
-/* Chip mini EIA — en línea con ES/EN, no apilado */
+/* Chip mini promedio semanal — en línea con ES/EN */
 .eia-chip {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  max-width: 92px;
-  padding: 3px 7px;
+  gap: 4px;
+  max-width: 118px;
+  padding: 3px 8px;
   border-radius: 999px;
   background: rgba(56, 189, 248, 0.12);
   border: 1px solid rgba(56, 189, 248, 0.32);
@@ -106,11 +106,12 @@ body {
 }
 
 .eia-chip-label {
-  font-size: 0.55rem;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  opacity: 0.88;
+  font-size: 0.58rem;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  opacity: 0.9;
   flex-shrink: 0;
+  color: var(--blue);
 }
 
 .eia-chip-text {
@@ -118,7 +119,7 @@ body {
   font-variant-numeric: tabular-nums;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 0.62rem;
+  font-size: 0.64rem;
 }
 
 /* Botón idioma ES | EN */
