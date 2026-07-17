@@ -78,6 +78,31 @@ def send_message(chat_id: str | int, text: str, *, disable_preview: bool = False
     )
 
 
+def send_typing(chat_id: str | int) -> None:
+    try:
+        _api("sendChatAction", chat_id=chat_id, action="typing")
+    except Exception:
+        pass
+
+
+def handle_update_safe(update: dict) -> None:
+    """Wrapper para BackgroundTasks: nunca tumba el worker."""
+    try:
+        handle_update(update if isinstance(update, dict) else {})
+    except Exception as e:
+        print(f"[telegram] handle_update: {type(e).__name__}: {e}")
+        try:
+            msg = (update or {}).get("message") or (update or {}).get("edited_message") or {}
+            chat_id = (msg.get("chat") or {}).get("id")
+            if chat_id is not None:
+                send_message(
+                    chat_id,
+                    "⚠️ Error interno. Prueba /ahora de nuevo o /help",
+                )
+        except Exception:
+            pass
+
+
 def set_webhook(public_base: str | None = None) -> dict:
     base = (public_base or APP_URL).rstrip("/")
     secret = alerts_secret()
@@ -217,6 +242,7 @@ def handle_update(update: dict) -> None:
     text = msg.get("text") or ""
     cmd, arg = _parse_cmd(text)
     lang = _lang(chat_id)
+    send_typing(chat_id)
 
     # deep-link /start 80903
     if cmd == "/start":
@@ -424,27 +450,49 @@ def _cmd_ahora(chat_id: int, lang: str) -> None:
         return
     send_message(
         chat_id,
-        "🔎 Buscando precios…" if lang != "en" else "🔎 Searching prices…",
+        "🔎 Buscando precios… (unos segundos)"
+        if lang != "en"
+        else "🔎 Searching prices… (a few seconds)",
     )
+    send_typing(chat_id)
     try:
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
+
         from backend.search_core import run_search
 
-        data = run_search(
-            zip=str(row["zip"]),
-            fuel=str(row.get("fuel") or "regular"),
-            radius_mi=float(row.get("radius_mi") or 5),
-            limit=20,
-            track=False,
-        )
+        def _job():
+            return run_search(
+                zip=str(row["zip"]),
+                fuel=str(row.get("fuel") or "regular"),
+                radius_mi=float(row.get("radius_mi") or 5),
+                limit=12,
+                track=False,
+                quick=True,
+            )
+
+        # Evita colgar el bot más de 25s (Render free + Zyla)
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            fut = pool.submit(_job)
+            try:
+                data = fut.result(timeout=25)
+            except FuturesTimeout:
+                send_message(
+                    chat_id,
+                    "⏱️ Tardó mucho. Prueba de nuevo /ahora o otro ZIP."
+                    if lang != "en"
+                    else "⏱️ Timed out. Try /ahora again or another ZIP.",
+                )
+                return
         send_message(chat_id, _format_now(data, lang), disable_preview=True)
     except ValueError as e:
         send_message(chat_id, str(e))
     except Exception as e:
+        print(f"[telegram /ahora] {type(e).__name__}: {e}")
         send_message(
             chat_id,
-            f"Error al buscar: {type(e).__name__}"
+            f"Error al buscar: {type(e).__name__}. Prueba /ahora otra vez."
             if lang != "en"
-            else f"Search error: {type(e).__name__}",
+            else f"Search error: {type(e).__name__}. Try /ahora again.",
         )
 
 
@@ -488,8 +536,9 @@ def run_alert_checks(*, force: bool = False) -> dict:
                     zip=zip_c,
                     fuel=fuel,
                     radius_mi=radius,
-                    limit=20,
+                    limit=12,
                     track=False,
+                    quick=True,
                 )
             data = cache[key]
         except Exception as e:

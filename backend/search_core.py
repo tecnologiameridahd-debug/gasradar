@@ -31,8 +31,12 @@ def run_search(
     fuel: str = "regular",
     limit: int = 30,
     track: bool = True,
+    quick: bool = False,
 ) -> dict:
-    """Misma lógica que GET /api/search. Lanza ValueError si ZIP inválido."""
+    """Misma lógica que GET /api/search. Lanza ValueError si ZIP inválido.
+
+    quick=True: modo bot Telegram (sin GasBuddy, menos estaciones, más rápido).
+    """
     label = DEFAULT_LABEL
     state = "CO"
     zip_code = None
@@ -58,10 +62,14 @@ def run_search(
         label = DEFAULT_LABEL
         state = "CO"
 
-    try:
-        fetch_eia_state_averages(state)
-    except Exception:
-        pass
+    if not quick:
+        try:
+            fetch_eia_state_averages(state)
+        except Exception:
+            pass
+
+    if quick:
+        limit = min(int(limit), 12)
 
     zyla = None
     zyla_stations: list = []
@@ -90,19 +98,20 @@ def run_search(
                 }
 
     gb_stations: list = []
-    try:
-        from backend.gasbuddy_src import fetch_gasbuddy_stations
+    if not quick:
+        try:
+            from backend.gasbuddy_src import fetch_gasbuddy_stations
 
-        gb_stations = fetch_gasbuddy_stations(
-            zip_code=str(zip_code) if zip_code else None,
-            lat=float(lat) if lat is not None else None,
-            lon=float(lon) if lon is not None else None,
-            fuel=fuel,
-            limit=min(int(limit), 15),
-        )
-    except Exception as e:
-        print(f"[search] gasbuddy: {e}")
-        gb_stations = []
+            gb_stations = fetch_gasbuddy_stations(
+                zip_code=str(zip_code) if zip_code else None,
+                lat=float(lat) if lat is not None else None,
+                lon=float(lon) if lon is not None else None,
+                fuel=fuel,
+                limit=min(int(limit), 15),
+            )
+        except Exception as e:
+            print(f"[search] gasbuddy: {e}")
+            gb_stations = []
 
     from backend.geo import haversine_miles
     from backend.stations import _display_brand, _pretty_station_name, _station_id

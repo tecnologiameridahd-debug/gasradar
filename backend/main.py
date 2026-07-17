@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -16,7 +16,7 @@ from backend.prices import report_price
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.6.2"
+APP_VERSION = "0.6.3"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -163,9 +163,17 @@ def api_report(body: ReportBody):
 
 
 @app.post("/api/telegram/webhook")
-async def api_telegram_webhook(request: Request, key: str | None = None):
-    """Recibe updates de Telegram (setWebhook)."""
-    from backend.telegram_bot import alerts_secret, bot_ready, handle_update
+async def api_telegram_webhook(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    key: str | None = None,
+):
+    """
+    Recibe updates de Telegram.
+    Responde YA (ok) y procesa en segundo plano — evita bot 'pegado'
+    cuando la búsqueda de precios tarda.
+    """
+    from backend.telegram_bot import alerts_secret, bot_ready, handle_update_safe
 
     if not bot_ready():
         raise HTTPException(503, "TELEGRAM_BOT_TOKEN no configurado")
@@ -176,10 +184,10 @@ async def api_telegram_webhook(request: Request, key: str | None = None):
         update = await request.json()
     except Exception as e:
         raise HTTPException(400, f"JSON inválido: {e}") from e
-    try:
-        handle_update(update if isinstance(update, dict) else {})
-    except Exception as e:
-        print(f"[telegram webhook] {type(e).__name__}: {e}")
+    # No bloquear la respuesta a Telegram (timeout ~60s; en free se corta antes)
+    background_tasks.add_task(
+        handle_update_safe, update if isinstance(update, dict) else {}
+    )
     return {"ok": True}
 
 
