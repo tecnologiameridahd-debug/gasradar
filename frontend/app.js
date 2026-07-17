@@ -562,57 +562,47 @@ async function search({ lat, lon, zip } = {}) {
 }
 
 function renderEiaBanner(data) {
-  const banner = $("#eiaBanner");
-  if (!banner) return;
+  // Chip pequeño arriba (junto a ES/EN) — no card grande
+  const chip = $("#eiaBanner");
+  if (!chip) return;
   const meta = data.price_meta || {};
   const avg = data.state_avg || {};
   const fuelAvg = avg[state.fuel] != null ? avg[state.fuel] : avg.regular;
   const stCode = (data.center && data.center.state) || "";
   const eiaOk = !!meta.eia_ok || meta.avg_source === "eia";
-  const period = meta.eia_period || null;
+  const period = meta.eia_period || "";
 
-  // Mostrar si hay promedio de estado (EIA prioritario; si no, referencia)
   if (fuelAvg == null || Number.isNaN(Number(fuelAvg))) {
-    banner.hidden = true;
+    chip.hidden = true;
     return;
   }
-  banner.hidden = false;
+  chip.hidden = false;
 
   const badge = $("#eiaBadge");
-  const title = $("#eiaTitle");
-  const priceEl = $("#eiaPrice");
-  const stateEl = $("#eiaState");
-  const periodEl = $("#eiaPeriod");
-  const noteEl = $("#eiaNote");
-
-  if (badge) {
-    badge.textContent = eiaOk ? t("eiaBadge") : state.lang === "en" ? "Reference" : "Referencia";
-    badge.className = eiaOk ? "badge eia" : "badge estimate";
+  const text = $("#eiaChipText");
+  if (badge) badge.textContent = eiaOk ? "EIA" : state.lang === "en" ? "Avg" : "Ref";
+  // Ej: CO $3.72 · 07-13
+  let line = `${stCode || "—"} ${money(fuelAvg)}`;
+  if (eiaOk && period) {
+    // solo mes-día si viene YYYY-MM-DD
+    const short = String(period).length >= 10 ? String(period).slice(5) : period;
+    line += ` · ${short}`;
   }
-  if (title) title.textContent = t("eiaTitle");
-  if (priceEl) priceEl.textContent = money(fuelAvg);
-  if (stateEl) {
-    stateEl.textContent = t(
-      "eiaStateLine",
-      stCode || (state.lang === "en" ? "State" : "Estado"),
-      fuelLabel(state.fuel)
-    );
-  }
-  if (periodEl) {
-    periodEl.textContent = eiaOk ? t("eiaWeek", period) : "";
-    periodEl.hidden = !eiaOk;
-  }
-  if (noteEl) noteEl.textContent = t("eiaNote");
+  if (text) text.textContent = line;
+  chip.title = eiaOk
+    ? t("eiaNote") + (period ? ` (${period})` : "")
+    : t("eiaNote");
 }
 
 function render(data) {
   $("#locationLabel").textContent = data.center.label || "—";
   setLocDot("on");
 
-  const avg = data.state_avg || {};
-  const fuelAvg = avg[state.fuel] != null ? avg[state.fuel] : avg.regular;
-  const st = data.center.state ? ` ${data.center.state}` : "";
-  $("#stateAvg").textContent = t("stateAvg", st, money(fuelAvg));
+  // Ubicación en loc-box; el promedio va solo en el chip chico del header
+  const fuel = fuelLabel(state.fuel);
+  $("#stateAvg").textContent = data.center.state
+    ? `${data.center.state} · ${fuel}`
+    : fuel;
   renderEiaBanner(data);
 
   if (data.cheapest) {

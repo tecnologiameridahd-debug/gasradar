@@ -69,6 +69,53 @@ body {
   min-width: 0;
 }
 
+.header-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* Chip pequeño EIA al lado del idioma */
+.eia-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 148px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--blue);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.eia-chip[hidden] {
+  display: none !important;
+}
+
+.eia-chip-label {
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.9;
+  flex-shrink: 0;
+}
+
+.eia-chip-text {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Botón idioma ES | EN */
 .lang-switch {
   display: inline-flex;
@@ -78,7 +125,6 @@ body {
   border-radius: 999px;
   padding: 3px;
   gap: 2px;
-  margin-top: 4px;
 }
 
 .lang-btn {
@@ -373,69 +419,6 @@ a.btn-secondary:hover {
   50% {
     opacity: 0.45;
   }
-}
-
-/* ——— EIA weekly average banner ——— */
-.eia-banner {
-  background:
-    linear-gradient(145deg, rgba(56, 189, 248, 0.12) 0%, transparent 55%),
-    linear-gradient(165deg, var(--card) 0%, var(--bg2) 100%);
-  border-color: rgba(56, 189, 248, 0.35);
-}
-
-.eia-banner[hidden] {
-  display: none !important;
-}
-
-.eia-banner-top {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
-}
-
-.eia-title {
-  font-size: 0.88rem;
-  font-weight: 700;
-  color: var(--text);
-}
-
-.eia-row {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.eia-price {
-  font-size: 1.75rem;
-  font-weight: 800;
-  color: var(--blue);
-  letter-spacing: -0.03em;
-  font-variant-numeric: tabular-nums;
-}
-
-.eia-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.eia-state {
-  font-weight: 700;
-  font-size: 1rem;
-}
-
-.eia-period {
-  font-size: 0.78rem;
-  color: var(--muted);
-}
-
-.eia-note {
-  margin: 10px 0 0;
-  font-size: 0.75rem;
-  color: var(--muted2);
-  line-height: 1.4;
 }
 
 /* ——— Best card ——— */
