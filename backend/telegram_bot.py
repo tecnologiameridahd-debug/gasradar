@@ -92,18 +92,24 @@ def key_error_hint(key: str | None) -> str:
     """Mensaje de error sin revelar la clave real."""
     secret = alerts_secret()
     provided = _normalize_secret(key)
+    env_a = _normalize_secret(os.environ.get("ALERTS_SECRET"))
+    env_s = _normalize_secret(os.environ.get("STATS_KEY"))
+    active = "ALERTS_SECRET" if env_a else ("STATS_KEY" if env_s else "ninguna")
     if not secret:
-        return "No hay ALERTS_SECRET en Render. Crea la variable y redeploy."
+        return (
+            "No hay ALERTS_SECRET ni STATS_KEY en Render. "
+            "Crea ALERTS_SECRET, Save, espera Live."
+        )
     if not provided:
         return (
             "Falta ?key= en la URL. "
             "Ejemplo: /api/telegram/setup?key=TU_ALERTS_SECRET"
         )
     return (
-        f"Clave incorrecta. "
-        f"Enviaste {len(provided)} caracteres; en Render ALERTS_SECRET tiene {len(secret)}. "
-        f"Deben ser iguales (copia-pega desde Environment). "
-        f"Recomendado: solo letras y números, ej. gasradar2026"
+        f"Clave incorrecta. Enviaste {len(provided)} caracteres. "
+        f"El servidor usa {active} ({len(secret)} caracteres). "
+        f"ALERTS_SECRET={len(env_a) or 0} chars, STATS_KEY={len(env_s) or 0} chars. "
+        f"Deben coincidir exactamente. Si cambiaste la variable, Save + espera Live."
     )
 
 
