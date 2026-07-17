@@ -40,6 +40,11 @@ const I18N = {
     timeout: "Tardó mucho. Prueba de nuevo o escribe un ZIP.",
     searchError: "Error de búsqueda. Prueba un ZIP.",
     stateAvg: (st, price) => `Promedio del estado${st}: ${price}`,
+    eiaTitle: "Promedio esta semana",
+    eiaNote: "Promedio oficial del estado · no es el precio de cada bomba",
+    eiaWeek: (period) => (period ? `Semana del ${period}` : "Dato semanal EIA"),
+    eiaStateLine: (st, fuel) => `${st} · ${fuel}`,
+    eiaBadge: "EIA oficial",
     reported: "reportado",
     estimated: "estimado",
     reportedPrice: "precio reportado",
@@ -112,6 +117,11 @@ const I18N = {
     timeout: "Took too long. Try again or enter a ZIP.",
     searchError: "Search error. Try a ZIP.",
     stateAvg: (st, price) => `State average${st}: ${price}`,
+    eiaTitle: "This week's average",
+    eiaNote: "Official state average · not the price at each pump",
+    eiaWeek: (period) => (period ? `Week of ${period}` : "EIA weekly data"),
+    eiaStateLine: (st, fuel) => `${st} · ${fuel}`,
+    eiaBadge: "Official EIA",
     reported: "reported",
     estimated: "estimated",
     reportedPrice: "reported price",
@@ -453,7 +463,7 @@ function sourceBadgeHtml(s) {
     const age = s.price_age_hours != null ? ` · ${s.price_age_hours}h` : "";
     return `<span class="badge user">${t("reported")}${n}${age}</span>`;
   }
-  if (s.price_source === "zyla") {
+  if (s.price_source === "zyla" || s.price_source === "gasbuddy") {
     return `<span class="badge eia">${state.lang === "en" ? "live" : "en vivo"}</span>`;
   }
   if (s.price_source === "zyla_estimate") {
@@ -551,6 +561,50 @@ async function search({ lat, lon, zip } = {}) {
   }
 }
 
+function renderEiaBanner(data) {
+  const banner = $("#eiaBanner");
+  if (!banner) return;
+  const meta = data.price_meta || {};
+  const avg = data.state_avg || {};
+  const fuelAvg = avg[state.fuel] != null ? avg[state.fuel] : avg.regular;
+  const stCode = (data.center && data.center.state) || "";
+  const eiaOk = !!meta.eia_ok || meta.avg_source === "eia";
+  const period = meta.eia_period || null;
+
+  // Mostrar si hay promedio de estado (EIA prioritario; si no, referencia)
+  if (fuelAvg == null || Number.isNaN(Number(fuelAvg))) {
+    banner.hidden = true;
+    return;
+  }
+  banner.hidden = false;
+
+  const badge = $("#eiaBadge");
+  const title = $("#eiaTitle");
+  const priceEl = $("#eiaPrice");
+  const stateEl = $("#eiaState");
+  const periodEl = $("#eiaPeriod");
+  const noteEl = $("#eiaNote");
+
+  if (badge) {
+    badge.textContent = eiaOk ? t("eiaBadge") : state.lang === "en" ? "Reference" : "Referencia";
+    badge.className = eiaOk ? "badge eia" : "badge estimate";
+  }
+  if (title) title.textContent = t("eiaTitle");
+  if (priceEl) priceEl.textContent = money(fuelAvg);
+  if (stateEl) {
+    stateEl.textContent = t(
+      "eiaStateLine",
+      stCode || (state.lang === "en" ? "State" : "Estado"),
+      fuelLabel(state.fuel)
+    );
+  }
+  if (periodEl) {
+    periodEl.textContent = eiaOk ? t("eiaWeek", period) : "";
+    periodEl.hidden = !eiaOk;
+  }
+  if (noteEl) noteEl.textContent = t("eiaNote");
+}
+
 function render(data) {
   $("#locationLabel").textContent = data.center.label || "—";
   setLocDot("on");
@@ -559,6 +613,7 @@ function render(data) {
   const fuelAvg = avg[state.fuel] != null ? avg[state.fuel] : avg.regular;
   const st = data.center.state ? ` ${data.center.state}` : "";
   $("#stateAvg").textContent = t("stateAvg", st, money(fuelAvg));
+  renderEiaBanner(data);
 
   if (data.cheapest) {
     const b = data.cheapest;

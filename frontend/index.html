@@ -12,7 +12,7 @@
     <link rel="icon" href="/static/favicon-32.png?v=0.2.9" type="image/png" sizes="32x32" />
     <link rel="icon" href="/static/favicon-64.png?v=0.2.9" type="image/png" sizes="64x64" />
     <link rel="apple-touch-icon" href="/static/logo-192.png?v=0.2.9" />
-    <link rel="stylesheet" href="/static/styles.css?v=0.2.9" />
+    <link rel="stylesheet" href="/static/styles.css?v=0.3.9" />
   </head>
   <body>
     <a
@@ -105,6 +105,24 @@
         </div>
       </section>
 
+      <!-- Aviso EIA: promedio de la semana en el estado (no es cada bomba) -->
+      <section class="card eia-banner" id="eiaBanner" hidden>
+        <div class="eia-banner-top">
+          <span class="badge eia" id="eiaBadge">EIA</span>
+          <span class="eia-title" id="eiaTitle">Promedio esta semana</span>
+        </div>
+        <div class="eia-row">
+          <div class="eia-price" id="eiaPrice">$—</div>
+          <div class="eia-meta">
+            <div class="eia-state" id="eiaState">—</div>
+            <div class="eia-period" id="eiaPeriod"></div>
+          </div>
+        </div>
+        <p class="eia-note" id="eiaNote">
+          Promedio oficial del estado · no es el precio de cada bomba
+        </p>
+      </section>
+
       <section class="card best" id="bestCard" hidden>
         <div class="best-top">
           <span class="badge gold" data-i18n="cheapestBadge">★ Más barata</span>
@@ -185,6 +203,6 @@
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-    <script src="/static/app.js?v=0.2.9"></script>
+    <script src="/static/app.js?v=0.3.9"></script>
   </body>
 </html>

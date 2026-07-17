@@ -375,6 +375,69 @@ a.btn-secondary:hover {
   }
 }
 
+/* ——— EIA weekly average banner ——— */
+.eia-banner {
+  background:
+    linear-gradient(145deg, rgba(56, 189, 248, 0.12) 0%, transparent 55%),
+    linear-gradient(165deg, var(--card) 0%, var(--bg2) 100%);
+  border-color: rgba(56, 189, 248, 0.35);
+}
+
+.eia-banner[hidden] {
+  display: none !important;
+}
+
+.eia-banner-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.eia-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.eia-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.eia-price {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: var(--blue);
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.eia-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.eia-state {
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.eia-period {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.eia-note {
+  margin: 10px 0 0;
+  font-size: 0.75rem;
+  color: var(--muted2);
+  line-height: 1.4;
+}
+
 /* ——— Best card ——— */
 .best {
   display: grid;

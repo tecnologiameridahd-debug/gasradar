@@ -33,7 +33,7 @@ from backend.stations import stations_near
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.3.7"
+APP_VERSION = "0.3.9"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -211,65 +211,125 @@ def api_search(
                     "ok": True,
                 }
 
-    # Si hay estaciones Zyla con precio real, priorizarlas en la lista
+    # GasBuddy opcional (USE_GASBUDDY=1) — si Cloudflare bloquea, no pasa nada
+    gb_stations: list = []
+    try:
+        from backend.gasbuddy_src import fetch_gasbuddy_stations
+
+        gb_stations = fetch_gasbuddy_stations(
+            zip_code=str(zip_code) if zip_code else None,
+            lat=float(lat) if lat is not None else None,
+            lon=float(lon) if lon is not None else None,
+            fuel=fuel,
+            limit=min(int(limit), 15),
+        )
+    except Exception as e:
+        print(f"[search] gasbuddy: {e}")
+        gb_stations = []
+
+    # Si hay estaciones Zyla/GasBuddy con precio real, priorizarlas en la lista
     from backend.geo import haversine_miles
     from backend.stations import _display_brand, _pretty_station_name, _station_id
 
+    def _live_row(src: dict, source_tag: str) -> dict | None:
+        if src.get("lat") is None or src.get("lon") is None or src.get("price") is None:
+            return None
+        dist = src.get("distance_mi")
+        if dist is None:
+            dist = haversine_miles(
+                float(lat), float(lon), float(src["lat"]), float(src["lon"])
+            )
+        if dist > float(radius_mi) + 1.0:
+            return None
+        name = _pretty_station_name(
+            src.get("name") or "Gas Station",
+            src.get("brand"),
+            src.get("name") or "",
+            src.get("address"),
+        )
+        low = f"{name} {src.get('brand') or ''}".lower()
+        if any(x in low for x in ("dispensary", "cannabis", "marijuana", "weed")):
+            return None
+        brand = _display_brand(src.get("brand"), name)
+        sid = _station_id(float(src["lat"]), float(src["lon"]), name)
+        return {
+            "id": sid,
+            "name": name,
+            "brand": brand,
+            "lat": float(src["lat"]),
+            "lon": float(src["lon"]),
+            "address": src.get("address"),
+            "maps_query": f"{name}, {src.get('address') or ''}".strip(", "),
+            "distance_mi": float(dist),
+            "phone": None,
+            "website": None,
+            "source": source_tag,
+            "is_demo": False,
+            "nav_mode": "coords",
+            "price": float(src["price"]),
+            "price_source": source_tag,
+            "price_confidence": "high",
+            "price_age_hours": None,
+            "reports_count": 0,
+            "prices": {
+                fuel: {
+                    "price": float(src["price"]),
+                    "source": source_tag,
+                    "confidence": "high",
+                    "reports_count": 0,
+                    "age_hours": None,
+                }
+            },
+        }
+
     priced: list = []
+    # 1) Zyla
     if zyla_stations:
         for zs in zyla_stations:
-            if zs.get("lat") is None or zs.get("lon") is None or zs.get("price") is None:
-                continue
-            dist = haversine_miles(
-                float(lat), float(lon), float(zs["lat"]), float(zs["lon"])
-            )
-            if dist > float(radius_mi) + 1.0:
-                continue
-            name = _pretty_station_name(
-                zs.get("name") or "Gas Station",
-                zs.get("brand"),
-                zs.get("name") or "",
-                zs.get("address"),
-            )
-            # filtrar no-gasolina
-            low = f"{name} {zs.get('brand') or ''}".lower()
-            if any(x in low for x in ("dispensary", "cannabis", "marijuana", "weed")):
-                continue
-            brand = _display_brand(zs.get("brand"), name)
-            sid = _station_id(float(zs["lat"]), float(zs["lon"]), name)
-            priced.append(
-                {
-                    "id": sid,
-                    "name": name,
-                    "brand": brand,
-                    "lat": float(zs["lat"]),
-                    "lon": float(zs["lon"]),
-                    "address": zs.get("address"),
-                    "maps_query": f"{name}, {zs.get('address') or ''}".strip(", "),
-                    "distance_mi": dist,
-                    "phone": None,
-                    "website": None,
-                    "source": "zyla",
-                    "is_demo": False,
-                    "nav_mode": "coords",
-                    "price": float(zs["price"]),
-                    "price_source": "zyla",
-                    "price_confidence": "high",
-                    "price_age_hours": None,
-                    "reports_count": 0,
-                    "prices": {
-                        fuel: {
-                            "price": float(zs["price"]),
-                            "source": "zyla",
-                            "confidence": "high",
-                            "reports_count": 0,
-                            "age_hours": None,
-                        }
-                    },
-                }
-            )
+            row = _live_row(zs, "zyla")
+            if row:
+                priced.append(row)
         priced.sort(
             key=lambda x: (round(float(x["price"]), 3), float(x["distance_mi"]))
+        )
+
+    # 2) GasBuddy (si Zyla no dio bastantes y está activado)
+    if len(priced) < 8 and gb_stations:
+        seen_ids = {s["id"] for s in priced}
+        for gs in gb_stations:
+            # Si no hay coords, no se puede mapear bien
+            if gs.get("lat") is None or gs.get("lon") is None:
+                continue
+            row = _live_row(gs, "gasbuddy")
+            if not row or row["id"] in seen_ids:
+                continue
+            # no duplicar cerca de una ya listada
+            near = False
+            for p in priced:
+                try:
+                    if (
+                        haversine_miles(
+                            float(p["lat"]),
+                            float(p["lon"]),
+                            float(row["lat"]),
+                            float(row["lon"]),
+                        )
+                        < 0.12
+                    ):
+                        near = True
+                        break
+                except Exception:
+                    pass
+            if near:
+                continue
+            seen_ids.add(row["id"])
+            priced.append(row)
+        priced.sort(
+            key=lambda x: (
+                round(float(x["price"]), 3),
+                0 if x.get("price_source") in ("zyla", "gasbuddy", "user") else 1,
+                float(x["distance_mi"]),
+            )
         )
 
     # Completar con OSM solo si faltan resultados
@@ -360,14 +420,17 @@ def api_search(
 
     eia_txt = ""
     zyla_hits = sum(1 for s in priced if s.get("price_source") == "zyla")
+    gb_hits = sum(1 for s in priced if s.get("price_source") == "gasbuddy")
     if zyla_hits:
-        eia_txt = f" {zyla_hits} precios de estación vía Zyla Labs."
+        eia_txt = f" {zyla_hits} precios vía Zyla Labs."
+    elif gb_hits:
+        eia_txt = f" {gb_hits} precios vía GasBuddy (comunidad)."
     elif zyla and zyla.get("ok"):
         eia_txt = " Promedio de zona vía Zyla Labs."
     elif meta.get("eia_ok") and meta.get("eia_period"):
         eia_txt = f" Promedio estatal EIA (semana {meta['eia_period']})."
-    elif not meta.get("eia_ok"):
-        eia_txt = " Promedio de referencia (EIA/Zyla no disponible ahora)."
+    else:
+        eia_txt = " Precios de referencia (estimados). Reporta al pasar por la bomba."
 
     note = ""
     if not priced:
