@@ -80,16 +80,16 @@ body {
   flex-wrap: nowrap;
 }
 
-/* Chip mini promedio semanal — en línea con ES/EN */
+/* Chip "prom. sem." — botón mini al lado de ES/EN (siempre visible) */
 .eia-chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  max-width: 118px;
-  padding: 3px 8px;
+  max-width: 120px;
+  padding: 4px 9px;
   border-radius: 999px;
-  background: rgba(56, 189, 248, 0.12);
-  border: 1px solid rgba(56, 189, 248, 0.32);
+  background: rgba(56, 189, 248, 0.14);
+  border: 1px solid rgba(56, 189, 248, 0.38);
   font-size: 0.62rem;
   font-weight: 700;
   line-height: 1.15;
@@ -97,8 +97,9 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  height: 26px;
+  min-height: 28px;
   box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 .eia-chip[hidden] {
@@ -109,7 +110,7 @@ body {
   font-size: 0.58rem;
   letter-spacing: 0.01em;
   text-transform: none;
-  opacity: 0.9;
+  opacity: 0.95;
   flex-shrink: 0;
   color: var(--blue);
 }
@@ -119,7 +120,8 @@ body {
   font-variant-numeric: tabular-nums;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 0.64rem;
+  font-size: 0.66rem;
+  font-weight: 800;
 }
 
 /* Botón idioma ES | EN */

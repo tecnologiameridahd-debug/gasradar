@@ -221,6 +221,14 @@ function applyStaticI18n() {
     state.lang === "en"
       ? "GasRadar — Gas prices USA"
       : "GasRadar — Precios de gasolina USA";
+  // Actualiza chip "prom. sem." / "wk avg" al cambiar idioma
+  if (state.lastData) renderEiaBanner(state.lastData);
+  else {
+    const badge = $("#eiaBadge");
+    if (badge) badge.textContent = t("eiaChipLabel");
+    const chip = $("#eiaBanner");
+    if (chip) chip.title = t("eiaNote");
+  }
 }
 
 function setLang(lang) {
@@ -564,27 +572,26 @@ async function search({ lat, lon, zip } = {}) {
 }
 
 function renderEiaBanner(data) {
-  // Chip mini: "prom. sem. $3.72" — sin EIA ni fecha
+  // Chip siempre visible en header: "prom. sem. $3.72"
   const chip = $("#eiaBanner");
   if (!chip) return;
-  const avg = data.state_avg || {};
+  const avg = (data && data.state_avg) || {};
   const fuelAvg = avg[state.fuel] != null ? avg[state.fuel] : avg.regular;
-  const stCode = (data.center && data.center.state) || "";
-
-  if (fuelAvg == null || Number.isNaN(Number(fuelAvg))) {
-    chip.hidden = true;
-    return;
-  }
-  chip.hidden = false;
+  const stCode = (data && data.center && data.center.state) || "";
 
   const badge = $("#eiaBadge");
   const text = $("#eiaChipText");
   if (badge) badge.textContent = t("eiaChipLabel");
-  if (text) text.textContent = money(fuelAvg);
-  // Tooltip sin fecha: promedio esta semana + estado
-  chip.title = stCode
-    ? `${stCode} · ${t("eiaNote")}`
-    : t("eiaNote");
+  if (text) {
+    text.textContent =
+      fuelAvg != null && !Number.isNaN(Number(fuelAvg)) ? money(fuelAvg) : "$—";
+  }
+  chip.hidden = false;
+  chip.title = stCode ? `${stCode} · ${t("eiaNote")}` : t("eiaNote");
+  chip.setAttribute(
+    "aria-label",
+    `${t("eiaChipLabel")} ${text ? text.textContent : ""}`.trim()
+  );
 }
 
 function render(data) {

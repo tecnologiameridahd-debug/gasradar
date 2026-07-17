@@ -12,7 +12,7 @@
     <link rel="icon" href="/static/favicon-32.png?v=0.2.9" type="image/png" sizes="32x32" />
     <link rel="icon" href="/static/favicon-64.png?v=0.2.9" type="image/png" sizes="64x64" />
     <link rel="apple-touch-icon" href="/static/logo-192.png?v=0.2.9" />
-    <link rel="stylesheet" href="/static/styles.css?v=0.4.2" />
+    <link rel="stylesheet" href="/static/styles.css?v=0.4.3" />
   </head>
   <body>
     <a
@@ -49,8 +49,13 @@
           </div>
         </div>
         <div class="header-right">
-          <div class="eia-chip" id="eiaBanner" hidden title="Promedio del estado esta semana">
-            <span class="eia-chip-label" id="eiaBadge">prom. sem.</span>
+          <div
+            class="eia-chip"
+            id="eiaBanner"
+            title="Promedio del estado esta semana"
+            aria-label="Promedio semanal del estado"
+          >
+            <span class="eia-chip-label" id="eiaBadge" data-i18n="eiaChipLabel">prom. sem.</span>
             <span class="eia-chip-text" id="eiaChipText">$—</span>
           </div>
           <div class="lang-switch" role="group" aria-label="Language">
@@ -191,6 +196,6 @@
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-    <script src="/static/app.js?v=0.4.2"></script>
+    <script src="/static/app.js?v=0.4.3"></script>
   </body>
 </html>
