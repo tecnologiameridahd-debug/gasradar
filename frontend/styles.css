@@ -92,22 +92,35 @@ body {
 .tg-mini {
   display: inline-flex;
   align-items: center;
-  max-width: 120px;
-  padding: 1px 0;
-  font-size: 0.58rem;
-  font-weight: 600;
-  line-height: 1.2;
-  color: #6ec8f0;
-  text-decoration: none;
-  opacity: 0.92;
+  justify-content: center;
+  gap: 4px;
+  max-width: 110px;
+  height: 22px;
+  padding: 0 8px 0 6px;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  color: #fff !important;
+  text-decoration: none !important;
+  background: linear-gradient(180deg, #2aabee 0%, #229ed9 100%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 2px 8px rgba(34, 158, 217, 0.35);
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
+  box-sizing: border-box;
 }
 
 .tg-mini:hover {
-  color: #9adcf7;
-  text-decoration: underline;
+  filter: brightness(1.08);
+  color: #fff !important;
+  text-decoration: none !important;
+}
+
+.tg-mini-ico {
+  flex-shrink: 0;
+  display: block;
 }
 
 /* Chip "prom. sem." — botón mini al lado de ES/EN (siempre visible) */

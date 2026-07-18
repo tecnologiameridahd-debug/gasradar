@@ -92,7 +92,7 @@ const I18N = {
     installIos:
       "En iPhone: toca Compartir → Añadir a pantalla de inicio",
     installAlready: "Ya está instalada o ábrela desde el icono del teléfono",
-    telegramAlerts: "TG alertas",
+    telegramAlerts: "Alertas",
     trustpilotReview: "Deja una reseña",
   },
   en: {
@@ -182,7 +182,7 @@ const I18N = {
     installDone: "App installed — find it on your home screen",
     installIos: "On iPhone: tap Share → Add to Home Screen",
     installAlready: "Already installed, or open it from the home screen icon",
-    telegramAlerts: "TG alerts",
+    telegramAlerts: "Alerts",
     trustpilotReview: "Leave a review",
   },
 };
