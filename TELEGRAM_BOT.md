@@ -38,26 +38,36 @@ Opcional: si ya tienes `STATS_KEY`, se puede usar como clave del cron (si no hay
 ## Tras el deploy
 
 1. Pon las variables en Render → Environment → Save → redeploy  
-2. Activa el webhook (una vez):
+
+2. **Webhook automático:** al arrancar la app se registra solo  
+   (`AUTO_TELEGRAM_WEBHOOK=1` por defecto).  
+   No hace falta el link de setup si el token está bien.
+
+3. Comprueba sin clave secreta:
+
+```
+https://gasradarapp.com/api/health
+```
+
+Mira el bloque `"telegram"`:
+- `token: true`
+- `username: GasRadar_bot`
+- `webhook_ok: true`
+- `last_error: null`
+
+4. (Opcional) Setup manual si falló el auto:
 
 ```
 https://gasradarapp.com/api/telegram/setup?key=TU_ALERTS_SECRET
 ```
 
-Debe devolver `"ok": true` y el username del bot.
+`ALERTS_SECRET` y `?key=` deben ser **idénticos** (mismos caracteres).
 
-3. Diagnóstico:
+5. Abre https://t.me/GasRadar_bot → **Start**  
+   - Escribe `80903` (ZIP) → precios  
+   - Botones del teclado  
+   - `3.50` = tope de alerta  
 
-```
-https://gasradarapp.com/api/telegram/status?key=TU_ALERTS_SECRET
-```
-
-Mira `webhook_url`, `last_error_message`, `pending_update_count`.
-
-4. Abre https://t.me/GasRadar_bot → **Start**  
-   - Escribe `80903` (ZIP) → te devuelve precios  
-   - O usa los **botones** del teclado  
-   - Escribe `3.50` para alerta de tope  
 
 ## Si el bot “no sirve”
 

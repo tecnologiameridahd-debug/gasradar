@@ -16,9 +16,40 @@ from backend.prices import report_price
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.7.4"
+APP_VERSION = "0.7.5"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
+
+
+@app.on_event("startup")
+def _startup_telegram_webhook():
+    """
+    Al arrancar (cada deploy en Render) registra el webhook solo.
+    Así el bot funciona sin abrir /api/telegram/setup a mano.
+    """
+    import os
+
+    if (os.environ.get("AUTO_TELEGRAM_WEBHOOK") or "1").strip().lower() in (
+        "0",
+        "false",
+        "no",
+        "off",
+    ):
+        print("[telegram] AUTO_TELEGRAM_WEBHOOK desactivado")
+        return
+    try:
+        from backend.telegram_bot import bot_ready, get_webhook_info, set_webhook
+
+        if not bot_ready():
+            print("[telegram] sin TELEGRAM_BOT_TOKEN — webhook no registrado")
+            return
+        res = set_webhook()
+        info = get_webhook_info()
+        url = ((info or {}).get("result") or {}).get("url") or ""
+        err = ((info or {}).get("result") or {}).get("last_error_message") or ""
+        print(f"[telegram] webhook set ok={res.get('ok')} url={url!r} last_err={err!r}")
+    except Exception as e:
+        print(f"[telegram] webhook startup error: {type(e).__name__}: {e}")
 
 
 @app.middleware("http")
@@ -54,11 +85,37 @@ def health():
 
     from backend.db import db_status
     from backend.prices import _zyla_api_key, _zyla_gas_url, _zyla_station_url
-    from backend.telegram_bot import bot_ready
+    from backend.telegram_bot import alerts_secret, bot_ready, get_me, get_webhook_info
 
     zkey = _zyla_api_key()
     zurl = _zyla_gas_url()
     zst = _zyla_station_url()
+
+    tg: dict = {
+        "token": bot_ready(),
+        "secret_set": bool(alerts_secret()),
+        "secret_len": len(alerts_secret()) if alerts_secret() else 0,
+        "username": None,
+        "webhook_url": None,
+        "webhook_ok": None,
+        "pending_updates": None,
+        "last_error": None,
+    }
+    if bot_ready():
+        try:
+            me = get_me()
+            if me.get("ok"):
+                tg["username"] = (me.get("result") or {}).get("username")
+            info = get_webhook_info()
+            res = (info or {}).get("result") or {}
+            wh_url = res.get("url") or ""
+            tg["webhook_url"] = wh_url[:80] + ("…" if len(wh_url) > 80 else "")
+            tg["webhook_ok"] = bool(wh_url) and not res.get("last_error_message")
+            tg["pending_updates"] = res.get("pending_update_count")
+            tg["last_error"] = res.get("last_error_message")
+        except Exception as e:
+            tg["last_error"] = f"{type(e).__name__}: {e}"
+
     return {
         "ok": True,
         "app": "gasradar",
@@ -67,6 +124,7 @@ def health():
         "status": "alive",
         "db": db_status(),
         "telegram_bot": bot_ready(),
+        "telegram": tg,
         "zyla": {
             "key": bool(zkey),
             "key_len": len(zkey) if zkey else 0,
