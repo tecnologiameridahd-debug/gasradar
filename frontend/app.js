@@ -94,6 +94,7 @@ const I18N = {
     installAlready: "Ya está instalada o ábrela desde el icono del teléfono",
     telegramAlerts: "Alertas",
     trustpilotReview: "Deja una reseña",
+    buyMeCoffee: "Invítame un café",
   },
   en: {
     subtitle: "Cheapest gas near you",
@@ -184,6 +185,7 @@ const I18N = {
     installAlready: "Already installed, or open it from the home screen icon",
     telegramAlerts: "Alerts",
     trustpilotReview: "Leave a review",
+    buyMeCoffee: "Buy me a coffee",
   },
 };
 

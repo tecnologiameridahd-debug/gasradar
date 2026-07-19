@@ -1145,6 +1145,38 @@ a.btn-secondary:hover {
   letter-spacing: 0.02em;
 }
 
+/* Buy Me a Coffee — pie, tamaño mediano */
+.bmc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: #ffdd00;
+  color: #0d0c22 !important;
+  font-weight: 800;
+  font-size: 0.85rem;
+  text-decoration: none !important;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 14px rgba(255, 221, 0, 0.25);
+  line-height: 1.2;
+  transition: transform 0.12s ease, filter 0.15s ease;
+}
+
+.bmc-btn:hover {
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+  color: #0d0c22 !important;
+  text-decoration: none !important;
+}
+
+.bmc-ico {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
 /* Trustpilot en el pie (abajo) */
 .footer-trustpilot {
   margin-top: 12px;
