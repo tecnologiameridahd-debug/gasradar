@@ -74,19 +74,30 @@ body {
   flex-direction: row;
   align-items: flex-start;
   justify-content: flex-end;
-  gap: 6px;
+  gap: 8px;
   flex-shrink: 0;
   margin-top: 4px;
   flex-wrap: nowrap;
+  margin-left: auto;
 }
 
-/* Columna: prom. sem. → Alertas (igual que antes) → Café debajo */
+/* prom. sem. + Alertas (izquierda del bloque derecho) */
 .header-meta {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 3px;
   min-width: 0;
+}
+
+/* Idioma arriba + Apóyame abajo — esquina derecha */
+.header-end {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-left: 2px;
 }
 
 .tg-mini {
@@ -123,27 +134,27 @@ body {
   display: block;
 }
 
-/* Apóyame (Buy Me a Coffee) — más claro y visible, debajo de Alertas */
+/* Apóyame — bien a la derecha, más grande y legible */
 .bmc-mini {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  height: 26px;
-  min-width: 88px;
-  padding: 0 11px 0 9px;
+  gap: 6px;
+  height: 30px;
+  min-width: 102px;
+  padding: 0 12px;
   border-radius: 999px;
-  font-size: 0.68rem;
+  font-size: 0.78rem;
   font-weight: 800;
   letter-spacing: 0.02em;
   line-height: 1;
   color: #0d0c22 !important;
   text-decoration: none !important;
-  background: linear-gradient(180deg, #ffdd00 0%, #f5c400 55%, #e6b800 100%);
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: #ffdd00;
+  border: 2px solid #fff3a0;
   box-shadow:
-    0 0 0 1px rgba(251, 191, 36, 0.35),
-    0 3px 10px rgba(255, 221, 0, 0.35);
+    0 0 0 2px rgba(255, 221, 0, 0.35),
+    0 4px 14px rgba(0, 0, 0, 0.35);
   white-space: nowrap;
   box-sizing: border-box;
 }
@@ -153,12 +164,12 @@ body {
   color: #0d0c22 !important;
   text-decoration: none !important;
   box-shadow:
-    0 0 0 1px rgba(251, 191, 36, 0.5),
-    0 4px 14px rgba(255, 221, 0, 0.45);
+    0 0 0 2px rgba(255, 221, 0, 0.55),
+    0 6px 18px rgba(255, 221, 0, 0.4);
 }
 
 .bmc-mini .bmc-ico {
-  font-size: 0.9rem;
+  font-size: 1.05rem;
   line-height: 1;
 }
 
