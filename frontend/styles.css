@@ -80,36 +80,49 @@ body {
   flex-wrap: nowrap;
 }
 
-/* Columna: prom. sem. + link mini Telegram debajo */
+/* Columna: prom. sem. + Alertas | Café */
 .header-meta {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
 }
 
-.tg-mini {
+.header-actions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  flex-wrap: nowrap;
+}
+
+.tg-mini,
+.bmc-mini {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
-  max-width: 110px;
   height: 22px;
   padding: 0 8px 0 6px;
   border-radius: 999px;
-  font-size: 0.62rem;
+  font-size: 0.6rem;
   font-weight: 700;
   letter-spacing: 0.01em;
   line-height: 1;
-  color: #fff !important;
   text-decoration: none !important;
-  background: linear-gradient(180deg, #2aabee 0%, #229ed9 100%);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 2px 8px rgba(34, 158, 217, 0.35);
   white-space: nowrap;
   overflow: hidden;
   box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.tg-mini {
+  color: #fff !important;
+  background: linear-gradient(180deg, #2aabee 0%, #229ed9 100%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 2px 8px rgba(34, 158, 217, 0.35);
 }
 
 .tg-mini:hover {
@@ -121,6 +134,24 @@ body {
 .tg-mini-ico {
   flex-shrink: 0;
   display: block;
+}
+
+.bmc-mini {
+  color: #0d0c22 !important;
+  background: linear-gradient(180deg, #ffdd00 0%, #f5c518 100%);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 2px 8px rgba(255, 221, 0, 0.28);
+}
+
+.bmc-mini:hover {
+  filter: brightness(1.06);
+  color: #0d0c22 !important;
+  text-decoration: none !important;
+}
+
+.bmc-mini .bmc-ico {
+  font-size: 0.72rem;
+  line-height: 1;
 }
 
 /* Chip "prom. sem." — botón mini al lado de ES/EN (siempre visible) */
@@ -1143,41 +1174,6 @@ a.btn-secondary:hover {
   font-size: 0.7rem;
   color: var(--muted2);
   letter-spacing: 0.02em;
-}
-
-/* Buy Me a Coffee — dentro de la tarjeta de búsqueda, color app */
-.bmc-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  width: 100%;
-  margin-top: 10px;
-  padding: 11px 16px;
-  border-radius: 999px;
-  box-sizing: border-box;
-  background: linear-gradient(180deg, rgba(251, 191, 36, 0.22) 0%, rgba(245, 158, 11, 0.14) 100%);
-  color: var(--gold) !important;
-  font-weight: 700;
-  font-size: 0.9rem;
-  text-decoration: none !important;
-  border: 1px solid rgba(251, 191, 36, 0.4);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
-  line-height: 1.2;
-  transition: transform 0.12s ease, filter 0.15s ease, background 0.15s ease;
-}
-
-.bmc-btn:hover {
-  filter: brightness(1.1);
-  transform: translateY(-1px);
-  color: #fde68a !important;
-  text-decoration: none !important;
-  background: linear-gradient(180deg, rgba(251, 191, 36, 0.3) 0%, rgba(245, 158, 11, 0.2) 100%);
-}
-
-.bmc-ico {
-  font-size: 1.05rem;
-  line-height: 1;
 }
 
 /* Trustpilot en el pie (abajo) */
