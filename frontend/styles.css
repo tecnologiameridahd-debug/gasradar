@@ -1145,31 +1145,34 @@ a.btn-secondary:hover {
   letter-spacing: 0.02em;
 }
 
-/* Buy Me a Coffee — pie, tamaño mediano */
+/* Buy Me a Coffee — dentro de la tarjeta de búsqueda, color app */
 .bmc-btn {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  margin-top: 12px;
-  padding: 10px 16px;
+  width: 100%;
+  margin-top: 10px;
+  padding: 11px 16px;
   border-radius: 999px;
-  background: #ffdd00;
-  color: #0d0c22 !important;
-  font-weight: 800;
-  font-size: 0.85rem;
+  box-sizing: border-box;
+  background: linear-gradient(180deg, rgba(251, 191, 36, 0.22) 0%, rgba(245, 158, 11, 0.14) 100%);
+  color: var(--gold) !important;
+  font-weight: 700;
+  font-size: 0.9rem;
   text-decoration: none !important;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  box-shadow: 0 4px 14px rgba(255, 221, 0, 0.25);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
   line-height: 1.2;
-  transition: transform 0.12s ease, filter 0.15s ease;
+  transition: transform 0.12s ease, filter 0.15s ease, background 0.15s ease;
 }
 
 .bmc-btn:hover {
-  filter: brightness(1.05);
+  filter: brightness(1.1);
   transform: translateY(-1px);
-  color: #0d0c22 !important;
+  color: #fde68a !important;
   text-decoration: none !important;
+  background: linear-gradient(180deg, rgba(251, 191, 36, 0.3) 0%, rgba(245, 158, 11, 0.2) 100%);
 }
 
 .bmc-ico {
