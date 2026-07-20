@@ -513,20 +513,41 @@ a.btn-secondary:hover {
   background: #2a3a58;
 }
 
-/* Igual que antes; solo redondeo en <a> (Cómo llegar era cuadrado) */
-.btn-ghost {
+/* Ghost: mismo look para <button> y <a> (Compartir = referencia) */
+.btn-ghost,
+a.btn-ghost,
+button.btn-ghost {
+  appearance: none;
+  -webkit-appearance: none;
   background: transparent;
-  color: var(--blue);
+  color: var(--blue) !important;
   padding: 8px 10px;
+  margin: 0;
   border: 1px solid transparent;
   border-radius: 14px;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: 0;
+  text-decoration: none !important;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: inline-block;
+  vertical-align: middle;
+  -webkit-tap-highlight-color: transparent;
 }
 
-a.btn-ghost {
-  color: var(--blue);
-  text-decoration: none;
+/* Acciones de estación: los 3 idénticos (Cómo llegar / Compartir / Reportar) */
+.station-actions .btn-ghost,
+.station-actions a.btn-ghost,
+.station-actions button.btn-ghost {
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 8px 10px;
   border-radius: 14px;
-  box-sizing: border-box;
+  color: var(--blue) !important;
+  text-decoration: none !important;
 }
 
 /* PWA: Instalar app */
@@ -569,11 +590,14 @@ a.btn-ghost {
 }
 
 .btn-ghost:hover,
-a.btn-ghost:hover {
+a.btn-ghost:hover,
+button.btn-ghost:hover,
+.btn-ghost:visited,
+a.btn-ghost:visited {
   background: var(--blue-soft);
   border-color: rgba(56, 189, 248, 0.2);
-  color: var(--blue);
-  text-decoration: none;
+  color: var(--blue) !important;
+  text-decoration: none !important;
 }
 
 .btn-gps {
