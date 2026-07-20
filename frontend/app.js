@@ -952,6 +952,13 @@ function bindStationPressFeedback(root) {
       (e) => {
         if (e.button != null && e.button !== 0) return;
         if (isAction(e.target)) return;
+        // limpia selección nativa (iOS/Android a veces “copia” el texto)
+        try {
+          const sel = window.getSelection && window.getSelection();
+          if (sel && sel.removeAllRanges) sel.removeAllRanges();
+        } catch (_) {
+          /* ignore */
+        }
         card.classList.add("is-pressed");
       },
       { passive: true }
@@ -1303,6 +1310,12 @@ function bindBestCardPress() {
     (e) => {
       if (e.button != null && e.button !== 0) return;
       if (isAction(e.target)) return;
+      try {
+        const sel = window.getSelection && window.getSelection();
+        if (sel && sel.removeAllRanges) sel.removeAllRanges();
+      } catch (_) {
+        /* ignore */
+      }
       card.classList.add("is-pressed");
     },
     { passive: true }

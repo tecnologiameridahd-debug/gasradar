@@ -828,7 +828,19 @@ a.btn-secondary:hover {
   border-bottom-color: var(--line-soft);
   box-sizing: border-box;
   touch-action: manipulation;
-  user-select: none;
+  /* Evitar selección de texto al tocar (parece “copiar”) */
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+}
+
+.station *,
+.station *::before,
+.station *::after {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  -webkit-touch-callout: none;
 }
 
 .station:last-child {
@@ -886,6 +898,17 @@ a.btn-secondary:hover {
     border-color 0.14s ease;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  -webkit-touch-callout: none;
+}
+
+.best *,
+.best *::before,
+.best *::after {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  -webkit-touch-callout: none;
 }
 
 .best.is-pressed,
@@ -975,6 +998,9 @@ a.btn-secondary:hover {
   align-items: flex-start;
   justify-content: center;
   gap: 0;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  -webkit-touch-callout: none;
   /* línea del cuadro: doble anillo para que se note en móvil/PWA */
   border: 3px solid #4ade80 !important;
   border-radius: 10px;
