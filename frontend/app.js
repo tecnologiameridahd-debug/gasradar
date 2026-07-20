@@ -860,7 +860,6 @@ function render(data) {
     setStatus(t("noStations"), "empty");
     const head = $("#resultsHead");
     if (head) head.hidden = true;
-    $("#disclaimer").textContent = data.disclaimer || t("disclaimerFallback");
     return;
   }
 
@@ -915,12 +914,7 @@ function render(data) {
     .join("");
 
   $("#results").innerHTML = html;
-  // Disclaimer API está en español; en EN usamos texto corto local
-  if (state.lang === "en") {
-    $("#disclaimer").textContent = t("disclaimerFallback");
-  } else {
-    $("#disclaimer").textContent = data.disclaimer || t("disclaimerFallback");
-  }
+  // Aviso de estaciones/precios (OpenStreetMap, estimaciones) → /privacy
 
   $("#results").querySelectorAll("[data-maps]").forEach((btn) => {
     btn.addEventListener("click", (e) => {
