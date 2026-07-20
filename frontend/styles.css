@@ -513,23 +513,23 @@ a.btn-secondary:hover {
   background: #2a3a58;
 }
 
-/* Ghost: mismo look para <button> y <a> (Compartir = referencia) */
-.btn-ghost,
-a.btn-ghost,
-button.btn-ghost {
+/* Ghost — estilo de Compartir (referencia única) */
+button.btn-ghost,
+.btn-ghost {
   appearance: none;
   -webkit-appearance: none;
-  background: transparent;
+  background: transparent !important;
   color: var(--blue) !important;
-  padding: 8px 10px;
-  margin: 0;
-  border: 1px solid transparent;
-  border-radius: 14px;
-  font: inherit;
-  font-size: 0.9rem;
-  font-weight: 600;
-  line-height: 1.25;
-  letter-spacing: 0;
+  padding: 8px 10px !important;
+  margin: 0 !important;
+  border: 1px solid transparent !important;
+  border-radius: 14px !important;
+  font-family: inherit !important;
+  font-size: 0.9rem !important;
+  font-weight: 600 !important;
+  line-height: 1.25 !important;
+  letter-spacing: normal !important;
+  text-align: center;
   text-decoration: none !important;
   box-sizing: border-box;
   cursor: pointer;
@@ -538,16 +538,23 @@ button.btn-ghost {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Acciones de estación: los 3 idénticos (Cómo llegar / Compartir / Reportar) */
-.station-actions .btn-ghost,
-.station-actions a.btn-ghost,
+/* Los 3 de la estación: idénticos sí o sí */
+.station-actions {
+  align-items: center;
+}
+
 .station-actions button.btn-ghost {
-  font-size: 0.9rem;
-  font-weight: 600;
-  padding: 8px 10px;
-  border-radius: 14px;
+  flex: 0 0 auto;
+  min-width: 0;
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 8px 10px !important;
+  font-size: 0.9rem !important;
+  font-weight: 600 !important;
   color: var(--blue) !important;
-  text-decoration: none !important;
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: 14px !important;
 }
 
 /* PWA: Instalar app */
@@ -589,15 +596,13 @@ button.btn-ghost {
   }
 }
 
-.btn-ghost:hover,
-a.btn-ghost:hover,
 button.btn-ghost:hover,
-.btn-ghost:visited,
-a.btn-ghost:visited {
-  background: var(--blue-soft);
-  border-color: rgba(56, 189, 248, 0.2);
+.btn-ghost:hover {
+  background: var(--blue-soft) !important;
+  border-color: rgba(56, 189, 248, 0.2) !important;
   color: var(--blue) !important;
   text-decoration: none !important;
+  filter: none;
 }
 
 .btn-gps {
@@ -766,7 +771,8 @@ a.btn-ghost:visited {
 
 .best-actions .grow,
 .best-actions a.grow,
-.best-actions a.btn-primary {
+.best-actions a.btn-secondary,
+.best-actions button.btn-secondary {
   flex: 1;
   min-width: 120px;
   text-align: center;
@@ -776,6 +782,9 @@ a.btn-ghost:visited {
   justify-content: center;
   border-radius: 999px !important;
   min-height: 46px;
+  font-size: 0.95rem !important;
+  font-weight: 600 !important;
+  box-sizing: border-box;
 }
 
 /* ——— Badges ——— */

@@ -906,7 +906,7 @@ function render(data) {
           </div>
         </div>
         <div class="station-actions">
-          <a class="btn-ghost" href="${mapsUrl(s)}" target="_blank" rel="noopener">${mapsButtonLabel()}</a>
+          <button class="btn-ghost" type="button" data-maps="${escapeHtml(s.id)}">${escapeHtml(mapsButtonLabel())}</button>
           <button class="btn-ghost" type="button" data-share="${escapeHtml(s.id)}">${escapeHtml(t("share"))}</button>
           <button class="btn-ghost" type="button" data-report="${escapeHtml(s.id)}" data-name="${escapeHtml(s.name)}">${escapeHtml(t("report"))}</button>
         </div>
@@ -922,13 +922,29 @@ function render(data) {
     $("#disclaimer").textContent = data.disclaimer || t("disclaimerFallback");
   }
 
+  $("#results").querySelectorAll("[data-maps]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const id = btn.getAttribute("data-maps");
+      const st = state.stations.find((x) => x.id === id);
+      if (!st) return;
+      const url = mapsUrl(st);
+      try {
+        window.open(url, "_blank", "noopener");
+      } catch (_) {
+        location.href = url;
+      }
+    });
+  });
   $("#results").querySelectorAll("[data-report]").forEach((btn) => {
-    btn.addEventListener("click", () =>
-      openReport(btn.dataset.report, btn.dataset.name)
-    );
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openReport(btn.dataset.report, btn.dataset.name);
+    });
   });
   $("#results").querySelectorAll("[data-share]").forEach((btn) => {
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
       const id = btn.getAttribute("data-share");
       const st = state.stations.find((x) => x.id === id);
       if (st) sharePrice(st);
