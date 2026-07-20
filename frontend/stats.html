@@ -2,71 +2,57 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b1220" />
     <meta name="robots" content="noindex,nofollow" />
-    <title>GasRadar — Stats</title>
+    <title>GasRadar — Dashboard</title>
     <link rel="icon" href="/static/favicon-32.png?v=0.2.9" type="image/png" />
-    <link rel="stylesheet" href="/static/styles.css?v=0.2.9" />
-  </head>
-  <body>
-    <div class="app privacy-page">
-      <header class="top">
-        <div class="brand">
-          <a href="/" class="logo-link"><img class="logo" src="/static/logo.svg?v=0.2.9" width="48" height="48" alt="GasRadar" /></a>
-          <div class="brand-text">
-            <h1><span class="brand-gas">Gas</span><span class="brand-radar">Radar</span></h1>
-            <p class="subtitle">Visitas (solo tú)</p>
-          </div>
-        </div>
-      </header>
-
-      <section class="card">
-        <p class="loc-sub" style="margin:0 0 10px">
-          Clave de acceso (por defecto <code>gasradar2026</code> — cámbiala en Render con
-          <code>STATS_KEY</code>)
-        </p>
-        <div class="row">
-          <input id="keyInput" type="password" class="grow" placeholder="STATS_KEY" autocomplete="off" />
-          <button class="btn-primary" type="button" id="btnLoad">Ver stats</button>
-        </div>
-        <p class="hint" id="msg"></p>
-      </section>
-
-      <section class="card" id="summaryCard" hidden>
-        <h2 style="margin:0 0 10px;font-size:1.05rem">Resumen</h2>
-        <div class="stats-grid" id="totals"></div>
-        <p class="privacy-meta" id="note"></p>
-      </section>
-
-      <section class="card" id="daysCard" hidden>
-        <h2 style="margin:0 0 10px;font-size:1.05rem">Por día</h2>
-        <div id="byDay"></div>
-      </section>
-
-      <section class="card" id="refsCard" hidden>
-        <h2 style="margin:0 0 10px;font-size:1.05rem">De dónde vienen</h2>
-        <div id="refs"></div>
-      </section>
-
-      <section class="card" id="zipsCard" hidden>
-        <h2 style="margin:0 0 10px;font-size:1.05rem">Zonas / ZIP más buscados</h2>
-        <div id="zips"></div>
-      </section>
-
-      <section class="card" id="recentCard" hidden>
-        <h2 style="margin:0 0 10px;font-size:1.05rem">Actividad reciente</h2>
-        <div id="recent"></div>
-      </section>
-
-      <footer class="site-footer">
-        <a href="/">← GasRadar</a> · <a href="/privacy">Privacidad</a>
-      </footer>
-    </div>
+    <link rel="stylesheet" href="/static/styles.css?v=0.9.12" />
     <style>
+      .dash-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 4px;
+      }
+      .dash-head h2 {
+        margin: 0;
+        font-size: 1.05rem;
+      }
+      .dash-range {
+        display: inline-flex;
+        background: #0d1526;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 3px;
+        gap: 2px;
+      }
+      .dash-range button {
+        border: 0;
+        background: transparent;
+        color: var(--muted);
+        font-weight: 700;
+        font-size: 0.78rem;
+        padding: 7px 12px;
+        border-radius: 999px;
+        cursor: pointer;
+        min-width: 44px;
+      }
+      .dash-range button.active {
+        background: linear-gradient(180deg, var(--accent), var(--accent2));
+        color: #04210f;
+      }
       .stats-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 10px;
+      }
+      @media (min-width: 520px) {
+        .stats-grid.wide {
+          grid-template-columns: 1fr 1fr 1fr;
+        }
       }
       .stat-box {
         background: #0d1526;
@@ -74,36 +60,253 @@
         border-radius: 12px;
         padding: 12px;
       }
+      .stat-box.hi {
+        border-color: rgba(34, 197, 94, 0.35);
+        background: linear-gradient(160deg, rgba(34, 197, 94, 0.1), #0d1526 70%);
+      }
       .stat-box .n {
-        font-size: 1.6rem;
+        font-size: 1.55rem;
         font-weight: 800;
         color: var(--accent);
         font-variant-numeric: tabular-nums;
+        line-height: 1.1;
       }
       .stat-box .l {
-        font-size: 0.78rem;
+        font-size: 0.75rem;
         color: var(--muted);
-        margin-top: 2px;
+        margin-top: 4px;
+        font-weight: 600;
+      }
+      .stat-box .delta {
+        font-size: 0.72rem;
+        font-weight: 700;
+        margin-top: 4px;
+      }
+      .stat-box .delta.up {
+        color: var(--accent);
+      }
+      .stat-box .delta.down {
+        color: var(--danger);
+      }
+      .stat-box .delta.flat {
+        color: var(--muted2);
       }
       .stat-row {
         display: flex;
         justify-content: space-between;
+        align-items: center;
         gap: 10px;
-        padding: 8px 0;
+        padding: 9px 0;
         border-bottom: 1px solid var(--line-soft);
         font-size: 0.88rem;
       }
       .stat-row:last-child {
         border-bottom: 0;
       }
+      .stat-row .muted {
+        color: var(--muted);
+        font-size: 0.82rem;
+      }
+      .bar-wrap {
+        display: flex;
+        align-items: flex-end;
+        gap: 4px;
+        height: 120px;
+        padding: 8px 0 4px;
+        overflow-x: auto;
+      }
+      .bar-col {
+        flex: 1 0 14px;
+        min-width: 14px;
+        max-width: 36px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        height: 100%;
+        justify-content: flex-end;
+      }
+      .bar-stack {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        gap: 2px;
+        height: 100%;
+      }
+      .bar {
+        width: 100%;
+        border-radius: 4px 4px 2px 2px;
+        min-height: 2px;
+        transition: height 0.25s ease;
+      }
+      .bar.pv {
+        background: linear-gradient(180deg, #4ade80, #16a34a);
+      }
+      .bar.se {
+        background: linear-gradient(180deg, #38bdf8, #0284c7);
+      }
+      .bar-lbl {
+        font-size: 0.58rem;
+        color: var(--muted2);
+        writing-mode: horizontal-tb;
+        white-space: nowrap;
+      }
+      .legend {
+        display: flex;
+        gap: 12px;
+        font-size: 0.72rem;
+        color: var(--muted);
+        margin-top: 6px;
+      }
+      .legend i {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 2px;
+        margin-right: 4px;
+        vertical-align: middle;
+      }
+      .legend .pv {
+        background: #22c55e;
+      }
+      .legend .se {
+        background: #38bdf8;
+      }
+      .dash-msg {
+        min-height: 1.2em;
+        margin: 8px 0 0;
+        font-size: 0.82rem;
+        color: var(--muted);
+      }
+      .dash-msg.ok {
+        color: var(--accent);
+      }
+      .dash-msg.err {
+        color: var(--danger);
+      }
       code {
         color: var(--blue);
         font-size: 0.85em;
       }
+      .pill {
+        display: inline-block;
+        font-size: 0.68rem;
+        font-weight: 700;
+        padding: 2px 7px;
+        border-radius: 999px;
+        background: var(--blue-soft);
+        color: var(--blue);
+        border: 1px solid rgba(56, 189, 248, 0.3);
+        text-transform: uppercase;
+      }
+      .pill.search {
+        background: var(--accent-soft);
+        color: var(--accent);
+        border-color: rgba(34, 197, 94, 0.3);
+      }
+      .rank-bar {
+        height: 6px;
+        border-radius: 999px;
+        background: #1a2438;
+        overflow: hidden;
+        margin-top: 4px;
+        max-width: 120px;
+      }
+      .rank-bar > span {
+        display: block;
+        height: 100%;
+        background: linear-gradient(90deg, var(--accent), #4ade80);
+        border-radius: 999px;
+      }
     </style>
+  </head>
+  <body>
+    <div class="app privacy-page">
+      <header class="top">
+        <div class="brand">
+          <a href="/" class="logo-link" title="GasRadar">
+            <img class="logo" src="/static/logo.svg?v=0.2.9" width="48" height="48" alt="GasRadar" />
+          </a>
+          <div class="brand-text">
+            <h1><span class="brand-gas">Gas</span><span class="brand-radar">Radar</span></h1>
+            <p class="subtitle">Dashboard · solo tú</p>
+          </div>
+        </div>
+      </header>
+
+      <section class="card">
+        <p class="loc-sub" style="margin: 0 0 10px">
+          Clave (<code>STATS_KEY</code> en Render; por defecto <code>gasradar2026</code>)
+        </p>
+        <div class="row">
+          <input
+            id="keyInput"
+            type="password"
+            class="grow"
+            placeholder="STATS_KEY"
+            autocomplete="off"
+          />
+          <button class="btn-primary" type="button" id="btnLoad">Actualizar</button>
+        </div>
+        <p class="dash-msg" id="msg"></p>
+      </section>
+
+      <section class="card" id="summaryCard" hidden>
+        <div class="dash-head">
+          <h2>Resumen</h2>
+          <div class="dash-range" role="group" aria-label="Rango de días">
+            <button type="button" data-days="7">7d</button>
+            <button type="button" data-days="14" class="active">14d</button>
+            <button type="button" data-days="30">30d</button>
+          </div>
+        </div>
+        <div class="stats-grid wide" id="totals"></div>
+        <p class="privacy-meta" id="note" style="margin-top: 10px"></p>
+      </section>
+
+      <section class="card" id="chartCard" hidden>
+        <div class="dash-head">
+          <h2>Por día</h2>
+        </div>
+        <div class="bar-wrap" id="chart"></div>
+        <div class="legend">
+          <span><i class="pv"></i>Visitas</span>
+          <span><i class="se"></i>Búsquedas</span>
+        </div>
+        <div id="byDay" style="margin-top: 12px"></div>
+      </section>
+
+      <section class="card" id="refsCard" hidden>
+        <h2 style="margin: 0 0 10px; font-size: 1.05rem">De dónde vienen</h2>
+        <div id="refs"></div>
+      </section>
+
+      <section class="card" id="zipsCard" hidden>
+        <h2 style="margin: 0 0 10px; font-size: 1.05rem">ZIP / zonas más buscadas</h2>
+        <div id="zips"></div>
+      </section>
+
+      <section class="card" id="langsCard" hidden>
+        <h2 style="margin: 0 0 10px; font-size: 1.05rem">Idiomas</h2>
+        <div id="langs"></div>
+      </section>
+
+      <section class="card" id="recentCard" hidden>
+        <h2 style="margin: 0 0 10px; font-size: 1.05rem">Actividad reciente</h2>
+        <div id="recent"></div>
+      </section>
+
+      <footer class="site-footer">
+        <a href="/">← GasRadar</a> · <a href="/privacy">Privacidad</a>
+      </footer>
+    </div>
+
     <script>
       const $ = (s) => document.querySelector(s);
       const KEY_STORE = "gasradar_stats_key";
+      const DAYS_STORE = "gasradar_stats_days";
+      let currentDays = 14;
 
       function loadSavedKey() {
         try {
@@ -121,70 +324,205 @@
         }
       }
 
+      function loadSavedDays() {
+        try {
+          const d = parseInt(localStorage.getItem(DAYS_STORE) || "14", 10);
+          if (d === 7 || d === 14 || d === 30) return d;
+        } catch (_) {}
+        return 14;
+      }
+
+      function setDaysUI(d) {
+        currentDays = d;
+        document.querySelectorAll(".dash-range button").forEach((b) => {
+          b.classList.toggle("active", Number(b.dataset.days) === d);
+        });
+        try {
+          localStorage.setItem(DAYS_STORE, String(d));
+        } catch (_) {}
+      }
+
+      function fmtDelta(n) {
+        if (n == null || Number.isNaN(n)) return "";
+        if (n === 0) return `<div class="delta flat">= ayer</div>`;
+        if (n > 0) return `<div class="delta up">+${n} vs ayer</div>`;
+        return `<div class="delta down">${n} vs ayer</div>`;
+      }
+
+      function esc(s) {
+        return String(s || "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;");
+      }
+
       async function load() {
         const key = ($("#keyInput").value || "").trim();
         if (!key) {
           $("#msg").textContent = "Escribe la clave";
+          $("#msg").className = "dash-msg err";
           return;
         }
         $("#msg").textContent = "Cargando…";
+        $("#msg").className = "dash-msg";
         try {
           localStorage.setItem(KEY_STORE, key);
         } catch (_) {}
         try {
-          const res = await fetch("/api/stats?key=" + encodeURIComponent(key) + "&days=14");
+          const res = await fetch(
+            "/api/stats?key=" + encodeURIComponent(key) + "&days=" + currentDays
+          );
           if (!res.ok) {
             const err = await res.json().catch(() => ({}));
             $("#msg").textContent = err.detail || "Clave incorrecta o error";
+            $("#msg").className = "dash-msg err";
             return;
           }
           const data = await res.json();
-          $("#msg").textContent = "Actualizado · " + (data.today || "");
+          $("#msg").textContent =
+            "Actualizado · " + (data.today || "") + " · " + currentDays + " días";
+          $("#msg").className = "dash-msg ok";
           render(data);
         } catch (e) {
           $("#msg").textContent = "Error de red";
+          $("#msg").className = "dash-msg err";
         }
+      }
+
+      function renderChart(chart) {
+        const el = $("#chart");
+        if (!chart || !chart.length) {
+          el.innerHTML = "";
+          return;
+        }
+        const max = Math.max(
+          1,
+          ...chart.map((d) => Math.max(d.pageviews || 0, d.searches || 0))
+        );
+        el.innerHTML = chart
+          .map((d) => {
+            const pv = d.pageviews || 0;
+            const se = d.searches || 0;
+            const hPv = Math.max(2, Math.round((pv / max) * 90));
+            const hSe = Math.max(2, Math.round((se / max) * 90));
+            const lbl = String(d.day || "").slice(5); // MM-DD
+            return `<div class="bar-col" title="${esc(d.day)}: ${pv} visitas, ${se} búsquedas">
+              <div class="bar-stack">
+                <div class="bar se" style="height:${hSe}%"></div>
+                <div class="bar pv" style="height:${hPv}%"></div>
+              </div>
+              <span class="bar-lbl">${esc(lbl)}</span>
+            </div>`;
+          })
+          .join("");
+      }
+
+      function rankRows(items, labelKey) {
+        const max = Math.max(1, ...items.map((x) => x.n || 0));
+        return items
+          .map((x) => {
+            const pct = Math.round((100 * (x.n || 0)) / max);
+            return `<div class="stat-row">
+              <span style="min-width:0;flex:1">
+                <span>${esc(x[labelKey] || x.source || x.zip || x.lang || "—")}</span>
+                <div class="rank-bar"><span style="width:${pct}%"></span></div>
+              </span>
+              <span class="muted"><strong>${x.n || 0}</strong></span>
+            </div>`;
+          })
+          .join("");
       }
 
       function render(data) {
         const t = data.totals || {};
         $("#summaryCard").hidden = false;
+
+        const rate =
+          t.search_rate_period != null
+            ? t.search_rate_period + "%"
+            : t.search_rate_today != null
+              ? t.search_rate_today + "%"
+              : "—";
+
         $("#totals").innerHTML = `
-          <div class="stat-box"><div class="n">${t.pageviews_today || 0}</div><div class="l">Visitas hoy</div></div>
-          <div class="stat-box"><div class="n">${t.searches_today || 0}</div><div class="l">Búsquedas hoy</div></div>
-          <div class="stat-box"><div class="n">${t.pageviews || 0}</div><div class="l">Visitas total</div></div>
-          <div class="stat-box"><div class="n">${t.searches || 0}</div><div class="l">Búsquedas total</div></div>
+          <div class="stat-box hi">
+            <div class="n">${t.pageviews_today || 0}</div>
+            <div class="l">Visitas hoy</div>
+            ${fmtDelta(t.delta_views_vs_yesterday)}
+          </div>
+          <div class="stat-box hi">
+            <div class="n">${t.searches_today || 0}</div>
+            <div class="l">Búsquedas hoy</div>
+            ${fmtDelta(t.delta_searches_vs_yesterday)}
+          </div>
+          <div class="stat-box">
+            <div class="n">${t.pageviews_yesterday || 0}</div>
+            <div class="l">Visitas ayer</div>
+          </div>
+          <div class="stat-box">
+            <div class="n">${t.searches_yesterday || 0}</div>
+            <div class="l">Búsquedas ayer</div>
+          </div>
+          <div class="stat-box">
+            <div class="n">${t.pageviews_period || 0}</div>
+            <div class="l">Visitas (${currentDays}d)</div>
+          </div>
+          <div class="stat-box">
+            <div class="n">${t.searches_period || 0}</div>
+            <div class="l">Búsquedas (${currentDays}d)</div>
+          </div>
+          <div class="stat-box">
+            <div class="n">${rate}</div>
+            <div class="l">Ratio búsqueda / visita</div>
+          </div>
+          <div class="stat-box">
+            <div class="n">${t.pageviews || 0}</div>
+            <div class="l">Visitas total</div>
+          </div>
+          <div class="stat-box">
+            <div class="n">${t.searches || 0}</div>
+            <div class="l">Búsquedas total</div>
+          </div>
         `;
         $("#note").textContent = data.note || "";
 
+        const chart = data.chart || [];
         const days = data.by_day || [];
-        $("#daysCard").hidden = !days.length;
+        $("#chartCard").hidden = !chart.length && !days.length;
+        renderChart(chart);
         $("#byDay").innerHTML = days
           .map(
             (d) =>
-              `<div class="stat-row"><span>${d.day}</span><span>${d.pageviews || 0} visitas · ${d.searches || 0} búsquedas</span></div>`
+              `<div class="stat-row"><span>${esc(d.day)}</span><span class="muted">${d.pageviews || 0} visitas · ${d.searches || 0} búsquedas</span></div>`
           )
           .join("");
 
         const refs = data.top_referrers || [];
         $("#refsCard").hidden = !refs.length;
-        $("#refs").innerHTML = refs
-          .map((r) => `<div class="stat-row"><span>${r.source}</span><span>${r.n}</span></div>`)
-          .join("");
+        $("#refs").innerHTML = rankRows(refs, "source");
 
         const zips = data.top_search_details || [];
         $("#zipsCard").hidden = !zips.length;
-        $("#zips").innerHTML = zips
-          .map((z) => `<div class="stat-row"><span>${z.zip}</span><span>${z.n}</span></div>`)
-          .join("");
+        $("#zips").innerHTML = rankRows(zips, "zip");
+
+        const langs = data.top_langs || [];
+        $("#langsCard").hidden = !langs.length;
+        $("#langs").innerHTML = rankRows(langs, "lang");
 
         const recent = data.recent || [];
         $("#recentCard").hidden = !recent.length;
         $("#recent").innerHTML = recent
-          .map(
-            (r) =>
-              `<div class="stat-row"><span>${r.type} · ${r.detail} · ${r.from}</span><span>${r.day}</span></div>`
-          )
+          .map((r) => {
+            const kind = r.type === "search" ? "search" : "";
+            return `<div class="stat-row">
+              <span style="min-width:0">
+                <span class="pill ${kind}">${esc(r.type)}</span>
+                <span class="muted"> ${esc(r.detail)} · ${esc(r.from)} · ${esc(r.lang)}</span>
+              </span>
+              <span class="muted">${esc(r.day)}</span>
+            </div>`;
+          })
           .join("");
       }
 
@@ -192,6 +530,14 @@
       $("#keyInput").addEventListener("keydown", (e) => {
         if (e.key === "Enter") load();
       });
+      document.querySelectorAll(".dash-range button").forEach((b) => {
+        b.addEventListener("click", () => {
+          setDaysUI(Number(b.dataset.days));
+          load();
+        });
+      });
+
+      setDaysUI(loadSavedDays());
       const k = loadSavedKey();
       if (k) load();
     </script>
