@@ -734,8 +734,23 @@ a.btn-secondary:hover {
 .station-top {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   align-items: flex-start;
+}
+
+.station-logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  flex-shrink: 0;
+  object-fit: cover;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  background: #1a2332;
+}
+
+.station-info {
+  flex: 1;
+  min-width: 0;
 }
 
 .station-name {
@@ -793,6 +808,17 @@ a.btn-secondary:hover {
   gap: 4px;
   margin-top: 8px;
   flex-wrap: wrap;
+  padding-left: 50px; /* alinear bajo el texto (logo 40 + gap 10) */
+}
+
+@media (max-width: 380px) {
+  .station-logo {
+    width: 36px;
+    height: 36px;
+  }
+  .station-actions {
+    padding-left: 46px;
+  }
 }
 
 .rank {

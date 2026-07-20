@@ -516,6 +516,100 @@ function sourceBadgeHtml(s) {
   return `<span class="badge estimate">${t("estimated")}</span>`;
 }
 
+/** Slug de logo local /static/brands/{slug}.svg — genérico si no hay marca */
+const BRAND_LOGO_PATTERNS = [
+  ["sam's club", "sams-club"],
+  ["sams club", "sams-club"],
+  ["king soopers", "king-soopers"],
+  ["7-eleven", "7-eleven"],
+  ["7 eleven", "7-eleven"],
+  ["7-11", "7-eleven"],
+  ["circle k", "circle-k"],
+  ["phillips 66", "phillips-66"],
+  ["phillip 66", "phillips-66"],
+  ["phillips66", "phillips-66"],
+  ["diamond shamrock", "diamond-shamrock"],
+  ["murphy usa", "murphy"],
+  ["kum & go", "kum-go"],
+  ["kum and go", "kum-go"],
+  ["flying j", "flying-j"],
+  ["loaf 'n jug", "loaf-n-jug"],
+  ["loaf n jug", "loaf-n-jug"],
+  ["loaf'n jug", "loaf-n-jug"],
+  ["quiktrip", "quiktrip"],
+  ["quicktrip", "quiktrip"],
+  ["u pump it", "u-pump-it"],
+  ["upumpit", "u-pump-it"],
+  ["love's", "loves"],
+  ["loves", "loves"],
+  ["casey's", "caseys"],
+  ["caseys", "caseys"],
+  ["race trac", "racetrac"],
+  ["racetrac", "racetrac"],
+  ["raceway", "racetrac"],
+  ["shell", "shell"],
+  ["chevron", "chevron"],
+  ["exxon", "exxon"],
+  ["mobil", "mobil"],
+  ["arco", "arco"],
+  ["costco", "costco"],
+  ["walmart", "walmart"],
+  ["safeway", "safeway"],
+  ["conoco", "conoco"],
+  ["sinclair", "sinclair"],
+  ["valero", "valero"],
+  ["maverik", "maverik"],
+  ["holiday", "holiday"],
+  ["cenex", "cenex"],
+  ["texaco", "texaco"],
+  ["kroger", "kroger"],
+  ["murphy", "murphy"],
+  ["speedway", "speedway"],
+  ["pilot", "pilot"],
+  ["marathon", "marathon"],
+  ["sunoco", "sunoco"],
+  ["wawa", "wawa"],
+  ["sheetz", "sheetz"],
+  ["citgo", "citgo"],
+  ["getgo", "getgo"],
+  ["get go", "getgo"],
+  ["alon", "valero"],
+  ["qt", "quiktrip"],
+  ["bp", "bp"],
+];
+
+function brandLogoSlug(station) {
+  const blob = `${station?.brand || ""} ${station?.name || ""}`.toLowerCase();
+  for (const [needle, slug] of BRAND_LOGO_PATTERNS) {
+    if (needle === "bp") {
+      if (/(?:^|[^a-z])bp(?:[^a-z]|$)/.test(blob)) return slug;
+      continue;
+    }
+    if (needle === "qt") {
+      if (/(?:^|[^a-z])qt(?:[^a-z]|$)/.test(blob)) return slug;
+      continue;
+    }
+    if (blob.includes(needle)) return slug;
+  }
+  return "generic";
+}
+
+function brandLogoSrc(slug) {
+  const data = typeof BRAND_LOGO_DATA !== "undefined" ? BRAND_LOGO_DATA : null;
+  if (data && data[slug]) return data[slug];
+  if (data && data.generic) return data.generic;
+  // Fallback por si falta brand-logos.js (archivo estático)
+  return `/static/brands/${slug || "generic"}.svg?v=0.9.1`;
+}
+
+function brandLogoHtml(station) {
+  const slug = brandLogoSlug(station);
+  const label = station?.brand || station?.name || "Gas";
+  const src = brandLogoSrc(slug);
+  // data-URI inline — no depende de /static/brands ni de red
+  return `<img class="station-logo" src="${src}" width="40" height="40" alt="" decoding="async" data-brand="${escapeHtml(slug)}" title="${escapeHtml(label)}" onerror="this.onerror=null;if(window.BRAND_LOGO_DATA&amp;&amp;BRAND_LOGO_DATA.generic)this.src=BRAND_LOGO_DATA.generic" />`;
+}
+
 function rankClass(i) {
   if (i === 0) return "rank gold";
   if (i === 1) return "rank silver";
@@ -765,7 +859,8 @@ function render(data) {
       return `
       <article class="station" data-id="${escapeHtml(s.id)}">
         <div class="station-top">
-          <div>
+          ${brandLogoHtml(s)}
+          <div class="station-info">
             <p class="station-name"><span class="${rankClass(i)}">${i + 1}</span>${escapeHtml(s.name)}</p>
             <p class="station-sub">${brandBit}${s.distance_mi} mi ${src}</p>
             ${addr}

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="40" height="40" role="img">
+  <rect width="40" height="40" rx="10" fill="#DD1D21"/>
+  
+  <ellipse cx="20" cy="22" rx="11" ry="10" fill="#F7D117"/>
+  <path d="M12 18c2-6 6-9 8-9s6 3 8 9c-2 1-5 2-8 2s-6-1-8-2z" fill="#DD1D21"/>
+  <text x="20" y="26" text-anchor="middle" font-family="Arial Black,Arial,sans-serif" font-size="9" font-weight="800" fill="#DD1D21">S</text>
+
+</svg>
