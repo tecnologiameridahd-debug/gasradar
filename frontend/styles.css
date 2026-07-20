@@ -513,11 +513,30 @@ a.btn-secondary:hover {
   background: #2a3a58;
 }
 
-.btn-ghost {
+/* Ghost: botones e <a> (Cómo llegar) — mismos curvos que Compartir */
+.btn-ghost,
+a.btn-ghost,
+button.btn-ghost {
   background: transparent;
-  color: var(--blue);
-  padding: 8px 10px;
-  border: 1px solid transparent;
+  color: var(--blue) !important;
+  padding: 8px 12px;
+  border: 1px solid transparent !important;
+  border-radius: 999px !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none !important;
+  font-weight: 600;
+  line-height: 1.25;
+  box-sizing: border-box;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.station-actions .btn-ghost,
+.station-actions a.btn-ghost {
+  border-radius: 999px !important;
+  min-height: 34px;
 }
 
 /* PWA: Instalar app */
@@ -559,9 +578,13 @@ a.btn-secondary:hover {
   }
 }
 
-.btn-ghost:hover {
+.btn-ghost:hover,
+a.btn-ghost:hover,
+button.btn-ghost:hover {
   background: var(--blue-soft);
-  border-color: rgba(56, 189, 248, 0.2);
+  border-color: rgba(56, 189, 248, 0.2) !important;
+  color: var(--blue) !important;
+  text-decoration: none !important;
 }
 
 .btn-gps {
