@@ -934,6 +934,50 @@ function render(data) {
       if (st) sharePrice(st);
     });
   });
+
+  // Resaltado al tocar la tarjeta (feedback tipo “entrar”, sin mapa)
+  bindStationPressFeedback($("#results"));
+}
+
+function bindStationPressFeedback(root) {
+  if (!root) return;
+  const clear = (el) => el && el.classList.remove("is-pressed");
+
+  root.querySelectorAll(".station").forEach((card) => {
+    const isAction = (t) =>
+      t && (t.closest("a") || t.closest("button") || t.closest("input"));
+
+    card.addEventListener(
+      "pointerdown",
+      (e) => {
+        if (e.button != null && e.button !== 0) return;
+        if (isAction(e.target)) return;
+        card.classList.add("is-pressed");
+      },
+      { passive: true }
+    );
+    card.addEventListener(
+      "pointerup",
+      () => clear(card),
+      { passive: true }
+    );
+    card.addEventListener(
+      "pointercancel",
+      () => clear(card),
+      { passive: true }
+    );
+    card.addEventListener(
+      "pointerleave",
+      () => clear(card),
+      { passive: true }
+    );
+    // si el dedo se mueve (scroll), quitar resaltado
+    card.addEventListener(
+      "touchmove",
+      () => clear(card),
+      { passive: true }
+    );
+  });
 }
 
 function escapeHtml(s) {
@@ -1244,6 +1288,29 @@ function bind() {
   });
 
   setupPullToRefresh();
+  bindBestCardPress();
+}
+
+function bindBestCardPress() {
+  const card = $("#bestCard");
+  if (!card) return;
+  const clear = () => card.classList.remove("is-pressed");
+  const isAction = (t) =>
+    t && (t.closest("a") || t.closest("button") || t.closest("input"));
+
+  card.addEventListener(
+    "pointerdown",
+    (e) => {
+      if (e.button != null && e.button !== 0) return;
+      if (isAction(e.target)) return;
+      card.classList.add("is-pressed");
+    },
+    { passive: true }
+  );
+  card.addEventListener("pointerup", clear, { passive: true });
+  card.addEventListener("pointercancel", clear, { passive: true });
+  card.addEventListener("pointerleave", clear, { passive: true });
+  card.addEventListener("touchmove", clear, { passive: true });
 }
 
 /* ——— Pull-to-refresh estilo GasBuddy ——— */
