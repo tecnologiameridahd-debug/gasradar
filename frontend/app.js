@@ -325,6 +325,17 @@ function money(n) {
   return `$${Number(n).toFixed(2)}`;
 }
 
+/** Precio estilo GasBuddy: recuadro + dólares grandes + centavos arriba */
+function priceBoxHtml(n, { large = false } = {}) {
+  const cls = large ? "price-box large" : "price-box";
+  if (n == null || Number.isNaN(Number(n))) {
+    return `<div class="${cls}"><span class="price-whole">—</span></div>`;
+  }
+  const fixed = Number(n).toFixed(2);
+  const [whole, cents] = fixed.split(".");
+  return `<div class="${cls}" title="${money(n)}"><span class="price-currency">$</span><span class="price-whole">${whole}</span><span class="price-cents">${cents}</span></div>`;
+}
+
 function fuelLabel(fuel) {
   const map = {
     regular: "Regular",
@@ -774,7 +785,7 @@ function render(data) {
     const b = data.cheapest;
     state.cheapest = b;
     $("#bestCard").hidden = false;
-    $("#bestPrice").textContent = money(b.price);
+    $("#bestPrice").innerHTML = priceBoxHtml(b.price, { large: true });
     $("#bestName").textContent = b.name;
     const conf = b.source === "user" ? t("reportedPrice") : t("estimated");
     $("#bestMeta").textContent = `${b.distance_mi} mi · ${conf}`;
@@ -866,7 +877,7 @@ function render(data) {
             ${addr}
           </div>
           <div class="station-price-col">
-            <div class="station-price">${money(s.price)}</div>
+            ${priceBoxHtml(s.price)}
             ${vsAvgHtml(s.vs_avg)}
           </div>
         </div>
