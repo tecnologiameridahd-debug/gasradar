@@ -48,7 +48,7 @@
     <link rel="icon" href="/static/favicon-64.png?v=0.2.9" type="image/png" sizes="64x64" />
     <link rel="apple-touch-icon" href="/static/logo-192.png?v=0.5.0" sizes="192x192" />
     <link rel="apple-touch-icon" href="/static/logo-512.png?v=0.5.0" sizes="512x512" />
-    <link rel="stylesheet" href="/static/styles.css?v=0.9.3" />
+    <link rel="stylesheet" href="/static/styles.css?v=0.9.4" />
   </head>
   <body>
     <div class="social-fabs" aria-label="Redes sociales">
@@ -84,7 +84,12 @@
       </a>
     </div>
 
-    <div class="app">
+    <div class="app" id="appRoot">
+      <!-- Pull-to-refresh (estilo GasBuddy) -->
+      <div class="ptr" id="ptr" aria-hidden="true">
+        <div class="ptr-ring" id="ptrRing" aria-hidden="true"></div>
+        <span class="ptr-label" id="ptrLabel"></span>
+      </div>
       <header class="top">
         <div class="brand">
           <img
@@ -319,6 +324,6 @@
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script src="/static/brand-logos.js?v=0.9.1"></script>
-    <script src="/static/app.js?v=0.9.3"></script>
+    <script src="/static/app.js?v=0.9.4"></script>
   </body>
 </html>

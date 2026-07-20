@@ -95,6 +95,10 @@ const I18N = {
     telegramAlerts: "Alertas",
     trustpilotReview: "Deja una reseña",
     buyMeCoffee: "Apóyame",
+    pullHint: "Desliza para actualizar",
+    pullRelease: "Suelta para actualizar",
+    pullRefreshing: "Actualizando precios…",
+    pullDone: "Precios actualizados",
   },
   en: {
     subtitle: "Cheapest gas near you",
@@ -186,6 +190,10 @@ const I18N = {
     telegramAlerts: "Alerts",
     trustpilotReview: "Leave a review",
     buyMeCoffee: "Support",
+    pullHint: "Pull to refresh",
+    pullRelease: "Release to refresh",
+    pullRefreshing: "Updating prices…",
+    pullDone: "Prices updated",
   },
 };
 
@@ -671,23 +679,34 @@ function applySearchData(data, { zip } = {}) {
   render(data);
 }
 
-async function search({ lat, lon, zip } = {}) {
+async function search({ lat, lon, zip, force = false, soft = false } = {}) {
   if (state.searching) return;
 
   const memKey = searchMemKey({ lat, lon, zip });
-  const memHit = _searchMem.get(memKey);
-  if (memHit && Date.now() - memHit.ts < SEARCH_MEM_MS && memHit.data) {
-    applySearchData(memHit.data, { zip });
-    return;
+  if (force) {
+    try {
+      _searchMem.delete(memKey);
+    } catch (_) {
+      /* ignore */
+    }
+  } else {
+    const memHit = _searchMem.get(memKey);
+    if (memHit && Date.now() - memHit.ts < SEARCH_MEM_MS && memHit.data) {
+      applySearchData(memHit.data, { zip });
+      return;
+    }
   }
 
   setBusy(true);
-  setStatus(t("searching"), "loading");
-  $("#results").innerHTML = "";
-  const bestCard = $("#bestCard");
-  if (bestCard) bestCard.hidden = true;
-  const head = $("#resultsHead");
-  if (head) head.hidden = true;
+  // soft = pull-to-refresh: no vaciar lista (como GasBuddy)
+  if (!soft) {
+    setStatus(t("searching"), "loading");
+    $("#results").innerHTML = "";
+    const bestCard = $("#bestCard");
+    if (bestCard) bestCard.hidden = true;
+    const head = $("#resultsHead");
+    if (head) head.hidden = true;
+  }
 
   const params = new URLSearchParams();
   params.set("fuel", state.fuel);
@@ -730,11 +749,16 @@ async function search({ lat, lon, zip } = {}) {
     applySearchData(data, { zip });
   } catch (e) {
     clearTimeout(timer);
-    setLocDot("off");
-    if (e && e.name === "AbortError") {
-      setStatus(t("timeout"), "error");
+    if (soft) {
+      // pull-to-refresh: mantener lista y avisar
+      showToast(e && e.name === "AbortError" ? t("timeout") : e.message || t("searchError"));
     } else {
-      setStatus(e.message || t("searchError"), "error");
+      setLocDot("off");
+      if (e && e.name === "AbortError") {
+        setStatus(t("timeout"), "error");
+      } else {
+        setStatus(e.message || t("searchError"), "error");
+      }
     }
   } finally {
     setBusy(false);
@@ -1218,6 +1242,167 @@ function bind() {
       closeReport();
     }
   });
+
+  setupPullToRefresh();
+}
+
+/* ——— Pull-to-refresh estilo GasBuddy ——— */
+function setupPullToRefresh() {
+  const ptr = $("#ptr");
+  const label = $("#ptrLabel");
+  const ring = $("#ptrRing");
+  if (!ptr) return;
+
+  const THRESHOLD = 70;
+  const MAX = 118;
+  let startY = 0;
+  let pulling = false;
+  let armed = false;
+  let dist = 0;
+  let refreshing = false;
+
+  function pageScrollTop() {
+    return window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+  }
+
+  function setPtr(px, mode) {
+    dist = px;
+    const ready = px >= THRESHOLD;
+    ptr.classList.toggle("visible", px > 4 || mode === "refreshing");
+    ptr.classList.toggle("ready", ready && mode !== "refreshing");
+    ptr.classList.toggle("refreshing", mode === "refreshing");
+    ptr.style.setProperty("--ptr-pull", `${Math.min(MAX, px)}px`);
+    if (ring) {
+      // anillo que se llena al tirar
+      const p = Math.min(1, px / THRESHOLD);
+      ring.style.setProperty("--ptr-p", String(p));
+      if (mode === "refreshing") {
+        ring.style.transform = "";
+      } else {
+        ring.style.transform = `rotate(${p * 280}deg)`;
+      }
+    }
+    if (label) {
+      if (mode === "refreshing") label.textContent = t("pullRefreshing");
+      else if (ready) label.textContent = t("pullRelease");
+      else label.textContent = t("pullHint");
+    }
+  }
+
+  function resetPtr(animate) {
+    if (animate) ptr.classList.add("snap");
+    else ptr.classList.remove("snap");
+    setPtr(0, "idle");
+    if (animate) {
+      setTimeout(() => ptr.classList.remove("snap"), 280);
+    }
+  }
+
+  async function refreshFromPull() {
+    if (refreshing || state.searching) {
+      resetPtr(true);
+      return;
+    }
+    if (state.lat == null && !state.zip) {
+      resetPtr(true);
+      showToast(t("searchFirst"));
+      return;
+    }
+
+    refreshing = true;
+    setPtr(Math.min(THRESHOLD + 8, MAX * 0.72), "refreshing");
+    document.body.classList.add("ptr-busy");
+
+    try {
+      await search({
+        lat: state.lat,
+        lon: state.lon,
+        zip: state.zip || undefined,
+        force: true,
+        soft: true,
+      });
+      showToast(t("pullDone"));
+    } catch (_) {
+      /* search ya muestra error */
+    } finally {
+      refreshing = false;
+      document.body.classList.remove("ptr-busy");
+      resetPtr(true);
+    }
+  }
+
+  document.addEventListener(
+    "touchstart",
+    (e) => {
+      if (refreshing || state.searching) return;
+      if ($("#modal")?.classList.contains("open")) return;
+      if (pageScrollTop() > 4) {
+        armed = false;
+        pulling = false;
+        return;
+      }
+      // no activar en inputs / selects
+      const tag = (e.target && e.target.tagName) || "";
+      if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA" || e.target.isContentEditable) {
+        armed = false;
+        return;
+      }
+      startY = e.touches[0].clientY;
+      armed = true;
+      pulling = false;
+      dist = 0;
+    },
+    { passive: true }
+  );
+
+  document.addEventListener(
+    "touchmove",
+    (e) => {
+      if (!armed || refreshing) return;
+      if (pageScrollTop() > 4) {
+        armed = false;
+        if (pulling) resetPtr(false);
+        pulling = false;
+        return;
+      }
+      const dy = e.touches[0].clientY - startY;
+      if (dy < 8) {
+        if (pulling && dy <= 0) {
+          pulling = false;
+          resetPtr(false);
+        }
+        return;
+      }
+      // resistencia tipo goma (GasBuddy)
+      const resisted = Math.min(MAX, dy * 0.42);
+      pulling = true;
+      setPtr(resisted, "pull");
+      // bloquear scroll nativo mientras tiramos
+      if (resisted > 6) {
+        try {
+          e.preventDefault();
+        } catch (_) {
+          /* ignore */
+        }
+      }
+    },
+    { passive: false }
+  );
+
+  const endPull = () => {
+    if (!armed && !pulling) return;
+    armed = false;
+    if (!pulling) return;
+    pulling = false;
+    if (dist >= THRESHOLD && !refreshing) {
+      refreshFromPull();
+    } else {
+      resetPtr(true);
+    }
+  };
+
+  document.addEventListener("touchend", endPull, { passive: true });
+  document.addEventListener("touchcancel", endPull, { passive: true });
 }
 
 function trackVisit() {
