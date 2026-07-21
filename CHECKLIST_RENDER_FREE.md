@@ -74,15 +74,17 @@ git push origin main
 
 ## Cron de precios (scrapers propios, gratis)
 
-### 1) AAA diario (recomendado) — promedios estado/metro
-Más cercanos a la calle que EIA.
+### 1) AAA diario — **todo USA** (recomendado)
+Promedios de **50 estados + metros** (Denver, LA, NYC…). Cualquier ZIP.
 
 ```
 https://gasradarapp.com/api/cron/aaa?key=gasradar2026
 ```
 
 - Method: **GET**  
-- Schedule: **Every day** ~14:00 UTC  
+- Schedule: **Every day** ~15:00 UTC (puede tardar 2–5 min)  
+- Versión rápida (solo estados top + tabla nacional):  
+  `https://gasradarapp.com/api/cron/aaa?key=gasradar2026&full=0`
 
 ### 2) EIA semanal — respaldo oficial
 
@@ -92,9 +94,15 @@ https://gasradarapp.com/api/eia/refresh?key=gasradar2026
 
 - Schedule: **Every Monday**  
 
-### ¿Cualquier ZIP?
+### ¿Cualquier ZIP de USA?
 
-Sí: ZIP → ciudad/estado → promedio **AAA metro** o estado (o EIA) + marca.
+**Sí.** Flujo:
+
+1. ZIP → ciudad + estado (ej. 90210 → Beverly Hills, CA)  
+2. Si hay **metro AAA** (Los Angeles, Denver…) → ese promedio  
+3. Si no → **promedio del estado AAA**  
+4. + ajuste por marca (Shell, Costco…)  
+5. Si alguien **reportó** → precio de esa bomba / zona
 
 ### Precios más rápidos
 

@@ -1,5 +1,5 @@
 {
-  "ts": 1784611553.2428005,
+  "ts": 1784611933.4639764,
   "ok": true,
   "states": {
     "AK": {
@@ -49,8 +49,8 @@
       "diesel": 6.701,
       "source": "aaa",
       "ok": true,
-      "ts": 1784611553.7370787,
-      "state_name": "California"
+      "ts": 1784611933.73904,
+      "state": "CA"
     },
     "CO": {
       "regular": 3.955,
@@ -59,7 +59,7 @@
       "diesel": 4.829,
       "source": "aaa",
       "ok": true,
-      "ts": 1784611554.0182872,
+      "ts": 1784611933.456904,
       "state": "CO"
     },
     "CT": {
@@ -513,6 +513,458 @@
       "state_name": "Wyoming"
     }
   },
-  "metros": {},
+  "metros": {
+    "CO:boulder-longmont": {
+      "regular": 3.987,
+      "mid": 4.433,
+      "premium": 4.727,
+      "diesel": 4.854,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.456904,
+      "state": "CO",
+      "metro_name": "Boulder-Longmont"
+    },
+    "CO:colorado springs": {
+      "regular": 3.821,
+      "mid": 4.225,
+      "premium": 4.557,
+      "diesel": 4.745,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.456904,
+      "state": "CO",
+      "metro_name": "Colorado Springs"
+    },
+    "CO:denver": {
+      "regular": 3.9,
+      "mid": 4.334,
+      "premium": 4.667,
+      "diesel": 4.782,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.456904,
+      "state": "CO",
+      "metro_name": "Denver"
+    },
+    "CO:fort collins-loveland": {
+      "regular": 3.949,
+      "mid": 4.366,
+      "premium": 4.694,
+      "diesel": 4.79,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.456904,
+      "state": "CO",
+      "metro_name": "Fort Collins-Loveland"
+    },
+    "CO:pueblo": {
+      "regular": 3.771,
+      "mid": 4.155,
+      "premium": 4.518,
+      "diesel": 4.704,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.456904,
+      "state": "CO",
+      "metro_name": "Pueblo"
+    },
+    "CO:grand junction": {
+      "regular": 3.989,
+      "mid": 4.309,
+      "premium": 4.645,
+      "diesel": 4.944,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.456904,
+      "state": "CO",
+      "metro_name": "Grand Junction"
+    },
+    "CO:durango": {
+      "regular": 4.404,
+      "mid": 4.625,
+      "premium": 4.952,
+      "diesel": 5.054,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.456904,
+      "state": "CO",
+      "metro_name": "Durango"
+    },
+    "CO:glenwood springs": {
+      "regular": 4.609,
+      "mid": 5.07,
+      "premium": 5.337,
+      "diesel": 5.12,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.456904,
+      "state": "CO",
+      "metro_name": "Glenwood Springs"
+    },
+    "CO:greeley": {
+      "regular": 3.825,
+      "mid": 4.192,
+      "premium": 4.503,
+      "diesel": 4.735,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.456904,
+      "state": "CO",
+      "metro_name": "Greeley"
+    },
+    "CO:vail": {
+      "regular": 4.374,
+      "mid": 4.717,
+      "premium": 4.925,
+      "diesel": 4.839,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.456904,
+      "state": "CO",
+      "metro_name": "Vail"
+    },
+    "CA:bakersfield": {
+      "regular": 5.607,
+      "mid": 5.779,
+      "premium": 6.084,
+      "diesel": 6.6,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.73904,
+      "state": "CA",
+      "metro_name": "Bakersfield"
+    },
+    "CA:chico-paradise": {
+      "regular": 5.325,
+      "mid": 5.49,
+      "premium": 5.732,
+      "diesel": 6.417,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.73904,
+      "state": "CA",
+      "metro_name": "Chico-Paradise"
+    },
+    "CA:fresno": {
+      "regular": 5.396,
+      "mid": 5.596,
+      "premium": 5.847,
+      "diesel": 6.59,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.73904,
+      "state": "CA",
+      "metro_name": "Fresno"
+    },
+    "CA:los angeles-long beach": {
+      "regular": 5.543,
+      "mid": 5.746,
+      "premium": 5.939,
+      "diesel": 6.887,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.73904,
+      "state": "CA",
+      "metro_name": "Los Angeles-Long Beach"
+    },
+    "CA:merced": {
+      "regular": 5.437,
+      "mid": 5.708,
+      "premium": 5.916,
+      "diesel": 6.908,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.73904,
+      "state": "CA",
+      "metro_name": "Merced"
+    },
+    "CA:modesto": {
+      "regular": 5.326,
+      "mid": 5.554,
+      "premium": 5.804,
+      "diesel": 6.533,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.73904,
+      "state": "CA",
+      "metro_name": "Modesto"
+    },
+    "CA:oakland": {
+      "regular": 5.499,
+      "mid": 5.741,
+      "premium": 5.958,
+      "diesel": 6.625,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.73904,
+      "state": "CA",
+      "metro_name": "Oakland"
+    },
+    "CA:orange county": {
+      "regular": 5.479,
+      "mid": 5.691,
+      "premium": 5.861,
+      "diesel": 6.776,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.73904,
+      "state": "CA",
+      "metro_name": "Orange County"
+    },
+    "CA:redding": {
+      "regular": 5.343,
+      "mid": 5.468,
+      "premium": 5.712,
+      "diesel": 6.429,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.73904,
+      "state": "CA",
+      "metro_name": "Redding"
+    },
+    "CA:riverside": {
+      "regular": 5.404,
+      "mid": 5.636,
+      "premium": 5.817,
+      "diesel": 6.728,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.73904,
+      "state": "CA",
+      "metro_name": "Riverside"
+    },
+    "CA:sacramento": {
+      "regular": 5.443,
+      "mid": 5.684,
+      "premium": 5.912,
+      "diesel": 6.562,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.73904,
+      "state": "CA",
+      "metro_name": "Sacramento"
+    },
+    "CA:salinas": {
+      "regular": 5.619,
+      "mid": 5.756,
+      "premium": 6.009,
+      "diesel": 6.686,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.73904,
+      "state": "CA",
+      "metro_name": "Salinas"
+    },
+    "CA:san diego": {
+      "regular": 5.571,
+      "mid": 5.766,
+      "premium": 5.967,
+      "diesel": 6.72,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.73904,
+      "state": "CA",
+      "metro_name": "San Diego"
+    },
+    "CA:san francisco": {
+      "regular": 5.691,
+      "mid": 5.857,
+      "premium": 6.082,
+      "diesel": 6.845,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.73904,
+      "state": "CA",
+      "metro_name": "San Francisco"
+    },
+    "CA:san jose": {
+      "regular": 5.503,
+      "mid": 5.745,
+      "premium": 5.925,
+      "diesel": 6.666,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.73904,
+      "state": "CA",
+      "metro_name": "San Jose"
+    },
+    "CA:san luis obispo-atascadero-paso robles": {
+      "regular": 5.79,
+      "mid": 5.956,
+      "premium": 6.168,
+      "diesel": 6.91,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.73904,
+      "state": "CA",
+      "metro_name": "San Luis Obispo-Atascadero-Paso Robles"
+    },
+    "CA:santa barbara-santa maria-lompoc": {
+      "regular": 5.596,
+      "mid": 5.763,
+      "premium": 5.988,
+      "diesel": 6.826,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.73904,
+      "state": "CA",
+      "metro_name": "Santa Barbara-Santa Maria-Lompoc"
+    },
+    "CA:santa cruz-watsonville": {
+      "regular": 5.569,
+      "mid": 5.826,
+      "premium": 6.014,
+      "diesel": 6.784,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.73904,
+      "state": "CA",
+      "metro_name": "Santa Cruz-Watsonville"
+    },
+    "CA:santa rosa": {
+      "regular": 5.645,
+      "mid": 5.825,
+      "premium": 6.036,
+      "diesel": 6.729,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.73904,
+      "state": "CA",
+      "metro_name": "Santa Rosa"
+    },
+    "CA:stockton-lodi": {
+      "regular": 5.309,
+      "mid": 5.566,
+      "premium": 5.796,
+      "diesel": 6.483,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.73904,
+      "state": "CA",
+      "metro_name": "Stockton-Lodi"
+    },
+    "CA:vallejo-fairfield": {
+      "regular": 5.361,
+      "mid": 5.616,
+      "premium": 5.809,
+      "diesel": 6.529,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.73904,
+      "state": "CA",
+      "metro_name": "Vallejo-Fairfield"
+    },
+    "CA:ventura": {
+      "regular": 5.454,
+      "mid": 5.684,
+      "premium": 5.886,
+      "diesel": 6.772,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.73904,
+      "state": "CA",
+      "metro_name": "Ventura"
+    },
+    "CA:visalia-tulare-porterville": {
+      "regular": 5.401,
+      "mid": 5.575,
+      "premium": 5.872,
+      "diesel": 6.51,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.73904,
+      "state": "CA",
+      "metro_name": "Visalia-Tulare-Porterville"
+    },
+    "CA:yolo": {
+      "regular": 5.384,
+      "mid": 5.585,
+      "premium": 5.858,
+      "diesel": 6.55,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.73904,
+      "state": "CA",
+      "metro_name": "Yolo"
+    },
+    "CA:yuba city": {
+      "regular": 5.16,
+      "mid": 5.3,
+      "premium": 5.487,
+      "diesel": 6.421,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.73904,
+      "state": "CA",
+      "metro_name": "Yuba City"
+    },
+    "CA:el centro": {
+      "regular": 5.262,
+      "mid": 5.413,
+      "premium": 5.583,
+      "diesel": 6.584,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.73904,
+      "state": "CA",
+      "metro_name": "El Centro"
+    },
+    "CA:hanford-corcoran": {
+      "regular": 5.322,
+      "mid": 5.547,
+      "premium": 5.816,
+      "diesel": 6.367,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.73904,
+      "state": "CA",
+      "metro_name": "Hanford-Corcoran"
+    },
+    "CA:madera-chowchilla": {
+      "regular": 5.473,
+      "mid": 5.764,
+      "premium": 6.087,
+      "diesel": 6.475,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.73904,
+      "state": "CA",
+      "metro_name": "Madera-Chowchilla"
+    },
+    "CA:napa": {
+      "regular": 5.624,
+      "mid": 5.819,
+      "premium": 6.046,
+      "diesel": 6.605,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.73904,
+      "state": "CA",
+      "metro_name": "Napa"
+    },
+    "CA:san bernardino": {
+      "regular": 5.421,
+      "mid": 5.62,
+      "premium": 5.844,
+      "diesel": 6.707,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.73904,
+      "state": "CA",
+      "metro_name": "San Bernardino"
+    },
+    "CA:san rafael": {
+      "regular": 5.657,
+      "mid": 5.86,
+      "premium": 6.063,
+      "diesel": 6.848,
+      "source": "aaa_metro",
+      "ok": true,
+      "ts": 1784611933.73904,
+      "state": "CA",
+      "metro_name": "San Rafael"
+    }
+  },
   "source": "aaa"
 }

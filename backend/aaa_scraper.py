@@ -193,9 +193,30 @@ def fetch_aaa_state_table() -> dict[str, dict]:
     return out
 
 
+def _avg_from_current_row(texts: list[list[str]], now: float, st: str) -> dict | None:
+    for cells in texts:
+        if not cells or len(cells) < 5:
+            continue
+        if "current" in cells[0].lower() and "avg" in cells[0].lower():
+            reg = _parse_usd(cells[1])
+            if reg is None:
+                return None
+            return {
+                "regular": reg,
+                "mid": _parse_usd(cells[2]) or round(reg + 0.30, 3),
+                "premium": _parse_usd(cells[3]) or round(reg + 0.55, 3),
+                "diesel": _parse_usd(cells[4]) or round(reg + 0.40, 3),
+                "source": "aaa",
+                "ok": True,
+                "ts": now,
+                "state": st,
+            }
+    return None
+
+
 def fetch_aaa_state_detail(state: str) -> dict:
     """
-    Página de estado: current avg + metros.
+    Página de estado: current avg + metros (h3 + tabla Current Avg).
     Returns { state: {...}, metros: { "colorado springs": {...}, ... } }
     """
     st = (state or "CO").upper().strip()
@@ -212,76 +233,76 @@ def fetch_aaa_state_detail(state: str) -> dict:
     state_avg = None
     metros: dict[str, dict] = {}
 
-    # Primera tabla con "Current Avg."
+    # Primera tabla "Current Avg." = promedio del estado
     for table in soup.find_all("table"):
         rows = table.find_all("tr")
-        texts = [[c.get_text(strip=True) for c in row.find_all(["td", "th"])] for row in rows]
+        texts = [
+            [c.get_text(strip=True) for c in row.find_all(["td", "th"])] for row in rows
+        ]
         flat = " ".join(" ".join(r) for r in texts).lower()
         if "current avg" in flat and state_avg is None:
-            for cells in texts:
-                if cells and "current" in cells[0].lower() and len(cells) >= 5:
-                    reg = _parse_usd(cells[1])
-                    if reg:
-                        state_avg = {
-                            "regular": reg,
-                            "mid": _parse_usd(cells[2]) or round(reg + 0.30, 3),
-                            "premium": _parse_usd(cells[3]) or round(reg + 0.55, 3),
-                            "diesel": _parse_usd(cells[4]) or round(reg + 0.40, 3),
-                            "source": "aaa",
-                            "ok": True,
-                            "ts": now,
-                            "state": st,
-                        }
-                    break
+            state_avg = _avg_from_current_row(texts, now, st)
+            if state_avg:
+                state_avg["source"] = "aaa"
+            break
 
-    # Metros: filas con nombre de ciudad y 4 precios
-    # Heurística: celdas tipo ["Colorado Springs", "$3.82", ...]
-    for table in soup.find_all("table"):
-        for row in table.find_all("tr"):
-            cells = [c.get_text(strip=True) for c in row.find_all(["td", "th"])]
-            if len(cells) < 5:
-                continue
-            name = cells[0].strip()
-            if not name or name.lower() in (
-                "current avg.",
-                "yesterday avg.",
-                "week ago avg.",
-                "month ago avg.",
-                "year ago avg.",
-                "regular",
-                "",
-            ):
-                continue
-            if "avg" in name.lower() or "price" in name.lower():
-                continue
-            reg = _parse_usd(cells[1])
-            mid = _parse_usd(cells[2])
-            prem = _parse_usd(cells[3])
-            diesel = _parse_usd(cells[4])
-            if reg is None:
-                continue
-            # ciudad / metro (no un estado suelto)
-            key = re.sub(r"\s+", " ", name.lower()).strip()
-            if len(key) < 3:
-                continue
-            metros[key] = {
-                "regular": reg,
-                "mid": mid if mid is not None else round(reg + 0.30, 3),
-                "premium": prem if prem is not None else round(reg + 0.55, 3),
-                "diesel": diesel if diesel is not None else round(reg + 0.40, 3),
-                "source": "aaa_metro",
-                "ok": True,
-                "ts": now,
-                "metro_name": name,
-                "state": st,
-            }
+    # Metros: <h3>Ciudad</h3> seguido de tabla con Current Avg.
+    skip_h3 = {
+        "compare states",
+        "national average",
+        "state average",
+        "fuel price averages",
+    }
+    for h3 in soup.find_all("h3"):
+        name = h3.get_text(strip=True)
+        if not name or len(name) < 2:
+            continue
+        if name.lower() in skip_h3:
+            continue
+        # tabla siguiente
+        table = h3.find_next("table")
+        if not table:
+            continue
+        texts = [
+            [c.get_text(strip=True) for c in row.find_all(["td", "th"])]
+            for row in table.find_all("tr")
+        ]
+        flat = " ".join(" ".join(r) for r in texts).lower()
+        if "current avg" not in flat:
+            continue
+        avg = _avg_from_current_row(texts, now, st)
+        if not avg:
+            continue
+        # limpiar " (CO only)" etc.
+        clean = re.sub(r"\s*\([^)]*\)\s*", " ", name).strip()
+        clean = re.sub(r"\s+", " ", clean)
+        key = clean.lower()
+        avg["source"] = "aaa_metro"
+        avg["metro_name"] = clean
+        metros[key] = avg
 
-    print(f"[aaa] detail {st} avg={state_avg and state_avg.get('regular')} metros={len(metros)}")
+    print(
+        f"[aaa] detail {st} avg={state_avg and state_avg.get('regular')} metros={len(metros)}"
+    )
     return {"state": state_avg, "metros": metros}
 
 
-def refresh_aaa(states: list[str] | None = None) -> dict:
-    """Actualiza caché AAA (tabla + detalles de estados clave)."""
+# Todos los estados + DC (cualquier ZIP USA)
+US_STATE_CODES: list[str] = [
+    "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "DC", "FL",
+    "GA", "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME",
+    "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH",
+    "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI",
+    "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
+]
+
+
+def refresh_aaa(states: list[str] | None = None, full_usa: bool = True) -> dict:
+    """
+    Actualiza caché AAA para TODO USA.
+    1) Tabla nacional (50 estados + DC) en 1 request
+    2) Páginas de detalle (metros) para estados pedidos o todos si full_usa
+    """
     if not _enabled():
         return {"ok": False, "disabled": True}
 
@@ -290,19 +311,31 @@ def refresh_aaa(states: list[str] | None = None) -> dict:
     states_map = dict(disk.get("states") or {})
     metros_map = dict(disk.get("metros") or {})
 
+    # 1) Una sola página = cobertura nacional
     table = fetch_aaa_state_table()
     for k, v in table.items():
         states_map[k] = v
 
-    want = states or ["CO", "CA", "TX", "FL", "NY", "AZ", "NV", "WA", "IL", "GA"]
-    for st in want:
+    # 2) Detalle + metros: full USA o lista
+    if states is not None:
+        want = list(states)
+    elif full_usa:
+        want = list(US_STATE_CODES)
+    else:
+        want = ["CO", "CA", "TX", "FL", "NY", "AZ", "NV", "WA", "IL", "GA"]
+
+    detail_ok = 0
+    for i, st in enumerate(want):
         try:
             det = fetch_aaa_state_detail(st)
             if det.get("state"):
+                # preferir detalle del estado si es más fresco
                 states_map[st] = det["state"]
+                detail_ok += 1
             for mk, mv in (det.get("metros") or {}).items():
                 metros_map[f"{st}:{mk}"] = mv
-            time.sleep(0.4)  # ser educados
+            # ritmo educado (todo USA ~51 páginas)
+            time.sleep(0.35 if full_usa or len(want) > 15 else 0.25)
         except Exception as e:
             print(f"[aaa] detail {st}: {e}")
 
@@ -312,14 +345,18 @@ def refresh_aaa(states: list[str] | None = None) -> dict:
         "states": states_map,
         "metros": metros_map,
         "source": "aaa",
+        "covers": "all_us_states",
     }
+    _mem.clear()
     _mem.update(payload)
     _save_disk(payload)
     return {
         "ok": payload["ok"],
         "states": len(states_map),
         "metros": len(metros_map),
+        "details_ok": detail_ok,
         "co_regular": (states_map.get("CO") or {}).get("regular"),
+        "covers": "USA — cualquier ZIP → estado AAA (+ metro si hay)",
     }
 
 
@@ -328,48 +365,101 @@ def get_aaa_averages(
     city: str | None = None,
 ) -> dict | None:
     """
-    Promedios AAA para un estado (y metro si hay match de city).
-    Lee caché; si no hay o está vieja, refresca en caliente (solo ese estado).
+    Promedios AAA para cualquier estado USA (y metro si hay match de city).
+    Caché disco/mem; si falta el estado, descarga tabla nacional o detalle.
     """
     if not _enabled():
         return None
     st = (state or "CO").upper().strip()
+    if st in ("DEFAULT", "US", "USA"):
+        st = "CO"  # no hay "US" en AAA table de estados; se usa fallback national abajo
     now = time.time()
 
-    # memoria
-    if _mem.get("ok") and now - float(_mem.get("ts") or 0) < AAA_CACHE_TTL:
-        states = _mem.get("states") or {}
-        metros = _mem.get("metros") or {}
-    else:
+    def _load_maps() -> tuple[dict, dict]:
+        if _mem.get("ok") and now - float(_mem.get("ts") or 0) < AAA_CACHE_TTL:
+            return _mem.get("states") or {}, _mem.get("metros") or {}
         disk = _load_disk()
         if disk.get("ok") and now - float(disk.get("ts") or 0) < AAA_CACHE_TTL:
             _mem.update(disk)
-            states = disk.get("states") or {}
-            metros = disk.get("metros") or {}
-        else:
-            # refresh ligero: tabla + este estado
-            try:
-                refresh_aaa([st])
-            except Exception as e:
-                print(f"[aaa] refresh: {e}")
-            states = _mem.get("states") or _load_disk().get("states") or {}
-            metros = _mem.get("metros") or _load_disk().get("metros") or {}
+            return disk.get("states") or {}, disk.get("metros") or {}
+        return disk.get("states") or {}, disk.get("metros") or {}
 
-    # metro primero (más local)
+    states, metros = _load_maps()
+
+    # si no hay tabla o falta este estado → refresh rápido nacional
+    if not states or st not in states:
+        try:
+            table = fetch_aaa_state_table()
+            if table:
+                states = {**(states or {}), **table}
+                payload = {
+                    "ts": now,
+                    "ok": True,
+                    "states": states,
+                    "metros": metros,
+                    "source": "aaa",
+                }
+                _mem.update(payload)
+                _save_disk({**_load_disk(), **payload, "metros": metros})
+        except Exception as e:
+            print(f"[aaa] table on-demand: {e}")
+
+    # metro: si pedimos city y no está en caché, bajar detalle de ese estado
     if city:
         ckey = re.sub(r"\s+", " ", city.lower()).strip()
-        # match exacto o parcial
+        has_metro = any(
+            k.startswith(f"{st}:")
+            and (
+                ckey == k.split(":", 1)[-1]
+                or ckey in k.split(":", 1)[-1]
+                or k.split(":", 1)[-1] in ckey
+            )
+            for k in metros
+        )
+        if not has_metro and not any(k.startswith(f"{st}:") for k in metros):
+            try:
+                det = fetch_aaa_state_detail(st)
+                if det.get("state"):
+                    states[st] = det["state"]
+                for mk, mv in (det.get("metros") or {}).items():
+                    metros[f"{st}:{mk}"] = mv
+                disk = _load_disk()
+                disk["states"] = {**(disk.get("states") or {}), **states}
+                disk["metros"] = metros
+                disk["ts"] = now
+                disk["ok"] = True
+                _mem.update(disk)
+                _save_disk(disk)
+            except Exception as e:
+                print(f"[aaa] detail on-demand {st}: {e}")
+
+        # match metro
+        best = None
+        best_score = 0
         for mk, mv in metros.items():
             if not mk.startswith(f"{st}:"):
                 continue
             metro_name = mk.split(":", 1)[-1]
-            if ckey == metro_name or ckey in metro_name or metro_name in ckey:
-                return dict(mv)
-        # sin prefijo de estado
-        for mk, mv in metros.items():
-            metro_name = mk.split(":")[-1]
-            if ckey == metro_name or ckey in metro_name:
-                return dict(mv)
+            score = 0
+            if ckey == metro_name:
+                score = 100
+            elif ckey in metro_name:
+                score = 80
+            elif metro_name in ckey:
+                score = 70
+            else:
+                # tokens: "colorado springs" vs "colorado springs"
+                ct = set(ckey.replace("-", " ").split())
+                mt = set(metro_name.replace("-", " ").split())
+                if ct and mt and ct <= mt or mt <= ct:
+                    score = 60
+                elif ct & mt:
+                    score = 40
+            if score > best_score:
+                best_score = score
+                best = mv
+        if best and best_score >= 40:
+            return dict(best)
 
     row = states.get(st)
     if row and row.get("ok") and row.get("regular"):

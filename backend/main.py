@@ -16,7 +16,7 @@ from backend.prices import report_price
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.9.18"
+APP_VERSION = "0.9.19"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -33,7 +33,12 @@ def _startup_jobs():
             from backend.aaa_scraper import refresh_aaa
             from backend.prices import US_STATES, warm_eia_cache
 
-            aaa = refresh_aaa(["CO", "CA", "TX", "FL", "NY", "AZ", "NV", "WA"])
+            # Tabla nacional (50 estados) al arrancar; metros de estados grandes
+            aaa = refresh_aaa(
+                ["CO", "CA", "TX", "FL", "NY", "AZ", "NV", "WA", "IL", "GA", "PA", "OH"],
+                full_usa=False,
+            )
+            # asegura tabla de TODO USA aunque full_usa=False (fetch_aaa_state_table dentro)
             print(f"[aaa] warm startup: {aaa}")
             res = warm_eia_cache(list(US_STATES), force=False)
             print(f"[eia] warm startup ok_count={res.get('ok_count')}")
@@ -213,28 +218,38 @@ def api_cron_eia(key: str | None = Query(None)):
 
 
 @app.api_route("/api/cron/aaa", methods=["GET", "POST"])
-def api_cron_aaa(key: str | None = Query(None)):
+def api_cron_aaa(
+    key: str | None = Query(None),
+    full: int = Query(1, ge=0, le=1),
+):
     """
-    Cron diario AAA (scraper de promedios estado/metro):
+    Cron diario AAA — TODO USA (cualquier ZIP):
 
       https://gasradarapp.com/api/cron/aaa?key=TU_STATS_KEY
 
-    Más cercano a precios reales que EIA semanal. No es por bomba.
+    full=1 (default): tabla 50 estados + metros de todos los estados (~2–5 min).
+    full=0: solo tabla nacional + metros de estados principales (más rápido).
     """
     from datetime import datetime, timezone
 
-    from backend.aaa_scraper import refresh_aaa
+    from backend.aaa_scraper import US_STATE_CODES, refresh_aaa
     from backend.analytics import check_stats_key
 
     if not check_stats_key(key):
         raise HTTPException(401, "Clave incorrecta. Usa ?key= tu STATS_KEY")
-    res = refresh_aaa(
-        ["CO", "CA", "TX", "FL", "NY", "AZ", "NV", "WA", "IL", "GA", "PA", "OH", "NC", "MI"]
-    )
+    if full:
+        # Todo USA: estados + metros (recomendado 1×/día)
+        res = refresh_aaa(list(US_STATE_CODES), full_usa=True)
+    else:
+        res = refresh_aaa(
+            ["CO", "CA", "TX", "FL", "NY", "AZ", "NV", "WA", "IL", "GA", "PA", "OH", "NC", "MI"],
+            full_usa=False,
+        )
     res["cron"] = True
     res["utc"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     res["interval_hint"] = "daily"
     res["url"] = "https://gasprices.aaa.com"
+    res["scope"] = "all_usa" if full else "core_states"
     return res
 
 
