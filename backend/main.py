@@ -16,7 +16,7 @@ from backend.prices import report_price
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.9.14"
+APP_VERSION = "0.9.15"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -169,18 +169,42 @@ def health():
     }
 
 
-@app.post("/api/eia/refresh")
-def api_eia_refresh(key: str | None = Query(None)):
-    """
-    Fuerza actualización de promedios EIA (gratis).
-    Útil como cron diario en Render: GET/POST con ?key=STATS_KEY.
-    """
+def _run_eia_cron(key: str | None):
+    """Actualiza base EIA (gratis). Mismo handler para GET/POST (cron-job.org, etc.)."""
+    from datetime import datetime, timezone
+
     from backend.analytics import check_stats_key
     from backend.prices import warm_eia_cache
 
     if not check_stats_key(key):
-        raise HTTPException(401, "Clave incorrecta (STATS_KEY)")
-    return warm_eia_cache(force=True)
+        raise HTTPException(401, "Clave incorrecta. Usa ?key= tu STATS_KEY")
+    # Estados principales cada hora (pocas llamadas EIA / menos rate-limit)
+    res = warm_eia_cache(
+        ["CO", "CA", "TX", "FL", "NY", "AZ", "NV", "WA", "DEFAULT"],
+        force=True,
+    )
+    res["cron"] = True
+    res["utc"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    res["interval_hint"] = "hourly"
+    return res
+
+
+@app.api_route("/api/eia/refresh", methods=["GET", "POST"])
+def api_eia_refresh(key: str | None = Query(None)):
+    """
+    Cron cada hora — link listo para cron-job.org / UptimeRobot / Render Cron:
+
+      https://gasradarapp.com/api/eia/refresh?key=TU_STATS_KEY
+
+    Actualiza promedios EIA (gratis). No usa Zyla.
+    """
+    return _run_eia_cron(key)
+
+
+@app.api_route("/api/cron/eia", methods=["GET", "POST"])
+def api_cron_eia(key: str | None = Query(None)):
+    """Alias corto del cron EIA (mismo que /api/eia/refresh)."""
+    return _run_eia_cron(key)
 
 
 @app.get("/api/geo/zip/{zip_code}")

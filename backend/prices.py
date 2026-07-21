@@ -93,10 +93,10 @@ SPREAD_DIESEL = 0.40
 
 REPORT_MAX_AGE_SEC = 72 * 3600
 REPORT_CONSENSUS_HOURS = 48
-# Caché “caliente”: reusa sin red
-EIA_CACHE_TTL = 20 * 3600  # ~20h — se renueva al menos 1 vez al día
+# Caché “caliente”: reusa sin red entre crons
+EIA_CACHE_TTL = 55 * 60  # ~55 min — el cron horario fuerza refresh antes
 # Si es más viejo, sigue sirviendo el valor pero pide refresh en background
-EIA_STALE_SOFT = 26 * 3600
+EIA_STALE_SOFT = 2 * 3600
 
 # Memoria proceso
 _eia_mem: dict = {"ts": 0.0, "by_state": {}}

@@ -72,6 +72,34 @@ git push origin main
 
 ---
 
+## Cron cada hora: actualizar precios base (EIA gratis)
+
+Sin Zyla. El cron llama a este **link** (GET):
+
+```
+https://gasradarapp.com/api/eia/refresh?key=TU_STATS_KEY
+```
+
+Alias igual:
+
+```
+https://gasradarapp.com/api/cron/eia?key=TU_STATS_KEY
+```
+
+### En [cron-job.org](https://cron-job.org) (gratis)
+
+1. Create cronjob  
+2. **URL** = el link de arriba (cambia `TU_STATS_KEY` por tu `STATS_KEY` de Render; si no pusiste una, la default es `gasradar2026`)  
+3. **Schedule** = every hour (`0 * * * *` o “every 1 hour”)  
+4. Request method = **GET**  
+5. Enable → Save  
+
+Respuesta OK ejemplo: `{"ok":true,"cron":true,"states":{"CO":{"ok":true,"regular":3.72...}}}`  
+
+También despierta la app en Render free (doble beneficio).
+
+---
+
 ## Contacto en la app
 
 - Contacto: contact@gasradarapp.com  
