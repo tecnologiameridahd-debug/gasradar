@@ -182,24 +182,38 @@ def run_search(
                     "ok": True,
                 }
 
-    # GasBuddy solo si está activado y faltan resultados (lento / Cloudflare)
+    # Precios por estación: 1) VPS scraper (GasBuddy)  2) gasbuddy local opcional
     gb_stations: list = []
     if not quick and len(zyla_stations) < 6:
         try:
-            from backend.gasbuddy_src import _enabled as gasbuddy_enabled
-            from backend.gasbuddy_src import fetch_gasbuddy_stations
+            from backend.vps_scraper_client import fetch_vps_stations
 
-            if gasbuddy_enabled():
-                gb_stations = fetch_gasbuddy_stations(
-                    zip_code=str(zip_code) if zip_code else None,
-                    lat=float(lat) if lat is not None else None,
-                    lon=float(lon) if lon is not None else None,
-                    fuel=fuel,
-                    limit=min(int(limit), 10),
-                )
+            gb_stations = fetch_vps_stations(
+                zip_code=str(zip_code) if zip_code else None,
+                lat=float(lat) if lat is not None else None,
+                lon=float(lon) if lon is not None else None,
+                fuel=fuel,
+                limit=min(int(limit), 25),
+            )
         except Exception as e:
-            print(f"[search] gasbuddy: {e}")
+            print(f"[search] vps_scraper: {e}")
             gb_stations = []
+        if not gb_stations:
+            try:
+                from backend.gasbuddy_src import _enabled as gasbuddy_enabled
+                from backend.gasbuddy_src import fetch_gasbuddy_stations
+
+                if gasbuddy_enabled():
+                    gb_stations = fetch_gasbuddy_stations(
+                        zip_code=str(zip_code) if zip_code else None,
+                        lat=float(lat) if lat is not None else None,
+                        lon=float(lon) if lon is not None else None,
+                        fuel=fuel,
+                        limit=min(int(limit), 10),
+                    )
+            except Exception as e:
+                print(f"[search] gasbuddy: {e}")
+                gb_stations = []
 
     from backend.geo import haversine_miles
     from backend.stations import _display_brand, _pretty_station_name, _station_id

@@ -16,7 +16,7 @@ from backend.prices import report_price
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.9.21"
+APP_VERSION = "0.9.22"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -100,6 +100,7 @@ class ReportBody(BaseModel):
 @app.get("/api/health")
 def health():
     """Healthcheck para Render y keep-alive (cron / script)."""
+    import os
     from datetime import datetime, timezone
 
     from backend.db import db_status
@@ -169,6 +170,13 @@ def health():
             "co_regular": (eia_co.get("state_avg") or {}).get("regular"),
             "mem": eia_mem,
             "disk": eia_disk,
+        },
+        "vps_scraper": {
+            "enabled": bool(
+                (os.environ.get("USE_VPS_SCRAPER") or "").strip().lower()
+                in ("1", "true", "yes", "on")
+            ),
+            "url_set": bool((os.environ.get("VPS_SCRAPER_URL") or "").strip()),
         },
     }
 

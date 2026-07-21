@@ -1,0 +1,42 @@
+# GasRadar VPS Scraper + FlareSolverr (opcional pero recomendado)
+#
+# Uso:
+#   cd vps_scraper
+#   cp .env.example .env   # edita SCRAPER_API_KEY
+#   docker compose up -d
+#
+# Prueba:
+#   curl "http://127.0.0.1:8788/health"
+#   curl "http://127.0.0.1:8788/prices?zip=80903&key=TU_CLAVE"
+
+services:
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    container_name: gasradar-flaresolverr
+    environment:
+      - LOG_LEVEL=info
+      - TZ=UTC
+    restart: unless-stopped
+    # no hace falta publicar puerto si solo lo usa scraper en la misma red
+    ports:
+      - "8191:8191"
+
+  scraper:
+    build: .
+    container_name: gasradar-scraper
+    depends_on:
+      - flaresolverr
+    environment:
+      - PORT=8788
+      - FLARESOLVERR_URL=http://flaresolverr:8191/v1
+      - SCRAPER_API_KEY=${SCRAPER_API_KEY:-changeme}
+      - CACHE_DIR=/data/cache
+      - CACHE_TTL_SEC=${CACHE_TTL_SEC:-10800}
+    ports:
+      - "8788:8788"
+    volumes:
+      - scraper_data:/data
+    restart: unless-stopped
+
+volumes:
+  scraper_data:
