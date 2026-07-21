@@ -67,7 +67,11 @@ async def _lookup_async(
     fuel: str,
     limit: int = 15,
 ) -> list[dict]:
-    from py_gasbuddy import GasBuddy
+    try:
+        from py_gasbuddy import GasBuddy
+    except ImportError as e:
+        print(f"[gasbuddy] py-gasbuddy no instalado: {e}")
+        return []
 
     solver = _solver_url()
     kwargs = {}
