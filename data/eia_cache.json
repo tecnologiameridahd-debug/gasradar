@@ -1,0 +1,167 @@
+{
+  "CO": {
+    "regular": 3.722,
+    "mid": 4.022,
+    "premium": 4.272,
+    "diesel": 4.122,
+    "period": "2026-07-13",
+    "source": "eia",
+    "duoarea": "SCO",
+    "ts": 1784608482.669796,
+    "ok": true
+  },
+  "NV": {
+    "regular": 3.855,
+    "mid": 4.155,
+    "premium": 4.405,
+    "diesel": 4.255,
+    "period": "2026-07-13",
+    "source": "eia",
+    "duoarea": "SNV",
+    "ts": 1784608672.470191,
+    "ok": true
+  },
+  "CA": {
+    "regular": 5.2,
+    "mid": 5.5,
+    "premium": 5.75,
+    "diesel": 5.6,
+    "period": "2026-07-13",
+    "source": "eia",
+    "duoarea": "SCA",
+    "ts": 1784608623.866995,
+    "ok": true
+  },
+  "TX": {
+    "regular": 3.371,
+    "mid": 3.671,
+    "premium": 3.921,
+    "diesel": 3.771,
+    "period": "2026-07-13",
+    "source": "eia",
+    "duoarea": "STX",
+    "ts": 1784608629.2669013,
+    "ok": true
+  },
+  "NY": {
+    "regular": 3.984,
+    "mid": 4.284,
+    "premium": 4.534,
+    "diesel": 4.384,
+    "period": "2026-07-13",
+    "source": "eia",
+    "duoarea": "SNY",
+    "ts": 1784608632.9561965,
+    "ok": true
+  },
+  "FL": {
+    "regular": 3.74,
+    "mid": 4.04,
+    "premium": 4.29,
+    "diesel": 4.14,
+    "period": "2026-07-13",
+    "source": "eia",
+    "duoarea": "SFL",
+    "ts": 1784608636.4810388,
+    "ok": true
+  },
+  "AZ": {
+    "regular": 3.855,
+    "mid": 4.155,
+    "premium": 4.405,
+    "diesel": 4.255,
+    "period": "2026-07-13",
+    "source": "eia",
+    "duoarea": "SAZ",
+    "ts": 1784608640.3404849,
+    "ok": true
+  },
+  "NM": {
+    "regular": 3.855,
+    "mid": 4.155,
+    "premium": 4.405,
+    "diesel": 4.255,
+    "period": "2026-07-13",
+    "source": "eia",
+    "duoarea": "SNM",
+    "ts": 1784608647.6960464,
+    "ok": true
+  },
+  "UT": {
+    "regular": 3.855,
+    "mid": 4.155,
+    "premium": 4.405,
+    "diesel": 4.255,
+    "period": "2026-07-13",
+    "source": "eia",
+    "duoarea": "SUT",
+    "ts": 1784608653.6689813,
+    "ok": true
+  },
+  "WY": {
+    "regular": 3.855,
+    "mid": 4.155,
+    "premium": 4.405,
+    "diesel": 4.255,
+    "period": "2026-07-13",
+    "source": "eia",
+    "duoarea": "SWY",
+    "ts": 1784608659.3687773,
+    "ok": true
+  },
+  "KS": {
+    "regular": 3.855,
+    "mid": 4.155,
+    "premium": 4.405,
+    "diesel": 4.255,
+    "period": "2026-07-13",
+    "source": "eia",
+    "duoarea": "SKS",
+    "ts": 1784608664.591548,
+    "ok": true
+  },
+  "NE": {
+    "regular": 3.855,
+    "mid": 4.155,
+    "premium": 4.405,
+    "diesel": 4.255,
+    "period": "2026-07-13",
+    "source": "eia",
+    "duoarea": "SNE",
+    "ts": 1784608668.4794533,
+    "ok": true
+  },
+  "WA": {
+    "regular": 4.849,
+    "mid": 5.149,
+    "premium": 5.399,
+    "diesel": 5.249,
+    "period": "2026-07-13",
+    "source": "eia",
+    "duoarea": "SWA",
+    "ts": 1784608676.4108224,
+    "ok": true
+  },
+  "OR": {
+    "regular": 3.855,
+    "mid": 4.155,
+    "premium": 4.405,
+    "diesel": 4.255,
+    "period": "2026-07-13",
+    "source": "eia",
+    "duoarea": "SOR",
+    "ts": 1784608678.4186249,
+    "ok": true
+  },
+  "DEFAULT": {
+    "regular": 3.855,
+    "mid": 4.155,
+    "premium": 4.405,
+    "diesel": 4.255,
+    "period": "2026-07-13",
+    "source": "eia",
+    "duoarea": "NUS",
+    "ts": 1784608682.0757248,
+    "ok": true
+  }
+}

@@ -25,23 +25,24 @@ from backend.db import fetchone as db_fetchone
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 EIA_CACHE_PATH = DATA_DIR / "eia_cache.json"
 
-# Fallback si EIA no responde (actualizado ~2026; se reemplaza cuando EIA responde)
+# Fallback si EIA no responde (actualizado ~2026-07 con datos EIA reales;
+# se reemplaza al calentar caché diario — no uses Zyla).
 BASE_STATE_AVG = {
-    "CO": {"regular": 3.19, "mid": 3.49, "premium": 3.79, "diesel": 3.55},
-    "CA": {"regular": 4.55, "mid": 4.75, "premium": 4.95, "diesel": 4.80},
-    "TX": {"regular": 2.85, "mid": 3.15, "premium": 3.45, "diesel": 3.20},
-    "NY": {"regular": 3.35, "mid": 3.65, "premium": 3.95, "diesel": 3.90},
-    "FL": {"regular": 3.10, "mid": 3.40, "premium": 3.70, "diesel": 3.50},
-    "AZ": {"regular": 3.25, "mid": 3.55, "premium": 3.85, "diesel": 3.60},
-    "NM": {"regular": 2.95, "mid": 3.25, "premium": 3.55, "diesel": 3.30},
-    "UT": {"regular": 3.15, "mid": 3.45, "premium": 3.75, "diesel": 3.50},
-    "WY": {"regular": 3.05, "mid": 3.35, "premium": 3.65, "diesel": 3.40},
-    "KS": {"regular": 2.90, "mid": 3.20, "premium": 3.50, "diesel": 3.25},
-    "NE": {"regular": 2.95, "mid": 3.25, "premium": 3.55, "diesel": 3.30},
-    "NV": {"regular": 3.55, "mid": 3.85, "premium": 4.15, "diesel": 3.90},
-    "WA": {"regular": 4.10, "mid": 4.40, "premium": 4.70, "diesel": 4.40},
-    "OR": {"regular": 3.85, "mid": 4.15, "premium": 4.45, "diesel": 4.15},
-    "DEFAULT": {"regular": 3.25, "mid": 3.55, "premium": 3.85, "diesel": 3.65},
+    "CO": {"regular": 3.72, "mid": 4.02, "premium": 4.27, "diesel": 4.12},
+    "CA": {"regular": 5.20, "mid": 5.50, "premium": 5.75, "diesel": 5.60},
+    "TX": {"regular": 3.37, "mid": 3.67, "premium": 3.92, "diesel": 3.77},
+    "NY": {"regular": 3.98, "mid": 4.28, "premium": 4.53, "diesel": 4.38},
+    "FL": {"regular": 3.74, "mid": 4.04, "premium": 4.29, "diesel": 4.14},
+    "AZ": {"regular": 3.86, "mid": 4.16, "premium": 4.41, "diesel": 4.26},
+    "NM": {"regular": 3.40, "mid": 3.70, "premium": 3.95, "diesel": 3.80},
+    "UT": {"regular": 3.50, "mid": 3.80, "premium": 4.05, "diesel": 3.90},
+    "WY": {"regular": 3.45, "mid": 3.75, "premium": 4.00, "diesel": 3.85},
+    "KS": {"regular": 3.30, "mid": 3.60, "premium": 3.85, "diesel": 3.70},
+    "NE": {"regular": 3.35, "mid": 3.65, "premium": 3.90, "diesel": 3.75},
+    "NV": {"regular": 3.86, "mid": 4.16, "premium": 4.41, "diesel": 4.26},
+    "WA": {"regular": 4.85, "mid": 5.15, "premium": 5.40, "diesel": 5.25},
+    "OR": {"regular": 4.10, "mid": 4.40, "premium": 4.65, "diesel": 4.50},
+    "DEFAULT": {"regular": 3.86, "mid": 4.16, "premium": 4.41, "diesel": 4.26},
 }
 
 # Ajuste típico vs promedio del estado (clubes más baratos, premium brands más caras)
@@ -92,10 +93,15 @@ SPREAD_DIESEL = 0.40
 
 REPORT_MAX_AGE_SEC = 72 * 3600
 REPORT_CONSENSUS_HOURS = 48
-EIA_CACHE_TTL = 6 * 3600  # 6h
+# Caché “caliente”: reusa sin red
+EIA_CACHE_TTL = 20 * 3600  # ~20h — se renueva al menos 1 vez al día
+# Si es más viejo, sigue sirviendo el valor pero pide refresh en background
+EIA_STALE_SOFT = 26 * 3600
 
 # Memoria proceso
 _eia_mem: dict = {"ts": 0.0, "by_state": {}}
+_eia_refresh_lock = False
+_eia_last_warm = 0.0
 
 # EIA product codes
 EIA_PRODUCTS = {
@@ -348,22 +354,31 @@ def _save_disk_eia(all_states: dict) -> None:
         pass
 
 
-def fetch_eia_state_averages(state: str = "CO") -> dict:
+def fetch_eia_state_averages(state: str = "CO", force: bool = False) -> dict:
     """
-    Precios oficiales EIA (retail semanal) por estado.
-    Solo 1 request (regular) + spreads mid/premium/diesel → menos rate-limit.
-    Cache 6h memoria + disco.
+    Precios oficiales EIA (retail semanal) por estado — gratis, sin Zyla.
+    1 request (regular) + spreads. Caché memoria + disco (~1 día).
     """
     st = (state or "DEFAULT").upper()
     now = time.time()
     cached = _eia_mem["by_state"].get(st)
-    if cached and now - cached.get("ts", 0) < EIA_CACHE_TTL and cached.get("ok"):
+    if (
+        not force
+        and cached
+        and cached.get("ok")
+        and now - cached.get("ts", 0) < EIA_CACHE_TTL
+    ):
         return cached
 
     # disco
     disk = _load_disk_eia()
     d_cached = disk.get(st)
-    if d_cached and now - d_cached.get("ts", 0) < EIA_CACHE_TTL and d_cached.get("ok"):
+    if (
+        not force
+        and d_cached
+        and d_cached.get("ok")
+        and now - d_cached.get("ts", 0) < EIA_CACHE_TTL
+    ):
         _eia_mem["by_state"][st] = d_cached
         return d_cached
 
@@ -392,19 +407,92 @@ def fetch_eia_state_averages(state: str = "CO") -> dict:
         result["diesel"] = round(val + SPREAD_DIESEL, 3)
         result["period"] = period
         result["ok"] = True
+        print(f"[eia] OK {st} regular={result['regular']} period={period}")
     elif d_cached and d_cached.get("ok"):
-        # rate limit: usar disco aunque esté viejo
+        # rate limit / fallo red: usar disco aunque esté viejo
         d_cached = dict(d_cached)
         d_cached["stale"] = True
         _eia_mem["by_state"][st] = d_cached
+        print(f"[eia] stale disk {st} regular={d_cached.get('regular')}")
         return d_cached
 
     _eia_mem["by_state"][st] = result
     _eia_mem["ts"] = now
     if result["ok"]:
         disk[st] = result
+        # también actualiza DEFAULT si es el nacional
+        if st in ("DEFAULT", "US") or duo == "NUS":
+            disk["DEFAULT"] = dict(result)
+            disk["DEFAULT"]["state"] = "DEFAULT"
         _save_disk_eia(disk)
+        # actualiza fallback en memoria de proceso (no el dict del módulo de forma permanente en código)
+        _apply_live_to_runtime_base(st, result)
     return result
+
+
+def _apply_live_to_runtime_base(st: str, result: dict) -> None:
+    """Si EIA trae datos, el fallback del proceso deja de ser el hardcode viejo."""
+    if not result.get("ok"):
+        return
+    key = st if st in BASE_STATE_AVG else "DEFAULT"
+    BASE_STATE_AVG[key] = {
+        "regular": float(result["regular"]),
+        "mid": float(result["mid"]),
+        "premium": float(result["premium"]),
+        "diesel": float(result["diesel"]),
+    }
+
+
+def warm_eia_cache(states: list[str] | None = None, force: bool = False) -> dict:
+    """
+    Calienta caché EIA al arrancar o 1× al día.
+    Gratis (api.eia.gov). No usa Zyla.
+    """
+    global _eia_last_warm, _eia_refresh_lock
+    if _eia_refresh_lock:
+        return {"ok": False, "busy": True}
+    _eia_refresh_lock = True
+    out: dict = {"ok": True, "states": {}, "forced": force}
+    try:
+        want = states or ["CO", "CA", "TX", "FL", "NY", "AZ", "NV", "WA", "DEFAULT"]
+        for st in want:
+            try:
+                r = fetch_eia_state_averages(st, force=force)
+                out["states"][st] = {
+                    "ok": bool(r.get("ok")),
+                    "regular": r.get("regular"),
+                    "period": r.get("period"),
+                }
+            except Exception as e:
+                out["states"][st] = {"ok": False, "error": str(e)[:80]}
+        _eia_last_warm = time.time()
+        out["warmed_at"] = _eia_last_warm
+    finally:
+        _eia_refresh_lock = False
+    return out
+
+
+def maybe_refresh_eia_background(state: str = "CO") -> None:
+    """Si la caché tiene >~1 día, refresca en hilo sin bloquear la búsqueda."""
+    global _eia_last_warm
+    now = time.time()
+    if now - _eia_last_warm < EIA_CACHE_TTL:
+        return
+    st = (state or "CO").upper()
+    mem = _eia_mem["by_state"].get(st) or _load_disk_eia().get(st) or {}
+    age = now - float(mem.get("ts") or 0)
+    if mem.get("ok") and age < EIA_CACHE_TTL:
+        return
+    # ya es viejo o no hay: refresh en background
+    import threading
+
+    def _run():
+        try:
+            warm_eia_cache([st, "DEFAULT"], force=True)
+        except Exception as e:
+            print(f"[eia] bg refresh fail: {e}")
+
+    threading.Thread(target=_run, name="eia-refresh", daemon=True).start()
 
 
 # Caché Zyla (precios por ZIP / estado)
@@ -1010,32 +1098,60 @@ def cheapest_summary(stations_with_prices: list[dict]) -> dict | None:
     }
 
 
+def _avg_from_eia_blob(blob: dict, source: str = "eia") -> dict:
+    return {
+        "regular": blob["regular"],
+        "mid": blob["mid"],
+        "premium": blob["premium"],
+        "diesel": blob["diesel"],
+        "source": source,
+        "eia_period": blob.get("period") or blob.get("eia_period"),
+        "eia_ok": True,
+    }
+
+
 def price_meta(state: str = "CO", fast: bool = True) -> dict:
-    """Info para el frontend. fast=True evita llamar EIA si no hay caché (no colgar)."""
+    """
+    Promedios para UI y estimaciones.
+    Prioridad: memoria EIA → disco EIA (aunque sea de ayer) → 1 fetch EIA si no hay nada
+    → fallback hardcode (ya actualizado 2026-07).
+    Zyla no se usa (cancelada).
+    """
     st = (state or "DEFAULT").upper()
-    # si hay caché caliente, usarla; si no, fallback sin red
-    cached = _eia_mem["by_state"].get(st)
     now = time.time()
-    if cached and now - cached.get("ts", 0) < EIA_CACHE_TTL and cached.get("ok"):
-        avg = state_averages(state)
-    elif not fast:
-        avg = state_averages(state)
+    avg = None
+
+    cached = _eia_mem["by_state"].get(st)
+    if cached and cached.get("ok"):
+        avg = _avg_from_eia_blob(cached, "eia")
+        if now - cached.get("ts", 0) >= EIA_CACHE_TTL:
+            maybe_refresh_eia_background(st)
     else:
-        # no bloquear con EIA en cada búsqueda
-        disk = _load_disk_eia().get(st)
+        disk = _load_disk_eia().get(st) or _load_disk_eia().get("DEFAULT")
         if disk and disk.get("ok"):
-            avg = {
-                "regular": disk["regular"],
-                "mid": disk["mid"],
-                "premium": disk["premium"],
-                "diesel": disk["diesel"],
-                "source": "eia",
-                "eia_period": disk.get("period"),
-                "eia_ok": True,
-            }
+            _eia_mem["by_state"][st] = disk
+            avg = _avg_from_eia_blob(disk, "eia")
+            if now - float(disk.get("ts") or 0) >= EIA_CACHE_TTL:
+                maybe_refresh_eia_background(st)
+        elif not fast:
+            eia = fetch_eia_state_averages(st, force=False)
+            if eia.get("ok"):
+                avg = _avg_from_eia_blob(eia, "eia")
         else:
-            base = dict(BASE_STATE_AVG.get(st) or BASE_STATE_AVG["DEFAULT"])
-            avg = {**base, "source": "fallback", "eia_period": None, "eia_ok": False}
+            # primera búsqueda en Render sin caché: 1 fetch corto (mejor que $3.19 viejo)
+            try:
+                eia = fetch_eia_state_averages(st, force=False)
+                if eia.get("ok"):
+                    avg = _avg_from_eia_blob(eia, "eia")
+                else:
+                    maybe_refresh_eia_background(st)
+            except Exception:
+                maybe_refresh_eia_background(st)
+
+    if avg is None:
+        base = dict(BASE_STATE_AVG.get(st) or BASE_STATE_AVG["DEFAULT"])
+        avg = {**base, "source": "fallback", "eia_period": None, "eia_ok": False}
+        maybe_refresh_eia_background(st)
 
     return {
         "state_avg": {
@@ -1047,12 +1163,12 @@ def price_meta(state: str = "CO", fast: bool = True) -> dict:
         "avg_source": avg.get("source"),
         "eia_period": avg.get("eia_period"),
         "eia_ok": avg.get("eia_ok"),
-        "collect_api_configured": bool(_zyla_api_key()),
+        "collect_api_configured": False,
         "zyla_configured": bool(_zyla_api_key()),
         "zyla_url_configured": bool(_zyla_gas_url()),
         "how_it_works": (
             "1) Reportes de la comunidad (prioridad). "
-            "2) EIA oficial o Zyla Labs + ajuste por marca. "
-            "3) Precios exactos de bomba: mas reportes o API de estaciones."
+            "2) Promedio oficial EIA (gratis, se actualiza ~diario) + ajuste por marca. "
+            "3) Precio exacto de bomba: reporta al pasar."
         ),
     }

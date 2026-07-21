@@ -16,19 +16,34 @@ from backend.prices import report_price
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.9.13"
+APP_VERSION = "0.9.14"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
 
 @app.on_event("startup")
-def _startup_telegram_webhook():
-    """
-    Al arrancar (cada deploy en Render) registra el webhook solo.
-    Así el bot funciona sin abrir /api/telegram/setup a mano.
-    """
+def _startup_jobs():
+    """Webhook Telegram + calentar precios EIA (gratis, ~1× al día)."""
     import os
+    import threading
 
+    # 1) EIA: base de estimaciones actualizada (sin Zyla)
+    def _warm_eia():
+        try:
+            from backend.prices import warm_eia_cache
+
+            # force si no hay caché; en redeploy de Render el disco está vacío
+            res = warm_eia_cache(
+                ["CO", "CA", "TX", "FL", "NY", "AZ", "NV", "WA", "DEFAULT"],
+                force=False,
+            )
+            print(f"[eia] warm startup: {res.get('states')}")
+        except Exception as e:
+            print(f"[eia] warm startup error: {type(e).__name__}: {e}")
+
+    threading.Thread(target=_warm_eia, name="eia-warm", daemon=True).start()
+
+    # 2) Telegram webhook
     if (os.environ.get("AUTO_TELEGRAM_WEBHOOK") or "1").strip().lower() in (
         "0",
         "false",
@@ -84,12 +99,22 @@ def health():
     from datetime import datetime, timezone
 
     from backend.db import db_status
-    from backend.prices import _zyla_api_key, _zyla_gas_url, _zyla_station_url
+    from backend.prices import (
+        _eia_mem,
+        _load_disk_eia,
+        _zyla_api_key,
+        _zyla_gas_url,
+        _zyla_station_url,
+        price_meta,
+    )
     from backend.telegram_bot import alerts_secret, bot_ready, get_me, get_webhook_info
 
     zkey = _zyla_api_key()
     zurl = _zyla_gas_url()
     zst = _zyla_station_url()
+    eia_co = price_meta("CO", fast=True)
+    eia_disk = bool((_load_disk_eia() or {}).get("CO", {}).get("ok"))
+    eia_mem = bool((_eia_mem.get("by_state") or {}).get("CO", {}).get("ok"))
 
     tg: dict = {
         "token": bot_ready(),
@@ -131,8 +156,31 @@ def health():
             "gas_url": bool(zurl),
             "station_url": bool(zst),
             "ready": bool(zkey and zurl and zst),
+            "note": "Opcional/cancelable. Precios base usan EIA gratis.",
+        },
+        "eia": {
+            "ok": bool(eia_co.get("eia_ok")),
+            "source": eia_co.get("avg_source"),
+            "period": eia_co.get("eia_period"),
+            "co_regular": (eia_co.get("state_avg") or {}).get("regular"),
+            "mem": eia_mem,
+            "disk": eia_disk,
         },
     }
+
+
+@app.post("/api/eia/refresh")
+def api_eia_refresh(key: str | None = Query(None)):
+    """
+    Fuerza actualización de promedios EIA (gratis).
+    Útil como cron diario en Render: GET/POST con ?key=STATS_KEY.
+    """
+    from backend.analytics import check_stats_key
+    from backend.prices import warm_eia_cache
+
+    if not check_stats_key(key):
+        raise HTTPException(401, "Clave incorrecta (STATS_KEY)")
+    return warm_eia_cache(force=True)
 
 
 @app.get("/api/geo/zip/{zip_code}")
