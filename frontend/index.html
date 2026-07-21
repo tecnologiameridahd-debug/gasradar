@@ -1,9 +1,62 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" style="background:#0b1220;color-scheme:dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#0b1220" />
+    <meta name="color-scheme" content="dark" />
+    <!-- Evita flash blanco antes de cargar styles.css -->
+    <style>
+      html, body {
+        margin: 0;
+        min-height: 100%;
+        min-height: 100dvh;
+        background: #0b1220 !important;
+        color: #eef3ff;
+        color-scheme: dark;
+      }
+      /* Splash mínima mientras llega el CSS/JS */
+      .boot-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        background: #0b1220;
+        transition: opacity 0.28s ease, visibility 0.28s ease;
+      }
+      .boot-splash.is-done {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+      .boot-splash img {
+        width: 72px;
+        height: 72px;
+        border-radius: 18px;
+      }
+      .boot-splash span {
+        font-family: system-ui, -apple-system, sans-serif;
+        font-weight: 700;
+        font-size: 1.05rem;
+        letter-spacing: 0.02em;
+        color: #9aabc7;
+      }
+      .boot-splash .boot-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #22c55e;
+        animation: bootPulse 0.9s ease infinite alternate;
+      }
+      @keyframes bootPulse {
+        from { opacity: 0.35; transform: scale(0.85); }
+        to { opacity: 1; transform: scale(1); }
+      }
+    </style>
     <meta
       name="description"
       id="metaDesc"
@@ -48,9 +101,14 @@
     <link rel="icon" href="/static/favicon-64.png?v=0.2.9" type="image/png" sizes="64x64" />
     <link rel="apple-touch-icon" href="/static/logo-192.png?v=0.5.0" sizes="192x192" />
     <link rel="apple-touch-icon" href="/static/logo-512.png?v=0.5.0" sizes="512x512" />
-    <link rel="stylesheet" href="/static/styles.css?v=0.9.28" />
+    <link rel="stylesheet" href="/static/styles.css?v=0.9.29" />
   </head>
-  <body>
+  <body style="background:#0b1220;margin:0">
+    <div class="boot-splash" id="bootSplash" aria-hidden="true">
+      <img src="/static/logo-192.png?v=0.5.0" alt="" width="72" height="72" />
+      <span>GasRadar</span>
+      <div class="boot-dot" aria-hidden="true"></div>
+    </div>
     <div class="social-fabs" aria-label="Redes sociales">
       <a
         class="social-fab tiktok-fab"
@@ -333,6 +391,23 @@
     </div>
 
     <script src="/static/brand-logos.js?v=0.9.1"></script>
-    <script src="/static/app.js?v=0.9.28"></script>
+    <script src="/static/app.js?v=0.9.29"></script>
+    <script>
+      /* Quita splash cuando la UI ya pintó */
+      (function () {
+        function hide() {
+          var el = document.getElementById("bootSplash");
+          if (!el) return;
+          el.classList.add("is-done");
+          setTimeout(function () {
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+          }, 320);
+        }
+        if (document.readyState === "complete") setTimeout(hide, 80);
+        else window.addEventListener("load", function () { setTimeout(hide, 80); });
+        /* por si el load tarda: no dejar splash eterno */
+        setTimeout(hide, 2200);
+      })();
+    </script>
   </body>
 </html>
