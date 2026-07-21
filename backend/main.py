@@ -16,7 +16,7 @@ from backend.prices import report_price
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.9.17"
+APP_VERSION = "0.9.18"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -27,20 +27,20 @@ def _startup_jobs():
     import os
     import threading
 
-    # 1) EIA: base de estimaciones actualizada (sin Zyla)
-    def _warm_eia():
+    # 1) AAA scraper + EIA (bases de precio gratis)
+    def _warm_prices():
         try:
-            from backend.prices import warm_eia_cache
+            from backend.aaa_scraper import refresh_aaa
+            from backend.prices import US_STATES, warm_eia_cache
 
-            # force si no hay caché; en redeploy de Render el disco está vacío
-            from backend.prices import US_STATES
-
+            aaa = refresh_aaa(["CO", "CA", "TX", "FL", "NY", "AZ", "NV", "WA"])
+            print(f"[aaa] warm startup: {aaa}")
             res = warm_eia_cache(list(US_STATES), force=False)
-            print(f"[eia] warm startup: {res.get('states')}")
+            print(f"[eia] warm startup ok_count={res.get('ok_count')}")
         except Exception as e:
-            print(f"[eia] warm startup error: {type(e).__name__}: {e}")
+            print(f"[prices] warm startup error: {type(e).__name__}: {e}")
 
-    threading.Thread(target=_warm_eia, name="eia-warm", daemon=True).start()
+    threading.Thread(target=_warm_prices, name="prices-warm", daemon=True).start()
 
     # 2) Telegram webhook
     if (os.environ.get("AUTO_TELEGRAM_WEBHOOK") or "1").strip().lower() in (
@@ -210,6 +210,32 @@ def api_eia_refresh(key: str | None = Query(None)):
 def api_cron_eia(key: str | None = Query(None)):
     """Alias del cron EIA semanal (mismo que /api/eia/refresh)."""
     return _run_eia_cron(key)
+
+
+@app.api_route("/api/cron/aaa", methods=["GET", "POST"])
+def api_cron_aaa(key: str | None = Query(None)):
+    """
+    Cron diario AAA (scraper de promedios estado/metro):
+
+      https://gasradarapp.com/api/cron/aaa?key=TU_STATS_KEY
+
+    Más cercano a precios reales que EIA semanal. No es por bomba.
+    """
+    from datetime import datetime, timezone
+
+    from backend.aaa_scraper import refresh_aaa
+    from backend.analytics import check_stats_key
+
+    if not check_stats_key(key):
+        raise HTTPException(401, "Clave incorrecta. Usa ?key= tu STATS_KEY")
+    res = refresh_aaa(
+        ["CO", "CA", "TX", "FL", "NY", "AZ", "NV", "WA", "IL", "GA", "PA", "OH", "NC", "MI"]
+    )
+    res["cron"] = True
+    res["utc"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    res["interval_hint"] = "daily"
+    res["url"] = "https://gasprices.aaa.com"
+    return res
 
 
 @app.get("/api/geo/zip/{zip_code}")

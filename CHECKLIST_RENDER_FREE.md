@@ -72,32 +72,37 @@ git push origin main
 
 ---
 
-## Cron 1× por semana: base EIA (gratis)
+## Cron de precios (scrapers propios, gratis)
 
-EIA solo publica **precios semanales** → no hace falta cada hora.
+### 1) AAA diario (recomendado) — promedios estado/metro
+Más cercanos a la calle que EIA.
+
+```
+https://gasradarapp.com/api/cron/aaa?key=gasradar2026
+```
+
+- Method: **GET**  
+- Schedule: **Every day** ~14:00 UTC  
+
+### 2) EIA semanal — respaldo oficial
 
 ```
 https://gasradarapp.com/api/eia/refresh?key=gasradar2026
 ```
 
-(o tu `STATS_KEY`)
-
-### En [cron-job.org](https://cron-job.org)
-
-1. URL = el link de arriba  
-2. Method = **GET**  
-3. Schedule = **Every Monday** ~14:00 UTC (o “once a week”)  
-4. Enable → Save  
+- Schedule: **Every Monday**  
 
 ### ¿Cualquier ZIP?
 
-Sí: ZIP → estado → promedio EIA de ese estado + marca.
+Sí: ZIP → ciudad/estado → promedio **AAA metro** o estado (o EIA) + marca.
 
-### Precios más rápidos (sin pagar API)
+### Precios más rápidos
 
-Los reportes de la app actualizan el mercado **local al instante**:
-si alguien reporta en una Shell, las estimaciones de esa zona se acercan al precio real
-sin esperar al lunes de EIA.
+Reportes de usuarios en la app → reajustan la zona al instante.
+
+### Nota
+
+GasBuddy por bomba sigue bloqueado (Cloudflare). No usamos Apify de pago.
 
 ---
 

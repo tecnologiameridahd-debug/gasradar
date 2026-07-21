@@ -91,6 +91,7 @@ def run_search(
     label = DEFAULT_LABEL
     state = "CO"
     zip_code = None
+    city = None
     if zip:
         g = geocode_zip(zip)
         if not g:
@@ -99,12 +100,14 @@ def run_search(
         label = g["label"]
         state = g.get("state") or "CO"
         zip_code = g.get("zip") or zip
+        city = g.get("city") or None
     elif lat is not None and lon is not None:
         rev = reverse_geocode(float(lat), float(lon))
         if rev:
             label = rev["label"]
             state = rev.get("state") or "CO"
             zip_code = rev.get("zip")
+            city = rev.get("city") or None
         else:
             label = f"Tu ubicación ({float(lat):.3f}, {float(lon):.3f})"
             state = "CO"
@@ -112,6 +115,7 @@ def run_search(
         lat, lon = DEFAULT_LAT, DEFAULT_LON
         label = DEFAULT_LABEL
         state = "CO"
+        city = "Denver"
 
     if quick:
         limit = min(int(limit), 12)
@@ -301,7 +305,9 @@ def run_search(
         stations = stations_near(
             float(lat), float(lon), radius_mi=radius_mi, limit=min(int(limit), 18)
         )
-        osm_priced = attach_prices(stations, state=state, fuel=fuel) if stations else []
+        osm_priced = (
+            attach_prices(stations, state=state, fuel=fuel, city=city) if stations else []
+        )
         if zyla_stations and osm_priced:
             osm_priced = merge_zyla_prices_into_stations(
                 osm_priced, zyla_stations, fuel=fuel
@@ -339,7 +345,9 @@ def run_search(
             ):
                 zreg = float(zyla.get(fuel) or zyla.get("regular") or 0)
                 if zreg > 1:
-                    meta_avg = (price_meta(state, fast=True).get("state_avg") or {}).get(
+                    meta_avg = (
+                        price_meta(state, fast=True, city=city).get("state_avg") or {}
+                    ).get(
                         fuel
                     )
                     old = float(item.get("price") or zreg)
@@ -358,10 +366,12 @@ def run_search(
 
     if not priced:
         stations = stations_near(float(lat), float(lon), radius_mi=radius_mi, limit=limit)
-        priced = attach_prices(stations, state=state, fuel=fuel) if stations else []
+        priced = (
+            attach_prices(stations, state=state, fuel=fuel, city=city) if stations else []
+        )
 
     best = cheapest_summary(priced) if priced else None
-    meta = price_meta(state, fast=True)
+    meta = price_meta(state, fast=True, city=city)
     if zyla and zyla.get("ok"):
         meta = dict(meta)
         meta["avg_source"] = "zyla"

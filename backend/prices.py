@@ -971,35 +971,47 @@ def fetch_collect_state_averages(state: str = "CO") -> dict | None:
         return None
 
 
-def state_averages(state: str = "CO") -> dict:
-    """Promedios: EIA → Zyla → fallback estático."""
+def state_averages(state: str = "CO", city: str | None = None) -> dict:
+    """
+    Promedios para estimaciones.
+    Prioridad: AAA metro/estado (scraper gratis) → EIA → fallback estático.
+    Zyla desactivado por defecto (cancelada).
+    """
     st = (state or "DEFAULT").upper()
-    eia = fetch_eia_state_averages(st)
     base = dict(BASE_STATE_AVG.get(st) or BASE_STATE_AVG["DEFAULT"])
-    zyla = None
-    if not eia.get("ok"):
-        zyla = fetch_collect_state_averages(st if st != "DEFAULT" else "CO")
 
-    if eia.get("ok"):
+    # 1) AAA scraper (promedios diarios, más cercanos a la calle)
+    aaa = None
+    try:
+        from backend.aaa_scraper import get_aaa_averages
+
+        aaa = get_aaa_averages(st, city=city)
+    except Exception as e:
+        print(f"[prices] aaa: {e}")
+
+    eia = fetch_eia_state_averages(st)
+
+    if aaa and aaa.get("ok") and aaa.get("regular"):
+        source = aaa.get("source") or "aaa"
+        regular = aaa["regular"]
+        mid = aaa.get("mid") or round(regular + SPREAD_MID, 3)
+        premium = aaa.get("premium") or round(regular + SPREAD_PREMIUM, 3)
+        diesel = aaa.get("diesel") or round(regular + SPREAD_DIESEL, 3)
+        period = None
+        eia_ok = bool(eia.get("ok"))
+        aaa_ok = True
+    elif eia.get("ok"):
         source = "eia"
         regular, mid, premium, diesel = eia["regular"], eia["mid"], eia["premium"], eia["diesel"]
         period = eia.get("period")
         eia_ok = True
-    elif zyla and zyla.get("ok"):
-        source = "zyla"
-        regular, mid, premium, diesel = (
-            zyla["regular"],
-            zyla["mid"],
-            zyla["premium"],
-            zyla["diesel"],
-        )
-        period = None
-        eia_ok = False
+        aaa_ok = False
     else:
         source = "fallback"
         regular, mid, premium, diesel = base["regular"], base["mid"], base["premium"], base["diesel"]
         period = None
         eia_ok = False
+        aaa_ok = False
 
     out = {
         "regular": regular,
@@ -1009,8 +1021,9 @@ def state_averages(state: str = "CO") -> dict:
         "source": source,
         "eia_period": period,
         "eia_ok": eia_ok,
-        "zyla_ok": bool(zyla and zyla.get("ok")),
-        "collect_ok": bool(zyla and zyla.get("ok")),
+        "aaa_ok": aaa_ok,
+        "zyla_ok": False,
+        "collect_ok": False,
     }
     return out
 
@@ -1028,10 +1041,10 @@ def _brand_delta(brand: str | None) -> float:
     return 0.0
 
 
-def estimate_prices(station: dict, state: str = "CO") -> dict:
+def estimate_prices(station: dict, state: str = "CO", city: str | None = None) -> dict:
     reports = latest_reports(station["id"])
     # no bloquear con red en cada estación
-    meta = price_meta(state, fast=True)
+    meta = price_meta(state, fast=True, city=city)
     avg = {
         **meta["state_avg"],
         "eia_ok": meta.get("eia_ok"),
@@ -1039,7 +1052,13 @@ def estimate_prices(station: dict, state: str = "CO") -> dict:
     }
     delta = _brand_delta(station.get("brand"))
     jitter = _seed_from_id(station["id"])
-    base_src = "eia_estimate" if avg.get("eia_ok") else "estimate"
+    avg_src = (meta.get("avg_source") or "").lower()
+    if avg_src in ("aaa", "aaa_metro"):
+        base_src = "aaa_estimate"
+    elif avg.get("eia_ok") or avg_src == "eia":
+        base_src = "eia_estimate"
+    else:
+        base_src = "estimate"
 
     prices: dict = {}
     for fuel in ("regular", "mid", "premium", "diesel"):
@@ -1154,13 +1173,17 @@ def refine_with_local_reports(
     return stations
 
 
-def attach_prices(stations: list[dict], state: str = "CO", fuel: str = "regular") -> list[dict]:
+def attach_prices(
+    stations: list[dict],
+    state: str = "CO",
+    fuel: str = "regular",
+    city: str | None = None,
+) -> list[dict]:
     fuel = fuel.lower()
     # usar promedios sin bloquear (caché o fallback)
-    # no llamar EIA síncrono aquí
     out = []
     for s in stations:
-        prices = estimate_prices(s, state=state)
+        prices = estimate_prices(s, state=state, city=city)
         item = dict(s)
         item["prices"] = prices
         pf = prices.get(fuel, prices["regular"])
@@ -1187,7 +1210,7 @@ def attach_prices(stations: list[dict], state: str = "CO", fuel: str = "regular"
     # Delta vs promedio del estado (para UI de "ahorro")
     avg_fuel = None
     try:
-        meta = price_meta(state, fast=True)
+        meta = price_meta(state, fast=True, city=city)
         avg_fuel = (meta.get("state_avg") or {}).get(fuel)
     except Exception:
         avg_fuel = None
@@ -1230,65 +1253,36 @@ def _avg_from_eia_blob(blob: dict, source: str = "eia") -> dict:
     }
 
 
-def price_meta(state: str = "CO", fast: bool = True) -> dict:
+def price_meta(
+    state: str = "CO",
+    fast: bool = True,
+    city: str | None = None,
+) -> dict:
     """
     Promedios para UI y estimaciones.
-    Prioridad: memoria EIA → disco EIA (aunque sea de ayer) → 1 fetch EIA si no hay nada
-    → fallback hardcode (ya actualizado 2026-07).
-    Zyla no se usa (cancelada).
+    Prioridad: AAA (scraper diario) → EIA → fallback.
     """
     st = (state or "DEFAULT").upper()
-    now = time.time()
-    avg = None
-
-    cached = _eia_mem["by_state"].get(st)
-    if cached and cached.get("ok"):
-        avg = _avg_from_eia_blob(cached, "eia")
-        if now - cached.get("ts", 0) >= EIA_CACHE_TTL:
-            maybe_refresh_eia_background(st)
-    else:
-        disk = _load_disk_eia().get(st) or _load_disk_eia().get("DEFAULT")
-        if disk and disk.get("ok"):
-            _eia_mem["by_state"][st] = disk
-            avg = _avg_from_eia_blob(disk, "eia")
-            if now - float(disk.get("ts") or 0) >= EIA_CACHE_TTL:
-                maybe_refresh_eia_background(st)
-        elif not fast:
-            eia = fetch_eia_state_averages(st, force=False)
-            if eia.get("ok"):
-                avg = _avg_from_eia_blob(eia, "eia")
-        else:
-            # primera búsqueda en Render sin caché: 1 fetch corto (mejor que $3.19 viejo)
-            try:
-                eia = fetch_eia_state_averages(st, force=False)
-                if eia.get("ok"):
-                    avg = _avg_from_eia_blob(eia, "eia")
-                else:
-                    maybe_refresh_eia_background(st)
-            except Exception:
-                maybe_refresh_eia_background(st)
-
-    if avg is None:
-        base = dict(BASE_STATE_AVG.get(st) or BASE_STATE_AVG["DEFAULT"])
-        avg = {**base, "source": "fallback", "eia_period": None, "eia_ok": False}
-        maybe_refresh_eia_background(st)
+    avg_full = state_averages(st, city=city)
+    maybe_refresh_eia_background(st)
 
     return {
         "state_avg": {
-            "regular": avg["regular"],
-            "mid": avg["mid"],
-            "premium": avg["premium"],
-            "diesel": avg["diesel"],
+            "regular": avg_full["regular"],
+            "mid": avg_full["mid"],
+            "premium": avg_full["premium"],
+            "diesel": avg_full["diesel"],
         },
-        "avg_source": avg.get("source"),
-        "eia_period": avg.get("eia_period"),
-        "eia_ok": avg.get("eia_ok"),
+        "avg_source": avg_full.get("source"),
+        "eia_period": avg_full.get("eia_period"),
+        "eia_ok": avg_full.get("eia_ok"),
+        "aaa_ok": avg_full.get("aaa_ok"),
         "collect_api_configured": False,
         "zyla_configured": bool(_zyla_api_key()),
         "zyla_url_configured": bool(_zyla_gas_url()),
         "how_it_works": (
-            "1) Reportes de la comunidad (prioridad; mueven el mercado local al instante). "
-            "2) Promedio oficial EIA semanal (gratis) + ajuste por marca. "
+            "1) Reportes de la comunidad (prioridad). "
+            "2) Promedio AAA (scraper diario) o EIA semanal + marca. "
             "3) Precio exacto de bomba: reporta al pasar."
         ),
     }
