@@ -21,6 +21,11 @@ const I18N = {
     locHint: "Escribe un ZIP o usa el GPS",
     cheapestBadge: "★ Más barata",
     directions: "Cómo llegar",
+    navOpenTitle: "Abriendo ruta",
+    navOpenHint: "Se abrirá Apple Maps o Google Maps. GasRadar se queda aquí.",
+    navOpenBtn: "Abrir mapas",
+    navStayBtn: "Quedarme aquí",
+    navOpening: "Abriendo navegación…",
     share: "Compartir",
     nearYou: "Cerca de ti",
     loading: "Cargando…",
@@ -117,6 +122,11 @@ const I18N = {
     locHint: "Enter a ZIP or use GPS",
     cheapestBadge: "★ Cheapest",
     directions: "Directions",
+    navOpenTitle: "Opening route",
+    navOpenHint: "Apple Maps or Google Maps will open. GasRadar stays here.",
+    navOpenBtn: "Open maps",
+    navStayBtn: "Stay here",
+    navOpening: "Opening navigation…",
     share: "Share",
     nearYou: "Near you",
     loading: "Loading…",
@@ -454,7 +464,7 @@ function detectPlatform() {
 }
 
 /**
- * Enlace de navegación (sin cambios de lógica de maps).
+ * Enlaces de navegación (web + deep links nativos).
  */
 function mapsUrl(stationOrLat, lon, name) {
   let lat, stationName, mapsQuery, isSearch;
@@ -486,13 +496,103 @@ function mapsUrl(stationOrLat, lon, name) {
   if (platform === "ios") {
     return `https://maps.apple.com/?daddr=${dest}&q=${encodeURIComponent(stationName)}&dirflg=d&ll=${dest}`;
   }
-  return `https://www.google.com/maps/dir/?api=1&destination=${dest}&destination=${encodeURIComponent(
-    stationName
-  )}&travelmode=driving`;
+  return `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`;
+}
+
+/** Deep link nativo (menos pestaña blanca en móvil). */
+function mapsNativeUrl(st) {
+  if (!st || st.lat == null || st.lon == null) return mapsUrl(st);
+  const lat = st.lat;
+  const lon = st.lon;
+  const label = encodeURIComponent(st.name || "Gas");
+  const platform = detectPlatform();
+  if (platform === "ios") {
+    return `maps://?daddr=${lat},${lon}&q=${label}&dirflg=d`;
+  }
+  if (platform === "android") {
+    // Abre Google Maps app si está instalada; si no, el sistema cae al navegador
+    return `google.navigation:q=${lat},${lon}`;
+  }
+  return mapsUrl(st);
 }
 
 function mapsButtonLabel() {
   return t("directions");
+}
+
+let _navStation = null;
+
+function closeNavSheet() {
+  const el = $("#navSheet");
+  if (el) el.hidden = true;
+  _navStation = null;
+}
+
+function openNavSheet(st) {
+  if (!st) return;
+  _navStation = st;
+  const sheet = $("#navSheet");
+  if (!sheet) {
+    // fallback sin hoja
+    launchMaps(st);
+    return;
+  }
+  const nameEl = $("#navSheetName");
+  const metaEl = $("#navSheetMeta");
+  if (nameEl) nameEl.textContent = st.name || "—";
+  if (metaEl) {
+    const bits = [];
+    if (st.price != null) bits.push(money(st.price));
+    if (st.distance_mi != null) bits.push(`${Number(st.distance_mi).toFixed(1)} mi`);
+    if (st.address) bits.push(st.address);
+    metaEl.textContent = bits.join(" · ");
+  }
+  sheet.hidden = false;
+}
+
+/** Abre Maps nativo o web sin dejar al usuario en pestaña blanca vacía. */
+function launchMaps(st) {
+  if (!st) return;
+  const native = mapsNativeUrl(st);
+  const web = mapsUrl(st);
+  try {
+    // Intento nativo primero (app de mapas)
+    const a = document.createElement("a");
+    a.href = native;
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } catch (_) {
+    /* ignore */
+  }
+  // Respaldo web en ~0.8s si el deep link no hizo nada (escritorio / sin app)
+  setTimeout(() => {
+    try {
+      window.open(web, "_blank", "noopener");
+    } catch (_) {
+      location.href = web;
+    }
+  }, 700);
+}
+
+function openDirections(st) {
+  if (!st) return;
+  openNavSheet(st);
+}
+
+function bindNavSheet() {
+  const sheet = $("#navSheet");
+  if (!sheet) return;
+  $("#navSheetOpen")?.addEventListener("click", () => {
+    const st = _navStation;
+    closeNavSheet();
+    if (st) launchMaps(st);
+  });
+  $("#navSheetStay")?.addEventListener("click", () => closeNavSheet());
+  sheet.addEventListener("click", (e) => {
+    if (e.target === sheet) closeNavSheet();
+  });
 }
 
 function setStatus(msg, kind = "loading") {
@@ -846,8 +946,15 @@ function render(data) {
       state.stations.find((x) => x.id === b.station_id) ||
       state.stations.find((x) => x.name === b.name) ||
       b;
-    $("#bestMaps").href = mapsUrl(full);
-    $("#bestMaps").textContent = t("directions");
+    const bestMaps = $("#bestMaps");
+    if (bestMaps) {
+      bestMaps.textContent = t("directions");
+      bestMaps.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openDirections(full);
+      };
+    }
   } else {
     state.cheapest = null;
     $("#bestCard").hidden = true;
@@ -918,13 +1025,7 @@ function render(data) {
       e.stopPropagation();
       const id = btn.getAttribute("data-maps");
       const st = state.stations.find((x) => x.id === id);
-      if (!st) return;
-      const url = mapsUrl(st);
-      try {
-        window.open(url, "_blank", "noopener");
-      } catch (_) {
-        location.href = url;
-      }
+      if (st) openDirections(st);
     });
   });
   $("#results").querySelectorAll("[data-report]").forEach((btn) => {
@@ -1235,6 +1336,7 @@ function startApp() {
 function bind() {
   $("#btnLangEs")?.addEventListener("click", () => setLang("es"));
   $("#btnLangEn")?.addEventListener("click", () => setLang("en"));
+  bindNavSheet();
 
   const bestShare = $("#bestShare");
   if (bestShare) {
