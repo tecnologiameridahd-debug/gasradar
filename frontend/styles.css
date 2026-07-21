@@ -1621,23 +1621,31 @@ button.btn-ghost:hover,
   text-decoration: underline !important;
 }
 
-/* ——— Hoja “Cómo llegar” (evita pantalla blanca de Maps) ——— */
-/* display:flex gana al atributo [hidden] del navegador → hay que forzar hide */
-.nav-sheet-bg[hidden] {
-  display: none !important;
-}
-
+/* ——— Hoja “Cómo llegar” (solo con .is-open; NUNCA al cargar) ——— */
 .nav-sheet-bg {
+  display: none;
   position: fixed;
   inset: 0;
   z-index: 80;
   background: rgba(5, 10, 20, 0.62);
   backdrop-filter: blur(6px);
-  display: flex;
   align-items: flex-end;
   justify-content: center;
   padding: 12px 12px calc(12px + var(--safe-b));
+}
+
+.nav-sheet-bg.is-open {
+  display: flex !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
   animation: fadeIn 0.18s ease;
+}
+
+.nav-sheet-bg[hidden],
+.nav-sheet-bg:not(.is-open) {
+  display: none !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
 }
 
 .nav-sheet {

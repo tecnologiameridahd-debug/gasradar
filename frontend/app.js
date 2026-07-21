@@ -21,10 +21,10 @@ const I18N = {
     locHint: "Escribe un ZIP o usa el GPS",
     cheapestBadge: "★ Más barata",
     directions: "Cómo llegar",
-    navOpenTitle: "Abriendo ruta",
+    navOpenTitle: "Cómo llegar",
     navOpenHint: "Se abrirá Apple Maps o Google Maps. GasRadar se queda aquí.",
     navOpenBtn: "Abrir mapas",
-    navStayBtn: "Quedarme aquí",
+    navStayBtn: "Cancelar",
     navOpening: "Abriendo navegación…",
     share: "Compartir",
     nearYou: "Cerca de ti",
@@ -122,10 +122,10 @@ const I18N = {
     locHint: "Enter a ZIP or use GPS",
     cheapestBadge: "★ Cheapest",
     directions: "Directions",
-    navOpenTitle: "Opening route",
+    navOpenTitle: "Directions",
     navOpenHint: "Apple Maps or Google Maps will open. GasRadar stays here.",
     navOpenBtn: "Open maps",
-    navStayBtn: "Stay here",
+    navStayBtn: "Cancel",
     navOpening: "Opening navigation…",
     share: "Share",
     nearYou: "Near you",
@@ -524,7 +524,12 @@ let _navStation = null;
 
 function closeNavSheet() {
   const el = $("#navSheet");
-  if (el) el.hidden = true;
+  if (el) {
+    el.hidden = true;
+    el.classList.remove("is-open");
+    el.setAttribute("aria-hidden", "true");
+    el.style.cssText = "display:none!important;visibility:hidden;pointer-events:none";
+  }
   _navStation = null;
 }
 
@@ -547,7 +552,11 @@ function openNavSheet(st) {
     if (st.address) bits.push(st.address);
     metaEl.textContent = bits.join(" · ");
   }
+  // Solo se muestra al tocar “Cómo llegar” — nunca al cargar la página
   sheet.hidden = false;
+  sheet.style.cssText = "";
+  sheet.classList.add("is-open");
+  sheet.setAttribute("aria-hidden", "false");
 }
 
 /** Abre Maps nativo o web sin dejar al usuario en pestaña blanca vacía. */
@@ -584,6 +593,8 @@ function openDirections(st) {
 function bindNavSheet() {
   const sheet = $("#navSheet");
   if (!sheet) return;
+  // Garantiza cerrado al arrancar (caché vieja / FOUC del sheet)
+  closeNavSheet();
   $("#navSheetOpen")?.addEventListener("click", () => {
     const st = _navStation;
     closeNavSheet();
@@ -592,6 +603,9 @@ function bindNavSheet() {
   $("#navSheetStay")?.addEventListener("click", () => closeNavSheet());
   sheet.addEventListener("click", (e) => {
     if (e.target === sheet) closeNavSheet();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeNavSheet();
   });
 }
 

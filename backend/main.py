@@ -16,7 +16,7 @@ from backend.prices import report_price
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.9.33"
+APP_VERSION = "0.9.34"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
