@@ -16,7 +16,7 @@ from backend.prices import report_price
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.9.35"
+APP_VERSION = "0.9.36"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -87,10 +87,12 @@ async def add_headers(request, call_next):
     elif path == "/":
         # Navegador revalida (max-age=0); Cloudflare puede servir shell oscuro del edge
         # mientras Render despierta (s-maxage + stale-while-revalidate).
+        # OJO: MutableHeaders de Starlette NO tiene .pop() → 500 Internal Server Error
         response.headers["Cache-Control"] = (
             "public, max-age=0, s-maxage=300, stale-while-revalidate=86400"
         )
-        response.headers.pop("Pragma", None)
+        if "pragma" in response.headers:
+            del response.headers["pragma"]
     return response
 
 

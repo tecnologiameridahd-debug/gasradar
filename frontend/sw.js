@@ -1,5 +1,5 @@
 /* GasRadar service worker — shell oscura al instante (sin flash blanco) */
-const CACHE = "gasradar-v0.9.35";
+const CACHE = "gasradar-v0.9.36";
 const PRECACHE = [
   "/",
   "/static/styles.css?v=0.9.35",
