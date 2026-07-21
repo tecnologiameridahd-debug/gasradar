@@ -708,7 +708,7 @@ async function search({ lat, lon, zip, force = false, soft = false } = {}) {
   const params = new URLSearchParams();
   params.set("fuel", state.fuel);
   params.set("radius_mi", String(state.radius));
-  params.set("limit", "20");
+  params.set("limit", "30");
   if (zip) params.set("zip", zip);
   if (lat != null && lon != null) {
     params.set("lat", String(lat));

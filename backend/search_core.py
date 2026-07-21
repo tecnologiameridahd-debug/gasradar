@@ -258,50 +258,58 @@ def run_search(
             priced.append(row)
         print(f"[search] gasbuddy primary n={len(priced)}")
 
-    # 2) OSM + AAA solo si GasBuddy no trajo lista sólida
-    # Con 8+ GasBuddy (nombre+dir+precio) no mezclamos basura OSM ("Gas station")
-    gb_n = sum(1 for p in priced if p.get("price_source") == "gasbuddy")
-    need_osm = gb_n < 8
+    # 2) OSM + AAA: SIEMPRE rellenar huecos cercanos (ej. Conoco a 0.7 mi que
+    # GasBuddy no trajo). No omitir solo porque ya hay 8+ de GasBuddy.
+    # Sí filtramos basura: "Gas station" anónimo, dispensarios, etc.
+    stations = stations_near(
+        float(lat), float(lon), radius_mi=radius_mi, limit=min(int(limit) + 10, 30)
+    )
+    osm_priced = (
+        attach_prices(stations, state=state, fuel=fuel, city=city) if stations else []
+    )
+    for item in osm_priced:
+        if (item.get("address") or "").strip():
+            continue
+        for gb in priced:
+            if gb.get("price_source") != "gasbuddy":
+                continue
+            if not (gb.get("address") or "").strip():
+                continue
+            if _near(item, gb, 0.2):
+                item["address"] = gb["address"]
+                item["maps_query"] = f"{item.get('name') or 'Gas'}, {gb['address']}"
+                if item.get("price_source") not in ("user", "gasbuddy"):
+                    item["price"] = gb["price"]
+                    item["price_source"] = "gasbuddy"
+                    item["price_confidence"] = "high"
+                    item["prices"] = dict(gb.get("prices") or {})
+                break
 
-    if need_osm and len(priced) < max(8, min(int(limit), 15)):
-        stations = stations_near(
-            float(lat), float(lon), radius_mi=radius_mi, limit=min(int(limit), 20)
-        )
-        osm_priced = (
-            attach_prices(stations, state=state, fuel=fuel, city=city) if stations else []
-        )
-        for item in osm_priced:
-            if (item.get("address") or "").strip():
+    for item in osm_priced:
+        low = f"{item.get('name')} {item.get('brand') or ''}".lower()
+        if any(x in low for x in ("dispensary", "cannabis", "marijuana", "weed")):
+            continue
+        nm = (item.get("name") or "").strip().lower()
+        brand = (item.get("brand") or "").strip().lower()
+        # Basura: sin marca y sin nombre útil
+        if nm in ("gas station", "gas", "fuel", "") and not brand:
+            if not (item.get("address") or "").strip():
                 continue
-            for gb in priced:
-                if gb.get("price_source") != "gasbuddy":
-                    continue
-                if not (gb.get("address") or "").strip():
-                    continue
-                if _near(item, gb, 0.2):
-                    item["address"] = gb["address"]
-                    item["maps_query"] = f"{item.get('name') or 'Gas'}, {gb['address']}"
-                    if item.get("price_source") not in ("user", "gasbuddy"):
-                        item["price"] = gb["price"]
-                        item["price_source"] = "gasbuddy"
-                        item["price_confidence"] = "high"
-                        item["prices"] = dict(gb.get("prices") or {})
-                    break
+        if "maybe closed" in nm or "tacos" in nm:
+            continue
+        # Duplicado de un live GasBuddy muy cerca → no añadir otra ficha
+        if any(_near(item, p, 0.12) for p in priced):
+            continue
+        # Fuera de radio del usuario
+        try:
+            if float(item.get("distance_mi") or 99) > float(radius_mi) + 0.35:
+                continue
+        except Exception:
+            pass
+        priced.append(item)
 
-        for item in osm_priced:
-            low = f"{item.get('name')} {item.get('brand') or ''}".lower()
-            if any(x in low for x in ("dispensary", "cannabis", "marijuana", "weed")):
-                continue
-            # Evitar relleno basura: "Gas station" sin marca ni dirección
-            nm = (item.get("name") or "").strip().lower()
-            if nm in ("gas station", "gas", "fuel") and not (item.get("address") or "").strip():
-                continue
-            if "maybe closed" in nm or "tacos" in nm:
-                continue
-            if any(_near(item, p, 0.12) for p in priced):
-                continue
-            priced.append(item)
-
+    # Orden: más barato primero, pero live/GB antes que estimado a mismo precio;
+    # distancia como desempate (la Conoco a 0.7 mi no se “pierde” del todo)
     priced.sort(
         key=lambda x: (
             round(float(x.get("price") or 99), 3),
@@ -309,6 +317,21 @@ def run_search(
             float(x.get("distance_mi") or 99),
         )
     )
+    # Cap final: preferir las más cercanas entre las baratas del top
+    if len(priced) > int(limit):
+        # Mantener todos los gasbuddy; completar con cercanos
+        gb_keep = [p for p in priced if p.get("price_source") == "gasbuddy"]
+        rest = [p for p in priced if p.get("price_source") != "gasbuddy"]
+        rest.sort(key=lambda x: float(x.get("distance_mi") or 99))
+        room = max(0, int(limit) - len(gb_keep))
+        priced = gb_keep + rest[:room]
+        priced.sort(
+            key=lambda x: (
+                round(float(x.get("price") or 99), 3),
+                0 if x.get("price_source") in ("gasbuddy", "user") else 1,
+                float(x.get("distance_mi") or 99),
+            )
+        )
 
     if not priced:
         stations = stations_near(float(lat), float(lon), radius_mi=radius_mi, limit=limit)
