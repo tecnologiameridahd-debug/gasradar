@@ -1622,6 +1622,11 @@ button.btn-ghost:hover,
 }
 
 /* ——— Hoja “Cómo llegar” (evita pantalla blanca de Maps) ——— */
+/* display:flex gana al atributo [hidden] del navegador → hay que forzar hide */
+.nav-sheet-bg[hidden] {
+  display: none !important;
+}
+
 .nav-sheet-bg {
   position: fixed;
   inset: 0;
