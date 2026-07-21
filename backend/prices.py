@@ -443,23 +443,58 @@ def _apply_live_to_runtime_base(st: str, result: dict) -> None:
     }
 
 
+# Todos los estados USA + DEFAULT (promedio nacional EIA)
+US_STATES: list[str] = [
+    "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
+    "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
+    "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
+    "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
+    "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
+    "DEFAULT",
+]
+
+
 def warm_eia_cache(states: list[str] | None = None, force: bool = False) -> dict:
     """
-    Calienta caché EIA al arrancar o 1× al día.
-    Gratis (api.eia.gov). No usa Zyla.
+    Calienta caché EIA (gratis). Cubre cualquier ZIP de USA:
+    ZIP → estado → promedio EIA de ese estado + ajuste por marca.
     """
     global _eia_last_warm, _eia_refresh_lock
     if _eia_refresh_lock:
         return {"ok": False, "busy": True}
     _eia_refresh_lock = True
-    out: dict = {"ok": True, "states": {}, "forced": force}
+    out: dict = {"ok": True, "states": {}, "forced": force, "covers": "all_us_zips"}
     try:
-        want = states or ["CO", "CA", "TX", "FL", "NY", "AZ", "NV", "WA", "DEFAULT"]
+        # Por defecto: todos los estados (cualquier ZIP code USA)
+        want = list(states) if states else list(US_STATES)
+        ok_n = 0
         for st in want:
             try:
-                r = fetch_eia_state_averages(st, force=force)
+                # force=True solo en estados “core” cada hora; el resto se
+                # actualiza si la caché ya expiró (evita rate-limit EIA)
+                st_force = force and st in (
+                    "DEFAULT",
+                    "CO",
+                    "CA",
+                    "TX",
+                    "FL",
+                    "NY",
+                    "AZ",
+                    "NV",
+                    "WA",
+                    "IL",
+                    "PA",
+                    "OH",
+                    "GA",
+                    "NC",
+                    "MI",
+                )
+                r = fetch_eia_state_averages(st, force=st_force)
+                good = bool(r.get("ok"))
+                if good:
+                    ok_n += 1
                 out["states"][st] = {
-                    "ok": bool(r.get("ok")),
+                    "ok": good,
                     "regular": r.get("regular"),
                     "period": r.get("period"),
                 }
@@ -467,6 +502,12 @@ def warm_eia_cache(states: list[str] | None = None, force: bool = False) -> dict
                 out["states"][st] = {"ok": False, "error": str(e)[:80]}
         _eia_last_warm = time.time()
         out["warmed_at"] = _eia_last_warm
+        out["ok_count"] = ok_n
+        out["total"] = len(want)
+        out["note"] = (
+            "Cualquier ZIP USA: se usa el promedio EIA del estado de ese ZIP "
+            "(no hace falta un precio por cada código postal)."
+        )
     finally:
         _eia_refresh_lock = False
     return out

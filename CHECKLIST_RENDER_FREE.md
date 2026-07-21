@@ -83,8 +83,19 @@ https://gasradarapp.com/api/eia/refresh?key=TU_STATS_KEY
 Alias igual:
 
 ```
-https://gasradarapp.com/api/cron/eia?key=TU_STATS_KEY
+https://gasradarapp.com/api/cron/eia?key=gasradar2026
 ```
+
+### ¿Sirve para cualquier ZIP?
+
+**Sí.** No hay un precio por cada ZIP; el flujo es:
+
+1. Usuario pone **cualquier ZIP USA** (ej. 90210, 10001, 33101, 80903)  
+2. GasRadar saca el **estado** (CA, NY, FL, CO…)  
+3. Usa el **promedio EIA de ese estado** (actualizado por el cron)  
+4. Ajusta un poco por **marca** (Shell más caro, Costco más barato…)  
+
+El cron calienta **los 50 estados + promedio nacional**, así cualquier ZIP tiene base.
 
 ### En [cron-job.org](https://cron-job.org) (gratis)
 
@@ -94,7 +105,7 @@ https://gasradarapp.com/api/cron/eia?key=TU_STATS_KEY
 4. Request method = **GET**  
 5. Enable → Save  
 
-Respuesta OK ejemplo: `{"ok":true,"cron":true,"states":{"CO":{"ok":true,"regular":3.72...}}}`  
+Respuesta OK ejemplo: `{"ok":true,"cron":true,"ok_count":51,"covers":"all_us_zips",...}`  
 
 También despierta la app en Render free (doble beneficio).
 

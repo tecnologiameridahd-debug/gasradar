@@ -16,7 +16,7 @@ from backend.prices import report_price
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.9.15"
+APP_VERSION = "0.9.16"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -33,10 +33,9 @@ def _startup_jobs():
             from backend.prices import warm_eia_cache
 
             # force si no hay caché; en redeploy de Render el disco está vacío
-            res = warm_eia_cache(
-                ["CO", "CA", "TX", "FL", "NY", "AZ", "NV", "WA", "DEFAULT"],
-                force=False,
-            )
+            from backend.prices import US_STATES
+
+            res = warm_eia_cache(list(US_STATES), force=False)
             print(f"[eia] warm startup: {res.get('states')}")
         except Exception as e:
             print(f"[eia] warm startup error: {type(e).__name__}: {e}")
@@ -174,18 +173,19 @@ def _run_eia_cron(key: str | None):
     from datetime import datetime, timezone
 
     from backend.analytics import check_stats_key
-    from backend.prices import warm_eia_cache
+    from backend.prices import US_STATES, warm_eia_cache
 
     if not check_stats_key(key):
         raise HTTPException(401, "Clave incorrecta. Usa ?key= tu STATS_KEY")
-    # Estados principales cada hora (pocas llamadas EIA / menos rate-limit)
-    res = warm_eia_cache(
-        ["CO", "CA", "TX", "FL", "NY", "AZ", "NV", "WA", "DEFAULT"],
-        force=True,
-    )
+    # Todos los estados USA → cualquier ZIP code (90210, 10001, 80903…)
+    res = warm_eia_cache(list(US_STATES), force=True)
     res["cron"] = True
     res["utc"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     res["interval_hint"] = "hourly"
+    res["how"] = (
+        "ZIP → estado → promedio EIA del estado + marca. "
+        "Sirve para cualquier ZIP de USA, no solo Colorado."
+    )
     return res
 
 
