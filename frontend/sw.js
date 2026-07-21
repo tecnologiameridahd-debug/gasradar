@@ -1,10 +1,10 @@
-/* GasRadar service worker — cache de shell para PWA */
-const CACHE = "gasradar-v0.9.29";
+/* GasRadar service worker — shell oscura al instante (sin flash blanco) */
+const CACHE = "gasradar-v0.9.31";
 const PRECACHE = [
   "/",
   "/static/styles.css?v=0.9.29",
   "/static/brand-logos.js?v=0.9.1",
-  "/static/app.js?v=0.9.29",
+  "/static/app.js?v=0.9.31",
   "/static/logo.svg?v=0.2.9",
   "/static/logo-192.png?v=0.5.0",
   "/static/logo-512.png?v=0.5.0",
@@ -40,7 +40,7 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
-  // API siempre de red (precios vivos)
+  // API: solo red
   if (url.pathname.startsWith("/api/")) {
     event.respondWith(
       fetch(req).catch(
@@ -54,16 +54,26 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // HTML: red primero
+  // Navegación HTML: CACHÉ PRIMERO (evita pantalla blanca esperando red/cold start)
+  // luego actualiza en segundo plano.
   if (req.mode === "navigate" || url.pathname === "/" || url.pathname.endsWith(".html")) {
     event.respondWith(
-      fetch(req)
-        .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(req, copy));
-          return res;
-        })
-        .catch(() => caches.match(req).then((c) => c || caches.match("/")))
+      caches.match("/").then((cached) => {
+        const network = fetch(req)
+          .then((res) => {
+            if (res && res.ok) {
+              const copy = res.clone();
+              caches.open(CACHE).then((c) => {
+                c.put("/", copy);
+                c.put(req, res.clone());
+              });
+            }
+            return res;
+          })
+          .catch(() => cached || caches.match("/"));
+        // Si hay shell en caché, muéstrala YA (oscura); si no, espera red
+        return cached || network;
+      })
     );
     return;
   }

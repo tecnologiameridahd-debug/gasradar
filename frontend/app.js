@@ -1694,9 +1694,20 @@ function registerServiceWorker() {
     ["localhost", "127.0.0.1"].includes(location.hostname);
   if (!ok) return;
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {
-      /* ignore: PWA opcional */
-    });
+    navigator.serviceWorker
+      .register("/sw.js", { scope: "/" })
+      .then((reg) => {
+        // Fuerza tomar el SW nuevo (flash blanco era caché vieja / red primero)
+        try {
+          reg.update();
+        } catch (_) {}
+        if (reg.waiting) {
+          reg.waiting.postMessage({ type: "SKIP_WAITING" });
+        }
+      })
+      .catch(() => {
+        /* ignore: PWA opcional */
+      });
   });
 }
 

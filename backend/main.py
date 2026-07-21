@@ -16,7 +16,7 @@ from backend.prices import report_price
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.9.30"
+APP_VERSION = "0.9.31"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -529,7 +529,14 @@ def index():
     index_path = FRONTEND / "index.html"
     if not index_path.exists():
         return {"msg": "Frontend missing"}
-    return FileResponse(index_path)
+    # HTML con fondo oscuro inline: no cachear agresivo (PWA/SW lo actualizan)
+    return FileResponse(
+        index_path,
+        headers={
+            "Cache-Control": "no-cache, must-revalidate",
+            "Content-Type": "text/html; charset=utf-8",
+        },
+    )
 
 
 @app.get("/robots.txt")
