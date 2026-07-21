@@ -16,7 +16,7 @@ from backend.prices import report_price
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.9.16"
+APP_VERSION = "0.9.17"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -177,14 +177,19 @@ def _run_eia_cron(key: str | None):
 
     if not check_stats_key(key):
         raise HTTPException(401, "Clave incorrecta. Usa ?key= tu STATS_KEY")
-    # Todos los estados USA → cualquier ZIP code (90210, 10001, 80903…)
+    # Todos los estados USA → cualquier ZIP (EIA es SEMANAL)
     res = warm_eia_cache(list(US_STATES), force=True)
     res["cron"] = True
     res["utc"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    res["interval_hint"] = "hourly"
+    res["interval_hint"] = "weekly"
+    res["schedule_cron"] = "0 14 * * 1"
+    res["schedule_note"] = (
+        "EIA publica ~1 vez por semana (lunes). "
+        "Pon el cron 1×/semana, no cada hora."
+    )
     res["how"] = (
         "ZIP → estado → promedio EIA del estado + marca. "
-        "Sirve para cualquier ZIP de USA, no solo Colorado."
+        "Precios más rápidos: reportes de usuarios en la zona."
     )
     return res
 
@@ -192,18 +197,18 @@ def _run_eia_cron(key: str | None):
 @app.api_route("/api/eia/refresh", methods=["GET", "POST"])
 def api_eia_refresh(key: str | None = Query(None)):
     """
-    Cron cada hora — link listo para cron-job.org / UptimeRobot / Render Cron:
+    Cron SEMANAL (recomendado lunes) — EIA es semanal:
 
       https://gasradarapp.com/api/eia/refresh?key=TU_STATS_KEY
 
-    Actualiza promedios EIA (gratis). No usa Zyla.
+    En cron-job.org: Every Monday 14:00 UTC (o 1× por semana).
     """
     return _run_eia_cron(key)
 
 
 @app.api_route("/api/cron/eia", methods=["GET", "POST"])
 def api_cron_eia(key: str | None = Query(None)):
-    """Alias corto del cron EIA (mismo que /api/eia/refresh)."""
+    """Alias del cron EIA semanal (mismo que /api/eia/refresh)."""
     return _run_eia_cron(key)
 
 

@@ -93,10 +93,9 @@ SPREAD_DIESEL = 0.40
 
 REPORT_MAX_AGE_SEC = 72 * 3600
 REPORT_CONSENSUS_HOURS = 48
-# Caché “caliente”: reusa sin red entre crons
-EIA_CACHE_TTL = 55 * 60  # ~55 min — el cron horario fuerza refresh antes
-# Si es más viejo, sigue sirviendo el valor pero pide refresh en background
-EIA_STALE_SOFT = 2 * 3600
+# Caché EIA: datos oficiales son SEMANALES → no hace falta cron horario
+EIA_CACHE_TTL = 6 * 24 * 3600  # ~6 días (EIA sale ~1×/semana)
+EIA_STALE_SOFT = 8 * 24 * 3600
 
 # Memoria proceso
 _eia_mem: dict = {"ts": 0.0, "by_state": {}}
@@ -1078,6 +1077,83 @@ def estimate_prices(station: dict, state: str = "CO") -> dict:
     return prices
 
 
+def refine_with_local_reports(
+    stations: list[dict], fuel: str = "regular"
+) -> list[dict]:
+    """
+    Mejora precios MÁS RÁPIDO que esperar a EIA semanal:
+    si hay reportes de usuarios en la zona (lista actual),
+    re-estima el resto usando ese mercado local + marca.
+
+    Gratis, sin Zyla. 1 solo reporte ya mueve las estimaciones cercanas.
+    """
+    if not stations:
+        return stations
+    fuel = (fuel or "regular").lower()
+    live = ("user", "zyla", "gasbuddy")
+    user_rows = [
+        s
+        for s in stations
+        if s.get("price_source") == "user" and s.get("price") is not None
+    ]
+    if not user_rows:
+        return stations
+
+    # Base de mercado “neutra” quitando el delta de marca del reporte
+    implied = []
+    brand_prices: dict[str, list[float]] = {}
+    for s in user_rows:
+        p = float(s["price"])
+        d = _brand_delta(s.get("brand"))
+        implied.append(p - d)
+        bkey = (s.get("brand") or "").strip().lower()
+        if bkey:
+            brand_prices.setdefault(bkey, []).append(p)
+
+    market_base = statistics.median(implied)
+    brand_med = {
+        b: statistics.median(vals) for b, vals in brand_prices.items() if vals
+    }
+
+    for s in stations:
+        if s.get("price_source") in live:
+            continue
+        bkey = (s.get("brand") or "").strip().lower()
+        # Misma marca que alguien reportó → usa ese precio (más real)
+        if bkey and bkey in brand_med:
+            raw = float(brand_med[bkey]) + _seed_from_id(s.get("id") or "") * 0.25
+            src = "local_brand"
+            conf = "medium"
+        else:
+            raw = market_base + _brand_delta(s.get("brand")) + _seed_from_id(
+                s.get("id") or ""
+            ) * 0.35
+            src = "local_estimate"
+            conf = "medium"
+        price = round(max(1.5, raw), 3)
+        s["price"] = price
+        s["price_source"] = src
+        s["price_confidence"] = conf
+        if isinstance(s.get("prices"), dict):
+            s["prices"][fuel] = {
+                "price": price,
+                "source": src,
+                "age_hours": None,
+                "reports_count": 0,
+                "confidence": conf,
+            }
+
+    stations.sort(
+        key=lambda x: (
+            round(float(x.get("price") or 99), 3),
+            0 if x.get("price_source") == "user" else 1,
+            0 if x.get("price_source") in ("local_brand", "local_estimate") else 2,
+            float(x.get("distance_mi") or 99),
+        )
+    )
+    return stations
+
+
 def attach_prices(stations: list[dict], state: str = "CO", fuel: str = "regular") -> list[dict]:
     fuel = fuel.lower()
     # usar promedios sin bloquear (caché o fallback)
@@ -1094,6 +1170,9 @@ def attach_prices(stations: list[dict], state: str = "CO", fuel: str = "regular"
         item["price_confidence"] = pf.get("confidence")
         item["reports_count"] = pf.get("reports_count") or 0
         out.append(item)
+
+    # Si hay reportes en la zona, sube/baja las estimaciones al mercado real YA
+    out = refine_with_local_reports(out, fuel=fuel)
 
     # Ranking: más barato primero; reportes de usuario ganan empates; luego cercanía
     def sort_key(x):
@@ -1208,8 +1287,8 @@ def price_meta(state: str = "CO", fast: bool = True) -> dict:
         "zyla_configured": bool(_zyla_api_key()),
         "zyla_url_configured": bool(_zyla_gas_url()),
         "how_it_works": (
-            "1) Reportes de la comunidad (prioridad). "
-            "2) Promedio oficial EIA (gratis, se actualiza ~diario) + ajuste por marca. "
+            "1) Reportes de la comunidad (prioridad; mueven el mercado local al instante). "
+            "2) Promedio oficial EIA semanal (gratis) + ajuste por marca. "
             "3) Precio exacto de bomba: reporta al pasar."
         ),
     }

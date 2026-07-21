@@ -72,42 +72,32 @@ git push origin main
 
 ---
 
-## Cron cada hora: actualizar precios base (EIA gratis)
+## Cron 1× por semana: base EIA (gratis)
 
-Sin Zyla. El cron llama a este **link** (GET):
-
-```
-https://gasradarapp.com/api/eia/refresh?key=TU_STATS_KEY
-```
-
-Alias igual:
+EIA solo publica **precios semanales** → no hace falta cada hora.
 
 ```
-https://gasradarapp.com/api/cron/eia?key=gasradar2026
+https://gasradarapp.com/api/eia/refresh?key=gasradar2026
 ```
 
-### ¿Sirve para cualquier ZIP?
+(o tu `STATS_KEY`)
 
-**Sí.** No hay un precio por cada ZIP; el flujo es:
+### En [cron-job.org](https://cron-job.org)
 
-1. Usuario pone **cualquier ZIP USA** (ej. 90210, 10001, 33101, 80903)  
-2. GasRadar saca el **estado** (CA, NY, FL, CO…)  
-3. Usa el **promedio EIA de ese estado** (actualizado por el cron)  
-4. Ajusta un poco por **marca** (Shell más caro, Costco más barato…)  
+1. URL = el link de arriba  
+2. Method = **GET**  
+3. Schedule = **Every Monday** ~14:00 UTC (o “once a week”)  
+4. Enable → Save  
 
-El cron calienta **los 50 estados + promedio nacional**, así cualquier ZIP tiene base.
+### ¿Cualquier ZIP?
 
-### En [cron-job.org](https://cron-job.org) (gratis)
+Sí: ZIP → estado → promedio EIA de ese estado + marca.
 
-1. Create cronjob  
-2. **URL** = el link de arriba (cambia `TU_STATS_KEY` por tu `STATS_KEY` de Render; si no pusiste una, la default es `gasradar2026`)  
-3. **Schedule** = every hour (`0 * * * *` o “every 1 hour”)  
-4. Request method = **GET**  
-5. Enable → Save  
+### Precios más rápidos (sin pagar API)
 
-Respuesta OK ejemplo: `{"ok":true,"cron":true,"ok_count":51,"covers":"all_us_zips",...}`  
-
-También despierta la app en Render free (doble beneficio).
+Los reportes de la app actualizan el mercado **local al instante**:
+si alguien reporta en una Shell, las estimaciones de esa zona se acercan al precio real
+sin esperar al lunes de EIA.
 
 ---
 
