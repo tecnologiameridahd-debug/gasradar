@@ -74,17 +74,29 @@ git push origin main
 
 ## Cron de precios (scrapers propios, gratis)
 
-### 1) AAA diario — **todo USA** (recomendado)
-Promedios de **50 estados + metros** (Denver, LA, NYC…). Cualquier ZIP.
+### 1) AAA diario — **todo USA** (recomendado para cron-job.org)
+**1 solo link** (responde en segundos, no hace timeout):
 
 ```
 https://gasradarapp.com/api/cron/aaa?key=gasradar2026
 ```
 
 - Method: **GET**  
-- Schedule: **Every day** ~15:00 UTC (puede tardar 2–5 min)  
-- Versión rápida (solo estados top + tabla nacional):  
-  `https://gasradarapp.com/api/cron/aaa?key=gasradar2026&full=0`
+- Schedule: **Every day**  
+- Timeout del cron: 30–60 s basta  
+- Actualiza **50 estados** → cualquier ZIP USA  
+
+Opcional (metros en background, sigue respondiendo rápido):
+
+```
+https://gasradarapp.com/api/cron/aaa?key=gasradar2026&full=1
+```
+
+Estado del job:
+
+```
+https://gasradarapp.com/api/cron/aaa/status?key=gasradar2026
+```
 
 ### 2) EIA semanal — respaldo oficial
 

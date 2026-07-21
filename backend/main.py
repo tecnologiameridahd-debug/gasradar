@@ -16,7 +16,7 @@ from backend.prices import report_price
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.9.20"
+APP_VERSION = "0.9.21"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -220,37 +220,94 @@ def api_cron_eia(key: str | None = Query(None)):
 @app.api_route("/api/cron/aaa", methods=["GET", "POST"])
 def api_cron_aaa(
     key: str | None = Query(None),
-    full: int = Query(1, ge=0, le=1),
+    full: int = Query(0, ge=0, le=1),
+    bg: int = Query(1, ge=0, le=1),
 ):
     """
-    Cron diario AAA — TODO USA (cualquier ZIP):
+    Cron diario AAA — responde RÁPIDO (para cron-job.org no haga timeout).
 
+    Link recomendado (usa este en cron-job.org):
       https://gasradarapp.com/api/cron/aaa?key=TU_STATS_KEY
 
-    full=1 (default): tabla 50 estados + metros de todos los estados (~2–5 min).
-    full=0: solo tabla nacional + metros de estados principales (más rápido).
+    - Por defecto: actualiza la tabla de 50 estados en segundos (cualquier ZIP USA).
+    - bg=1: si full=1, los metros se hacen en segundo plano.
+    - full=1: también scrapea metros de todos los estados (lento; mejor en background).
     """
     from datetime import datetime, timezone
 
-    from backend.aaa_scraper import US_STATE_CODES, refresh_aaa
+    from backend.aaa_scraper import (
+        aaa_job_status,
+        refresh_aaa,
+        refresh_aaa_table_only,
+        start_aaa_refresh_background,
+    )
     from backend.analytics import check_stats_key
 
     if not check_stats_key(key):
         raise HTTPException(401, "Clave incorrecta. Usa ?key= tu STATS_KEY")
-    if full:
-        # Todo USA: estados + metros (recomendado 1×/día)
-        res = refresh_aaa(list(US_STATE_CODES), full_usa=True)
-    else:
-        res = refresh_aaa(
-            ["CO", "CA", "TX", "FL", "NY", "AZ", "NV", "WA", "IL", "GA", "PA", "OH", "NC", "MI"],
-            full_usa=False,
-        )
+
+    utc = datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+    # Modo cron: siempre hacer la tabla rápida (cubre todo USA) y devolver YA
+    if bg or not full:
+        # 1) Sync rápido: 50 estados (~10–20 s)
+        try:
+            fast = refresh_aaa_table_only()
+        except Exception as e:
+            raise HTTPException(502, f"AAA table fail: {e}") from e
+
+        # 2) Metros en background solo si full=1
+        bg_info = None
+        if full:
+            bg_info = start_aaa_refresh_background(
+                states=None,
+                full_usa=True,
+                table_first=False,
+            )
+
+        return {
+            "ok": bool(fast.get("ok")),
+            "cron": True,
+            "utc": utc,
+            "interval_hint": "daily",
+            "mode": "fast_table",
+            "message": (
+                "Tabla 50 estados actualizada (cualquier ZIP USA). "
+                + ("Metros en segundo plano." if full else "Para metros usa full=1.")
+            ),
+            "states": fast.get("states"),
+            "metros": fast.get("metros"),
+            "co_regular": fast.get("co_regular"),
+            "background": bg_info,
+            "job": aaa_job_status(),
+            "url": "https://gasprices.aaa.com",
+        }
+
+    # bg=0 y full=1: modo lento síncrono (solo si aumentas timeout del cron)
+    res = refresh_aaa(full_usa=True)
     res["cron"] = True
-    res["utc"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    res["utc"] = utc
     res["interval_hint"] = "daily"
+    res["mode"] = "full_sync"
     res["url"] = "https://gasprices.aaa.com"
-    res["scope"] = "all_usa" if full else "core_states"
     return res
+
+
+@app.get("/api/cron/aaa/status")
+def api_cron_aaa_status(key: str | None = Query(None)):
+    """Estado del job AAA en background."""
+    from backend.aaa_scraper import aaa_job_status, get_aaa_averages
+    from backend.analytics import check_stats_key
+
+    if not check_stats_key(key):
+        raise HTTPException(401, "Clave incorrecta")
+    co = get_aaa_averages("CO")
+    return {
+        "ok": True,
+        "job": aaa_job_status(),
+        "co_regular": (co or {}).get("regular"),
+        "co_source": (co or {}).get("source"),
+    }
 
 
 @app.get("/api/geo/zip/{zip_code}")

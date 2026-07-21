@@ -21,6 +21,14 @@ AAA_CACHE_PATH = DATA_DIR / "aaa_cache.json"
 AAA_CACHE_TTL = 20 * 3600  # ~20h (AAA suele actualizar 1×/día)
 
 _mem: dict[str, Any] = {"ts": 0.0, "states": {}, "metros": {}}
+_job: dict[str, Any] = {
+    "running": False,
+    "last_start": None,
+    "last_end": None,
+    "last_ok": None,
+    "last_error": None,
+    "last_result": None,
+}
 
 # USPS abbr
 _STATE_NAME_TO_ABBR = {
@@ -297,6 +305,53 @@ US_STATE_CODES: list[str] = [
 ]
 
 
+def refresh_aaa_table_only() -> dict:
+    """
+    Rápido (~5–15 s): 1 sola página = 50 estados + DC.
+    Suficiente para CUALQUIER ZIP de USA (promedio del estado).
+    Ideal para cron-job.org (timeout corto).
+    """
+    if not _enabled():
+        return {"ok": False, "disabled": True}
+
+    now = time.time()
+    disk = _load_disk()
+    states_map = dict(disk.get("states") or {})
+    metros_map = dict(disk.get("metros") or {})
+
+    table = fetch_aaa_state_table()
+    if not table:
+        return {
+            "ok": False,
+            "error": "no se pudo leer tabla AAA",
+            "states": len(states_map),
+            "metros": len(metros_map),
+        }
+    for k, v in table.items():
+        states_map[k] = v
+
+    payload = {
+        "ts": now,
+        "ok": True,
+        "states": states_map,
+        "metros": metros_map,
+        "source": "aaa",
+        "covers": "all_us_states",
+    }
+    _mem.clear()
+    _mem.update(payload)
+    _save_disk(payload)
+    return {
+        "ok": True,
+        "mode": "table_fast",
+        "states": len(states_map),
+        "metros": len(metros_map),
+        "co_regular": (states_map.get("CO") or {}).get("regular"),
+        "covers": "USA — cualquier ZIP → promedio del estado AAA",
+        "seconds": "fast",
+    }
+
+
 def refresh_aaa(states: list[str] | None = None, full_usa: bool = True) -> dict:
     """
     Actualiza caché AAA para TODO USA.
@@ -352,11 +407,63 @@ def refresh_aaa(states: list[str] | None = None, full_usa: bool = True) -> dict:
     _save_disk(payload)
     return {
         "ok": payload["ok"],
+        "mode": "full",
         "states": len(states_map),
         "metros": len(metros_map),
         "details_ok": detail_ok,
         "co_regular": (states_map.get("CO") or {}).get("regular"),
         "covers": "USA — cualquier ZIP → estado AAA (+ metro si hay)",
+    }
+
+
+def aaa_job_status() -> dict:
+    return dict(_job)
+
+
+def start_aaa_refresh_background(
+    states: list[str] | None = None,
+    full_usa: bool = False,
+    table_first: bool = True,
+) -> dict:
+    """
+    Arranca el scrape en un hilo y devuelve al instante (para cron-job.org).
+    """
+    import threading
+
+    if _job.get("running"):
+        return {
+            "ok": True,
+            "started": False,
+            "already_running": True,
+            "job": aaa_job_status(),
+        }
+
+    def _run():
+        _job["running"] = True
+        _job["last_start"] = time.time()
+        _job["last_error"] = None
+        try:
+            if table_first:
+                fast = refresh_aaa_table_only()
+                _job["last_result"] = {"phase": "table", **fast}
+            if full_usa or states:
+                full = refresh_aaa(states=states, full_usa=full_usa)
+                _job["last_result"] = {"phase": "full", **full}
+            _job["last_ok"] = True
+        except Exception as e:
+            _job["last_ok"] = False
+            _job["last_error"] = f"{type(e).__name__}: {e}"
+            print(f"[aaa] bg job fail: {e}")
+        finally:
+            _job["running"] = False
+            _job["last_end"] = time.time()
+
+    threading.Thread(target=_run, name="aaa-cron", daemon=True).start()
+    return {
+        "ok": True,
+        "started": True,
+        "already_running": False,
+        "message": "Scrape AAA iniciado en segundo plano",
     }
 
 
