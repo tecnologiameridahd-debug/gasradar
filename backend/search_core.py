@@ -156,7 +156,7 @@ def run_search(
                 lat=float(lat) if lat is not None else None,
                 lon=float(lon) if lon is not None else None,
                 fuel=fuel,
-                limit=min(int(limit), 30),
+                limit=min(max(int(limit), 25), 40),
             )
         except Exception as e:
             print(f"[search] vps_scraper: {e}")
@@ -172,7 +172,7 @@ def run_search(
                         lat=float(lat) if lat is not None else None,
                         lon=float(lon) if lon is not None else None,
                         fuel=fuel,
-                        limit=min(int(limit), 15),
+                        limit=min(int(limit), 20),
                     )
             except Exception as e:
                 print(f"[search] gasbuddy: {e}")
@@ -258,15 +258,18 @@ def run_search(
             priced.append(row)
         print(f"[search] gasbuddy primary n={len(priced)}")
 
-    # 2) OSM + AAA: rellenar mapa si faltan estaciones
-    if len(priced) < max(8, min(int(limit), 15)):
+    # 2) OSM + AAA solo si GasBuddy no trajo lista sólida
+    # Con 8+ GasBuddy (nombre+dir+precio) no mezclamos basura OSM ("Gas station")
+    gb_n = sum(1 for p in priced if p.get("price_source") == "gasbuddy")
+    need_osm = gb_n < 8
+
+    if need_osm and len(priced) < max(8, min(int(limit), 15)):
         stations = stations_near(
             float(lat), float(lon), radius_mi=radius_mi, limit=min(int(limit), 20)
         )
         osm_priced = (
             attach_prices(stations, state=state, fuel=fuel, city=city) if stations else []
         )
-        # Copiar dirección/precio GasBuddy → OSM cercano (todo USA)
         for item in osm_priced:
             if (item.get("address") or "").strip():
                 continue
@@ -288,6 +291,12 @@ def run_search(
         for item in osm_priced:
             low = f"{item.get('name')} {item.get('brand') or ''}".lower()
             if any(x in low for x in ("dispensary", "cannabis", "marijuana", "weed")):
+                continue
+            # Evitar relleno basura: "Gas station" sin marca ni dirección
+            nm = (item.get("name") or "").strip().lower()
+            if nm in ("gas station", "gas", "fuel") and not (item.get("address") or "").strip():
+                continue
+            if "maybe closed" in nm or "tacos" in nm:
                 continue
             if any(_near(item, p, 0.12) for p in priced):
                 continue

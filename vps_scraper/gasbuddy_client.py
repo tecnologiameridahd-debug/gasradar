@@ -267,34 +267,28 @@ def fetch_stations(
     limit: int = 40,
 ) -> dict[str, Any]:
     """
-    Busca estaciones con precio.
+    Busca estaciones con precio (pagina cursor hasta `limit`).
     Returns { ok, stations, error?, method? }
     """
     search = None
     if zip_code:
         search = "".join(c for c in str(zip_code) if c.isdigit())[:5]
     referer = f"{GB_HOME}?search={search or ''}&fuel={_fuel_id(fuel)}"
-    variables: dict[str, Any] = {
+    base_vars: dict[str, Any] = {
         "fuel": _fuel_id(fuel),
         "maxAge": int(max_age or 0),
     }
     if search and len(search) == 5:
-        variables["search"] = search
+        base_vars["search"] = search
     elif lat is not None and lon is not None:
-        variables["lat"] = float(lat)
-        variables["lng"] = float(lon)
-        variables["search"] = f"{lat},{lon}"
+        base_vars["lat"] = float(lat)
+        base_vars["lng"] = float(lon)
+        base_vars["search"] = f"{lat},{lon}"
     else:
         return {"ok": False, "stations": [], "error": "need zip or lat/lon"}
 
-    payload = {
-        "operationName": "LocationBySearchTerm",
-        "variables": variables,
-        "query": LOCATION_QUERY_PRICES,
-    }
-
     last_err = None
-    # --- Attempt 1: curl_cffi ---
+    # --- Attempt 1: curl_cffi + paginación ---
     try:
         from curl_cffi import requests as cr
 
@@ -304,29 +298,21 @@ def fetch_stations(
         if not csrf:
             last_err = "no csrf (curl_cffi)"
         else:
-            resp = s.post(
-                GB_GQL,
-                data=json.dumps(payload),
-                headers=_headers(csrf, referer),
-                timeout=45,
+            stations, err = _fetch_pages(
+                s, csrf, referer, base_vars, fuel, limit
             )
-            if resp.status_code == 200:
-                data = resp.json()
-                stations = _parse_gql(data, fuel, limit)
-                if stations:
-                    return {
-                        "ok": True,
-                        "stations": stations,
-                        "method": "curl_cffi",
-                        "count": len(stations),
-                    }
-                last_err = f"empty results curl_cffi status={resp.status_code}"
-            else:
-                last_err = f"gql {resp.status_code}: {(resp.text or '')[:180]}"
+            if stations:
+                return {
+                    "ok": True,
+                    "stations": stations,
+                    "method": "curl_cffi",
+                    "count": len(stations),
+                }
+            last_err = err or "empty results curl_cffi"
     except Exception as e:
         last_err = f"curl_cffi: {type(e).__name__}: {e}"
 
-    # --- Attempt 2: FlareSolverr for cookies + CSRF, then GraphQL ---
+    # --- Attempt 2: FlareSolverr ---
     if _flaresolverr_url():
         try:
             from curl_cffi import requests as cr
@@ -339,29 +325,85 @@ def fetch_stations(
                 s = cr.Session(impersonate="chrome120")
                 for k, v in cookies.items():
                     s.cookies.set(k, v, domain=".gasbuddy.com")
-                resp = s.post(
-                    GB_GQL,
-                    data=json.dumps(payload),
-                    headers=_headers(csrf, referer),
-                    timeout=45,
+                stations, err = _fetch_pages(
+                    s, csrf, referer, base_vars, fuel, limit
                 )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    stations = _parse_gql(data, fuel, limit)
-                    if stations:
-                        return {
-                            "ok": True,
-                            "stations": stations,
-                            "method": "flaresolverr",
-                            "count": len(stations),
-                        }
-                    last_err = "empty results flaresolverr"
-                else:
-                    last_err = f"flaresolverr gql {resp.status_code}: {(resp.text or '')[:180]}"
+                if stations:
+                    return {
+                        "ok": True,
+                        "stations": stations,
+                        "method": "flaresolverr",
+                        "count": len(stations),
+                    }
+                last_err = err or "empty results flaresolverr"
         except Exception as e:
             last_err = f"flaresolverr: {type(e).__name__}: {e}"
 
     return {"ok": False, "stations": [], "error": last_err or "unknown"}
+
+
+def _fetch_pages(
+    session,
+    csrf: str,
+    referer: str,
+    base_vars: dict[str, Any],
+    fuel: str,
+    limit: int,
+    max_pages: int = 5,
+) -> tuple[list[dict], str | None]:
+    """Pagina GraphQL con cursor.next hasta reunir `limit` estaciones."""
+    out: list[dict] = []
+    seen_ids: set[str] = set()
+    cursor: str | None = None
+    last_err: str | None = None
+    for page in range(max_pages):
+        variables = dict(base_vars)
+        if cursor:
+            variables["cursor"] = cursor
+        payload = {
+            "operationName": "LocationBySearchTerm",
+            "variables": variables,
+            "query": LOCATION_QUERY_PRICES,
+        }
+        resp = session.post(
+            GB_GQL,
+            data=json.dumps(payload),
+            headers=_headers(csrf, referer),
+            timeout=45,
+        )
+        if resp.status_code != 200:
+            last_err = f"gql {resp.status_code}: {(resp.text or '')[:160]}"
+            break
+        data = resp.json()
+        if not isinstance(data, dict) or data.get("errors"):
+            last_err = f"gql errors: {str(data.get('errors'))[:160]}"
+            break
+        loc = ((data.get("data") or {}).get("locationBySearchTerm")) or {}
+        st_block = loc.get("stations") or {}
+        results = st_block.get("results") or []
+        next_cur = None
+        try:
+            next_cur = (st_block.get("cursor") or {}).get("next")
+        except Exception:
+            next_cur = None
+        for raw in results:
+            row = _normalize_station(raw, fuel)
+            if not row:
+                continue
+            sid = row.get("station_id") or f"{row.get('lat')},{row.get('lon')}"
+            if sid in seen_ids:
+                continue
+            seen_ids.add(sid)
+            out.append(row)
+            if len(out) >= limit:
+                return out, None
+        if not next_cur or not results:
+            break
+        cursor = next_cur
+        time.sleep(0.35)
+    if out:
+        return out, None
+    return [], last_err or "empty results"
 
 
 def _parse_gql(data: dict, fuel: str, limit: int) -> list[dict]:
