@@ -287,6 +287,26 @@ def run_search(
             row = _live_row(gs, "gasbuddy")
             if not row or row["id"] in seen_ids:
                 continue
+            # Si GasBuddy trae dirección, copiar a OSM cercano sin address
+            gb_addr = (gs.get("address") or "").strip()
+            if gb_addr:
+                for p in priced:
+                    try:
+                        if not (p.get("address") or "").strip() and (
+                            haversine_miles(
+                                float(p["lat"]),
+                                float(p["lon"]),
+                                float(row["lat"]),
+                                float(row["lon"]),
+                            )
+                            < 0.15
+                        ):
+                            p["address"] = gb_addr
+                            p["maps_query"] = (
+                                f"{p.get('name') or 'Gas'}, {gb_addr}"
+                            )
+                    except Exception:
+                        pass
             near = False
             for p in priced:
                 try:

@@ -95,6 +95,71 @@ def reverse_geocode(lat: float, lon: float) -> dict | None:
         return None
 
 
+@lru_cache(maxsize=400)
+def reverse_geocode_street(lat: float, lon: float) -> str | None:
+    """
+    Dirección corta (calle + ciudad) para estaciones sin addr en OSM.
+    zoom alto = calle. Cache por ~110 m (4 decimales).
+    """
+    lat_r = round(float(lat), 4)
+    lon_r = round(float(lon), 4)
+    try:
+        r = httpx.get(
+            "https://nominatim.openstreetmap.org/reverse",
+            params={
+                "lat": lat_r,
+                "lon": lon_r,
+                "format": "jsonv2",
+                "zoom": 18,
+                "addressdetails": 1,
+            },
+            headers={
+                "User-Agent": "GasRadar/1.0 (contact@gasradarapp.com)",
+                "Accept-Language": "en",
+            },
+            timeout=3.5,
+        )
+        if r.status_code != 200:
+            return None
+        data = r.json()
+        addr = data.get("address") or {}
+        house = (addr.get("house_number") or "").strip()
+        road = (
+            addr.get("road")
+            or addr.get("pedestrian")
+            or addr.get("neighbourhood")
+            or addr.get("suburb")
+            or ""
+        ).strip()
+        street = f"{house} {road}".strip() if house or road else ""
+        city = (
+            addr.get("city")
+            or addr.get("town")
+            or addr.get("village")
+            or addr.get("municipality")
+            or ""
+        )
+        state = addr.get("state") or ""
+        state_code = addr.get("ISO3166-2-lvl4") or ""
+        if state_code and "-" in state_code:
+            state_abbr = state_code.split("-")[-1]
+        else:
+            state_abbr = _state_abbr(state) or state
+        postcode = (addr.get("postcode") or "").split(";")[0][:5]
+        parts = [p for p in [street, city, state_abbr, postcode] if p]
+        if not parts:
+            # display_name de Nominatim como último recurso
+            dn = (data.get("display_name") or "").strip()
+            if dn:
+                # recortar a ~4 trozos
+                bits = [b.strip() for b in dn.split(",")[:4] if b.strip()]
+                return ", ".join(bits) if bits else None
+            return None
+        return ", ".join(parts)
+    except Exception:
+        return None
+
+
 def _state_abbr(name: str) -> str:
     table = {
         "colorado": "CO",

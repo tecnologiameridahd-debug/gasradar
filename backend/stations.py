@@ -366,22 +366,41 @@ def _station_from_osm_tags(
     )
     brand_tag = (tags.get("brand") or "").strip()
     brand = brand_tag or _guess_brand(f"{raw_name} {tags.get('operator', '')}")
+    # OSM a veces usa variantes de addr:* (muchas gasolineras en LV no tienen nada)
     street = " ".join(
         p
-        for p in [tags.get("addr:housenumber", ""), tags.get("addr:street", "")]
+        for p in [
+            tags.get("addr:housenumber", "") or tags.get("addr:house_number", ""),
+            tags.get("addr:street", "")
+            or tags.get("addr:place", "")
+            or tags.get("addr:suburb", ""),
+        ]
         if p
     ).strip()
-    city = tags.get("addr:city", "")
-    state = tags.get("addr:state", "")
-    postcode = tags.get("addr:postcode", "")
-    address = ", ".join(p for p in [street, city, state, postcode] if p) or None
+    city = (
+        tags.get("addr:city", "")
+        or tags.get("addr:town", "")
+        or tags.get("addr:suburb", "")
+        or ""
+    )
+    state = tags.get("addr:state", "") or ""
+    postcode = tags.get("addr:postcode", "") or ""
+    full = (tags.get("addr:full") or tags.get("address") or "").strip()
+    address = full or (
+        ", ".join(p for p in [street, city, state, postcode] if p) or None
+    )
     name = _pretty_station_name(raw_name, brand, raw_name, address)
     brand = _display_brand(brand, name)
     maps_query = name
-    if street:
+    if address:
+        maps_query = f"{name}, {address}"
+    elif street:
         maps_query = f"{name}, {street}"
         if city:
             maps_query += f", {city}"
+    else:
+        # Sin addr en OSM: Maps abre por coordenadas
+        maps_query = f"{name} @{float(slat):.5f},{float(slon):.5f}"
     dist = haversine_miles(lat, lon, float(slat), float(slon))
     return {
         "id": _station_id(float(slat), float(slon), name),
@@ -584,6 +603,43 @@ def _merge_stations(*lists: list[dict], radius_mi: float) -> list[dict]:
     return out
 
 
+def _enrich_missing_addresses(
+    stations: list[dict], *, max_lookups: int = 12
+) -> list[dict]:
+    """
+    Si OSM/Photon no traen calle, rellena con reverse Nominatim (calle).
+    Límite de lookups para no alargar la búsqueda en ciudades con muchos huecos.
+    """
+    from backend.geo import reverse_geocode_street
+
+    n = 0
+    for s in stations:
+        if (s.get("address") or "").strip():
+            continue
+        if n >= max_lookups:
+            # fallback suave: al menos ciudad no queda en blanco en UI
+            if not s.get("maps_query"):
+                s["maps_query"] = (
+                    f"{s.get('name') or 'Gas'} "
+                    f"@{float(s['lat']):.5f},{float(s['lon']):.5f}"
+                )
+            continue
+        try:
+            addr = reverse_geocode_street(float(s["lat"]), float(s["lon"]))
+        except Exception:
+            addr = None
+        n += 1
+        if addr:
+            s["address"] = addr
+            s["maps_query"] = f"{s.get('name') or 'Gas Station'}, {addr}"
+        else:
+            s["maps_query"] = (
+                f"{s.get('name') or 'Gas'} "
+                f"@{float(s['lat']):.5f},{float(s['lon']):.5f}"
+            )
+    return stations
+
+
 def stations_near(
     lat: float, lon: float, radius_mi: float = 5.0, limit: int = 40
 ) -> list[dict]:
@@ -615,7 +671,8 @@ def stations_near(
         cached = [s for s in cached if s["distance_mi"] <= radius_mi + 0.5]
         cached.sort(key=lambda x: x["distance_mi"])
         if cached:
-            return cached[:limit]
+            # Caché vieja puede no tener address: enriquecer huecos
+            return _enrich_missing_addresses(cached[:limit])[:limit]
 
     # Parallel-ish fail-over rápido: Photon primero (rápido en nube),
     # luego Overpass, luego Nominatim.
@@ -632,6 +689,7 @@ def stations_near(
         )
 
     if stations:
+        stations = _enrich_missing_addresses(stations[:60])
         _save_cache(lat_f, lon_f, radius_mi, stations[:60])
         return stations[:limit]
 
