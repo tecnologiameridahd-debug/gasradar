@@ -182,9 +182,10 @@ def run_search(
                     "ok": True,
                 }
 
-    # Precios por estación: 1) VPS scraper (GasBuddy)  2) gasbuddy local opcional
+    # Precios + dirección por estación: VPS GasBuddy (todo USA, por ZIP/GPS)
+    # Siempre se pide al scraper si no es quick — no solo cuando Zyla falla.
     gb_stations: list = []
-    if not quick and len(zyla_stations) < 6:
+    if not quick:
         try:
             from backend.vps_scraper_client import fetch_vps_stations
 
@@ -193,7 +194,7 @@ def run_search(
                 lat=float(lat) if lat is not None else None,
                 lon=float(lon) if lon is not None else None,
                 fuel=fuel,
-                limit=min(int(limit), 25),
+                limit=min(int(limit), 30),
             )
         except Exception as e:
             print(f"[search] vps_scraper: {e}")
@@ -209,7 +210,7 @@ def run_search(
                         lat=float(lat) if lat is not None else None,
                         lon=float(lon) if lon is not None else None,
                         fuel=fuel,
-                        limit=min(int(limit), 10),
+                        limit=min(int(limit), 15),
                     )
             except Exception as e:
                 print(f"[search] gasbuddy: {e}")
@@ -226,7 +227,7 @@ def run_search(
             dist = haversine_miles(
                 float(lat), float(lon), float(src["lat"]), float(src["lon"])
             )
-        if dist > float(radius_mi) + 1.0:
+        if dist > float(radius_mi) + 1.5:
             return None
         name = _pretty_station_name(
             src.get("name") or "Gas Station",
@@ -239,14 +240,16 @@ def run_search(
             return None
         brand = _display_brand(src.get("brand"), name)
         sid = _station_id(float(src["lat"]), float(src["lon"]), name)
+        addr = (src.get("address") or "").strip() or None
+        maps_q = f"{name}, {addr}".strip(", ") if addr else f"{name} @{float(src['lat']):.5f},{float(src['lon']):.5f}"
         return {
             "id": sid,
             "name": name,
             "brand": brand,
             "lat": float(src["lat"]),
             "lon": float(src["lon"]),
-            "address": src.get("address"),
-            "maps_query": f"{name}, {src.get('address') or ''}".strip(", "),
+            "address": addr,
+            "maps_query": maps_q,
             "distance_mi": float(dist),
             "phone": None,
             "website": None,
@@ -269,75 +272,50 @@ def run_search(
             },
         }
 
+    def _near(a: dict, b: dict, mi: float = 0.15) -> bool:
+        try:
+            return (
+                haversine_miles(
+                    float(a["lat"]), float(a["lon"]), float(b["lat"]), float(b["lon"])
+                )
+                < mi
+            )
+        except Exception:
+            return False
+
     priced: list = []
+
+    # 1) PRIORIDAD: GasBuddy/VPS (nombre + dirección + precio real) en cualquier ZIP USA
+    if gb_stations:
+        for gs in gb_stations:
+            row = _live_row(gs, "gasbuddy")
+            if not row:
+                continue
+            if any(_near(row, p, 0.12) for p in priced):
+                continue
+            priced.append(row)
+        print(f"[search] gasbuddy primary n={len(priced)}")
+
+    # 2) Zyla (si hay) — rellena huecos, no pisa GasBuddy
     if zyla_stations:
         for zs in zyla_stations:
             row = _live_row(zs, "zyla")
-            if row:
-                priced.append(row)
-        priced.sort(
-            key=lambda x: (round(float(x["price"]), 3), float(x["distance_mi"]))
-        )
-
-    if len(priced) < 8 and gb_stations:
-        seen_ids = {s["id"] for s in priced}
-        for gs in gb_stations:
-            if gs.get("lat") is None or gs.get("lon") is None:
+            if not row:
                 continue
-            row = _live_row(gs, "gasbuddy")
-            if not row or row["id"] in seen_ids:
-                continue
-            # Si GasBuddy trae dirección, copiar a OSM cercano sin address
-            gb_addr = (gs.get("address") or "").strip()
-            if gb_addr:
-                for p in priced:
-                    try:
-                        if not (p.get("address") or "").strip() and (
-                            haversine_miles(
-                                float(p["lat"]),
-                                float(p["lon"]),
-                                float(row["lat"]),
-                                float(row["lon"]),
-                            )
-                            < 0.15
-                        ):
-                            p["address"] = gb_addr
-                            p["maps_query"] = (
-                                f"{p.get('name') or 'Gas'}, {gb_addr}"
-                            )
-                    except Exception:
-                        pass
-            near = False
+            # enriquecer dirección de un GB cercano sin addr
             for p in priced:
-                try:
-                    if (
-                        haversine_miles(
-                            float(p["lat"]),
-                            float(p["lon"]),
-                            float(row["lat"]),
-                            float(row["lon"]),
-                        )
-                        < 0.12
-                    ):
-                        near = True
-                        break
-                except Exception:
-                    pass
-            if near:
+                if p.get("price_source") == "gasbuddy" and not (p.get("address") or "").strip():
+                    if _near(p, row, 0.15) and (row.get("address") or "").strip():
+                        p["address"] = row["address"]
+                        p["maps_query"] = f"{p.get('name')}, {row['address']}"
+            if any(_near(row, p, 0.12) for p in priced):
                 continue
-            seen_ids.add(row["id"])
             priced.append(row)
-        priced.sort(
-            key=lambda x: (
-                round(float(x["price"]), 3),
-                0 if x.get("price_source") in ("zyla", "gasbuddy", "user") else 1,
-                float(x["distance_mi"]),
-            )
-        )
 
-    if len(priced) < 6:
+    # 3) OSM + AAA: solo para rellenar mapa si faltan estaciones
+    if len(priced) < max(8, min(int(limit), 15)):
         stations = stations_near(
-            float(lat), float(lon), radius_mi=radius_mi, limit=min(int(limit), 18)
+            float(lat), float(lon), radius_mi=radius_mi, limit=min(int(limit), 20)
         )
         osm_priced = (
             attach_prices(stations, state=state, fuel=fuel, city=city) if stations else []
@@ -346,57 +324,59 @@ def run_search(
             osm_priced = merge_zyla_prices_into_stations(
                 osm_priced, zyla_stations, fuel=fuel
             )
-        seen = {s["id"] for s in priced}
+        # Copiar dirección GasBuddy → OSM cercano sin addr (todo USA)
+        for item in osm_priced:
+            if (item.get("address") or "").strip():
+                continue
+            for gb in priced:
+                if gb.get("price_source") != "gasbuddy":
+                    continue
+                if not (gb.get("address") or "").strip():
+                    continue
+                if _near(item, gb, 0.2):
+                    item["address"] = gb["address"]
+                    item["maps_query"] = f"{item.get('name') or 'Gas'}, {gb['address']}"
+                    # precio real de GB si OSM solo tiene estimado
+                    if item.get("price_source") not in ("user", "gasbuddy", "zyla"):
+                        item["price"] = gb["price"]
+                        item["price_source"] = "gasbuddy"
+                        item["price_confidence"] = "high"
+                        item["prices"] = dict(gb.get("prices") or {})
+                    break
+
         for item in osm_priced:
             low = f"{item.get('name')} {item.get('brand') or ''}".lower()
             if any(x in low for x in ("dispensary", "cannabis", "marijuana", "weed")):
                 continue
-            if item["id"] in seen:
+            if any(_near(item, p, 0.12) for p in priced):
+                # ya hay GB/zyla en ese punto: no duplicar OSM
                 continue
-            near_z = False
-            for z in priced:
-                try:
-                    if (
-                        haversine_miles(
-                            float(item["lat"]),
-                            float(item["lon"]),
-                            float(z["lat"]),
-                            float(z["lon"]),
-                        )
-                        < 0.12
-                    ):
-                        near_z = True
-                        break
-                except Exception:
-                    pass
-            if near_z:
-                continue
-            seen.add(item["id"])
             if (
                 zyla
                 and zyla.get("ok")
-                and item.get("price_source") not in ("user", "zyla")
+                and item.get("price_source") not in ("user", "zyla", "gasbuddy")
             ):
                 zreg = float(zyla.get(fuel) or zyla.get("regular") or 0)
                 if zreg > 1:
                     meta_avg = (
                         price_meta(state, fast=True, city=city).get("state_avg") or {}
-                    ).get(
-                        fuel
-                    )
+                    ).get(fuel)
                     old = float(item.get("price") or zreg)
                     adj = old - float(meta_avg) if meta_avg else 0.0
                     item["price"] = round(zreg + adj, 3)
                     item["price_source"] = "zyla_estimate"
                     item["price_confidence"] = "medium"
             priced.append(item)
-        priced.sort(
-            key=lambda x: (
-                round(float(x.get("price") or 99), 3),
-                0 if x.get("price_source") == "zyla" else 1,
-                float(x.get("distance_mi") or 99),
-            )
+
+    priced.sort(
+        key=lambda x: (
+            round(float(x.get("price") or 99), 3),
+            0
+            if x.get("price_source") in ("gasbuddy", "zyla", "user")
+            else 1,
+            float(x.get("distance_mi") or 99),
         )
+    )
 
     if not priced:
         stations = stations_near(float(lat), float(lon), radius_mi=radius_mi, limit=limit)
