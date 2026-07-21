@@ -15,13 +15,7 @@
         color: #eef3ff;
         color-scheme: dark;
       }
-      /* Nunca mostrar “Cómo llegar” al abrir (solo con .is-open) */
-      .nav-sheet-bg:not(.is-open),
-      .nav-sheet-bg[hidden] {
-        display: none !important;
-        visibility: hidden !important;
-        pointer-events: none !important;
-      }
+
       /* Splash mínima mientras llega el CSS/JS */
       .boot-splash {
         position: fixed;
@@ -111,7 +105,7 @@
     <link rel="icon" href="/static/favicon-64.png?v=0.2.9" type="image/png" sizes="64x64" />
     <link rel="apple-touch-icon" href="/static/logo-192.png?v=0.5.0" sizes="192x192" />
     <link rel="apple-touch-icon" href="/static/logo-512.png?v=0.5.0" sizes="512x512" />
-    <link rel="stylesheet" href="/static/styles.css?v=0.9.35" />
+    <link rel="stylesheet" href="/static/styles.css?v=0.9.37" />
   </head>
   <body style="background:#0b1220;margin:0">
     <div class="boot-splash" id="bootSplash" aria-hidden="true">
@@ -375,33 +369,8 @@
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-    <!-- Solo al tocar “Cómo llegar” (class is-open). Nunca al cargar. -->
-    <div class="nav-sheet-bg" id="navSheet" hidden aria-hidden="true" style="display:none!important;visibility:hidden">
-      <div class="nav-sheet" role="dialog" aria-modal="true" aria-labelledby="navSheetTitle">
-        <div class="nav-sheet-handle" aria-hidden="true"></div>
-        <div class="nav-sheet-brand">
-          <img src="/static/logo-192.png?v=0.5.0" alt="" width="40" height="40" />
-          <span>GasRadar</span>
-        </div>
-        <h3 id="navSheetTitle" data-i18n="navOpenTitle">Cómo llegar</h3>
-        <p class="nav-sheet-name" id="navSheetName">—</p>
-        <p class="nav-sheet-meta" id="navSheetMeta"></p>
-        <p class="nav-sheet-hint" data-i18n="navOpenHint">
-          Se abrirá Apple Maps o Google Maps. GasRadar se queda aquí.
-        </p>
-        <div class="nav-sheet-actions">
-          <button type="button" class="btn-primary grow" id="navSheetOpen" data-i18n="navOpenBtn">
-            Abrir mapas
-          </button>
-          <button type="button" class="btn-secondary grow" id="navSheetStay" data-i18n="navStayBtn">
-            Cancelar
-          </button>
-        </div>
-      </div>
-    </div>
-
     <script src="/static/brand-logos.js?v=0.9.1"></script>
-    <script src="/static/app.js?v=0.9.35"></script>
+    <script src="/static/app.js?v=0.9.37"></script>
     <script>
       /* Quita splash cuando la UI ya pintó */
       (function () {

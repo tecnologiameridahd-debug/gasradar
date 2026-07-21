@@ -520,93 +520,34 @@ function mapsButtonLabel() {
   return t("directions");
 }
 
-let _navStation = null;
-
-function closeNavSheet() {
-  const el = $("#navSheet");
-  if (el) {
-    el.hidden = true;
-    el.classList.remove("is-open");
-    el.setAttribute("aria-hidden", "true");
-    el.style.cssText = "display:none!important;visibility:hidden;pointer-events:none";
-  }
-  _navStation = null;
-}
-
-function openNavSheet(st) {
-  if (!st) return;
-  _navStation = st;
-  const sheet = $("#navSheet");
-  if (!sheet) {
-    // fallback sin hoja
-    launchMaps(st);
-    return;
-  }
-  const nameEl = $("#navSheetName");
-  const metaEl = $("#navSheetMeta");
-  if (nameEl) nameEl.textContent = st.name || "—";
-  if (metaEl) {
-    const bits = [];
-    if (st.price != null) bits.push(money(st.price));
-    if (st.distance_mi != null) bits.push(`${Number(st.distance_mi).toFixed(1)} mi`);
-    if (st.address) bits.push(st.address);
-    metaEl.textContent = bits.join(" · ");
-  }
-  // Solo se muestra al tocar “Cómo llegar” — nunca al cargar la página
-  sheet.hidden = false;
-  sheet.style.cssText = "";
-  sheet.classList.add("is-open");
-  sheet.setAttribute("aria-hidden", "false");
-}
-
-/** Abre Maps nativo o web sin dejar al usuario en pestaña blanca vacía. */
+/** Abre Maps al tocar Cómo llegar (sin menú intermedio). */
 function launchMaps(st) {
   if (!st) return;
-  const native = mapsNativeUrl(st);
   const web = mapsUrl(st);
+  const platform = detectPlatform();
+  // Móvil: deep link nativo (app de mapas). Escritorio: Google/Apple Maps en pestaña.
+  const href =
+    platform === "ios" || platform === "android" ? mapsNativeUrl(st) : web;
   try {
-    // Intento nativo primero (app de mapas)
     const a = document.createElement("a");
-    a.href = native;
-    a.rel = "noopener";
+    a.href = href;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
     document.body.appendChild(a);
     a.click();
     a.remove();
   } catch (_) {
-    /* ignore */
-  }
-  // Respaldo web en ~0.8s si el deep link no hizo nada (escritorio / sin app)
-  setTimeout(() => {
     try {
       window.open(web, "_blank", "noopener");
-    } catch (_) {
+    } catch (__) {
       location.href = web;
     }
-  }, 700);
+  }
 }
 
 function openDirections(st) {
   if (!st) return;
-  openNavSheet(st);
-}
-
-function bindNavSheet() {
-  const sheet = $("#navSheet");
-  if (!sheet) return;
-  // Garantiza cerrado al arrancar (caché vieja / FOUC del sheet)
-  closeNavSheet();
-  $("#navSheetOpen")?.addEventListener("click", () => {
-    const st = _navStation;
-    closeNavSheet();
-    if (st) launchMaps(st);
-  });
-  $("#navSheetStay")?.addEventListener("click", () => closeNavSheet());
-  sheet.addEventListener("click", (e) => {
-    if (e.target === sheet) closeNavSheet();
-  });
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeNavSheet();
-  });
+  launchMaps(st);
 }
 
 function setStatus(msg, kind = "loading") {
@@ -1350,8 +1291,6 @@ function startApp() {
 function bind() {
   $("#btnLangEs")?.addEventListener("click", () => setLang("es"));
   $("#btnLangEn")?.addEventListener("click", () => setLang("en"));
-  bindNavSheet();
-
   const bestShare = $("#bestShare");
   if (bestShare) {
     bestShare.addEventListener("click", () => {
