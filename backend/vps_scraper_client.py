@@ -76,12 +76,15 @@ def fetch_vps_stations(
     if hit and now - hit["ts"] < _CACHE_TTL:
         return list(hit["data"])
 
-    params: dict[str, Any] = {"fuel": fuel, "limit": limit}
-    if z and len(z) == 5:
+    params: dict[str, Any] = {"fuel": fuel, "limit": min(max(int(limit), 25), 40)}
+    # GPS del centro del ZIP da muchas más estaciones con dirección que solo zip=
+    if lat is not None and lon is not None:
+        params["lat"] = float(lat)
+        params["lon"] = float(lon)
+        if z and len(z) == 5:
+            params["zip"] = z  # solo para logs/caché; el VPS prioriza lat/lon
+    elif z and len(z) == 5:
         params["zip"] = z
-    elif lat is not None and lon is not None:
-        params["lat"] = lat
-        params["lon"] = lon
     else:
         return []
 

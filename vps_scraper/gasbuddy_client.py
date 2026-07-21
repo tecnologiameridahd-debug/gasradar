@@ -278,12 +278,14 @@ def fetch_stations(
         "fuel": _fuel_id(fuel),
         "maxAge": int(max_age or 0),
     }
-    if search and len(search) == 5:
-        base_vars["search"] = search
-    elif lat is not None and lon is not None:
+    # Preferir GPS: en metros grandes (Vegas, etc.) trae 20–40 resultados con dirección.
+    # Solo ZIP a veces devuelve 3–5 estaciones.
+    if lat is not None and lon is not None:
         base_vars["lat"] = float(lat)
         base_vars["lng"] = float(lon)
         base_vars["search"] = f"{lat},{lon}"
+    elif search and len(search) == 5:
+        base_vars["search"] = search
     else:
         return {"ok": False, "stations": [], "error": "need zip or lat/lon"}
 

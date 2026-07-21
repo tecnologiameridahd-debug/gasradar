@@ -86,8 +86,9 @@ def prices(
             return hit
 
     t0 = time.time()
+    # Si hay lat/lon (centro del ZIP), se usan para más estaciones; zip solo es fallback
     result = fetch_stations(
-        zip_code=z,
+        zip_code=z if lat is None or lon is None else None,
         lat=lat,
         lon=lon,
         fuel=fuel,
