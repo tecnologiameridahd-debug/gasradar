@@ -1,11 +1,10 @@
 """
 Búsqueda de precios reutilizable (web API + bot Telegram).
-Optimizado: cache en memoria + Zyla en paralelo + menos bloqueos.
+GasBuddy VPS + OSM/AAA. Sin Zyla.
 """
 from __future__ import annotations
 
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from backend.geo import (
     DEFAULT_LABEL,
@@ -17,9 +16,6 @@ from backend.geo import (
 from backend.prices import (
     attach_prices,
     cheapest_summary,
-    fetch_zyla_stations,
-    fetch_zyla_zip_prices,
-    merge_zyla_prices_into_stations,
     price_meta,
 )
 from backend.stations import stations_near
@@ -147,43 +143,9 @@ def run_search(
                 pass
         return cached
 
-    # EIA no bloquea: se lee de caché en price_meta(fast=True) más abajo
+    # EIA/AAA: price_meta(fast=True) más abajo. Sin Zyla.
 
-    zyla = None
-    zyla_stations: list = []
-    if zip_code:
-        # Zyla stations + averages EN PARALELO (antes era 1 + 1 secuencial)
-        try:
-            with ThreadPoolExecutor(max_workers=2) as pool:
-                f_st = pool.submit(fetch_zyla_stations, str(zip_code), fuel)
-                f_av = pool.submit(fetch_zyla_zip_prices, str(zip_code), fuel)
-                try:
-                    zyla_stations = f_st.result(timeout=16) or []
-                except Exception as e:
-                    print(f"[search] zyla stations: {e}")
-                    zyla_stations = []
-                try:
-                    zyla = f_av.result(timeout=16)
-                except Exception as e:
-                    print(f"[search] zyla avg: {e}")
-                    zyla = None
-        except Exception as e:
-            print(f"[search] zyla parallel: {e}")
-        if (not zyla or not zyla.get("ok")) and zyla_stations:
-            vals = [float(s["price"]) for s in zyla_stations if s.get("price")]
-            if vals:
-                avg_z = sum(vals) / len(vals)
-                zyla = {
-                    "regular": round(avg_z, 3),
-                    "mid": round(avg_z + 0.30, 3),
-                    "premium": round(avg_z + 0.55, 3),
-                    "diesel": round(avg_z + 0.40, 3),
-                    "source": "zyla",
-                    "ok": True,
-                }
-
-    # Precios + dirección por estación: VPS GasBuddy (todo USA, por ZIP/GPS)
-    # Siempre se pide al scraper si no es quick — no solo cuando Zyla falla.
+    # Precios + dirección: VPS GasBuddy (todo USA, por ZIP/GPS)
     gb_stations: list = []
     if not quick:
         try:
@@ -296,23 +258,7 @@ def run_search(
             priced.append(row)
         print(f"[search] gasbuddy primary n={len(priced)}")
 
-    # 2) Zyla (si hay) — rellena huecos, no pisa GasBuddy
-    if zyla_stations:
-        for zs in zyla_stations:
-            row = _live_row(zs, "zyla")
-            if not row:
-                continue
-            # enriquecer dirección de un GB cercano sin addr
-            for p in priced:
-                if p.get("price_source") == "gasbuddy" and not (p.get("address") or "").strip():
-                    if _near(p, row, 0.15) and (row.get("address") or "").strip():
-                        p["address"] = row["address"]
-                        p["maps_query"] = f"{p.get('name')}, {row['address']}"
-            if any(_near(row, p, 0.12) for p in priced):
-                continue
-            priced.append(row)
-
-    # 3) OSM + AAA: solo para rellenar mapa si faltan estaciones
+    # 2) OSM + AAA: rellenar mapa si faltan estaciones
     if len(priced) < max(8, min(int(limit), 15)):
         stations = stations_near(
             float(lat), float(lon), radius_mi=radius_mi, limit=min(int(limit), 20)
@@ -320,11 +266,7 @@ def run_search(
         osm_priced = (
             attach_prices(stations, state=state, fuel=fuel, city=city) if stations else []
         )
-        if zyla_stations and osm_priced:
-            osm_priced = merge_zyla_prices_into_stations(
-                osm_priced, zyla_stations, fuel=fuel
-            )
-        # Copiar dirección GasBuddy → OSM cercano sin addr (todo USA)
+        # Copiar dirección/precio GasBuddy → OSM cercano (todo USA)
         for item in osm_priced:
             if (item.get("address") or "").strip():
                 continue
@@ -336,8 +278,7 @@ def run_search(
                 if _near(item, gb, 0.2):
                     item["address"] = gb["address"]
                     item["maps_query"] = f"{item.get('name') or 'Gas'}, {gb['address']}"
-                    # precio real de GB si OSM solo tiene estimado
-                    if item.get("price_source") not in ("user", "gasbuddy", "zyla"):
+                    if item.get("price_source") not in ("user", "gasbuddy"):
                         item["price"] = gb["price"]
                         item["price_source"] = "gasbuddy"
                         item["price_confidence"] = "high"
@@ -349,31 +290,13 @@ def run_search(
             if any(x in low for x in ("dispensary", "cannabis", "marijuana", "weed")):
                 continue
             if any(_near(item, p, 0.12) for p in priced):
-                # ya hay GB/zyla en ese punto: no duplicar OSM
                 continue
-            if (
-                zyla
-                and zyla.get("ok")
-                and item.get("price_source") not in ("user", "zyla", "gasbuddy")
-            ):
-                zreg = float(zyla.get(fuel) or zyla.get("regular") or 0)
-                if zreg > 1:
-                    meta_avg = (
-                        price_meta(state, fast=True, city=city).get("state_avg") or {}
-                    ).get(fuel)
-                    old = float(item.get("price") or zreg)
-                    adj = old - float(meta_avg) if meta_avg else 0.0
-                    item["price"] = round(zreg + adj, 3)
-                    item["price_source"] = "zyla_estimate"
-                    item["price_confidence"] = "medium"
             priced.append(item)
 
     priced.sort(
         key=lambda x: (
             round(float(x.get("price") or 99), 3),
-            0
-            if x.get("price_source") in ("gasbuddy", "zyla", "user")
-            else 1,
+            0 if x.get("price_source") in ("gasbuddy", "user") else 1,
             float(x.get("distance_mi") or 99),
         )
     )
@@ -386,19 +309,7 @@ def run_search(
 
     best = cheapest_summary(priced) if priced else None
     meta = price_meta(state, fast=True, city=city)
-    if zyla and zyla.get("ok"):
-        meta = dict(meta)
-        meta["avg_source"] = "zyla"
-        meta["zyla_ok"] = True
-        meta["state_avg"] = {
-            "regular": zyla.get("regular"),
-            "mid": zyla.get("mid"),
-            "premium": zyla.get("premium"),
-            "diesel": zyla.get("diesel"),
-        }
-        avg = meta["state_avg"]
-    else:
-        avg = meta["state_avg"]
+    avg = meta["state_avg"]
     avg_fuel = avg.get(fuel) or avg.get("regular")
 
     if best and avg_fuel:
@@ -406,16 +317,13 @@ def run_search(
         best["state_avg_fuel"] = avg_fuel
 
     eia_txt = ""
-    zyla_hits = sum(1 for s in priced if s.get("price_source") == "zyla")
     gb_hits = sum(1 for s in priced if s.get("price_source") == "gasbuddy")
-    if zyla_hits:
-        eia_txt = f" {zyla_hits} precios vía Zyla Labs."
-    elif gb_hits:
-        eia_txt = f" {gb_hits} precios vía GasBuddy (comunidad)."
-    elif zyla and zyla.get("ok"):
-        eia_txt = " Promedio de zona vía Zyla Labs."
+    if gb_hits:
+        eia_txt = f" {gb_hits} precios vía GasBuddy (scraper)."
     elif meta.get("eia_ok") and meta.get("eia_period"):
         eia_txt = f" Promedio estatal EIA (semana {meta['eia_period']})."
+    elif meta.get("avg_source") in ("aaa", "aaa_metro"):
+        eia_txt = " Promedio AAA / zona."
     else:
         eia_txt = " Precios de referencia (estimados). Reporta al pasar por la bomba."
 

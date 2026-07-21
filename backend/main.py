@@ -16,7 +16,7 @@ from backend.prices import report_price
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.9.24"
+APP_VERSION = "0.9.25"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -107,16 +107,10 @@ def health():
     from backend.prices import (
         _eia_mem,
         _load_disk_eia,
-        _zyla_api_key,
-        _zyla_gas_url,
-        _zyla_station_url,
         price_meta,
     )
     from backend.telegram_bot import alerts_secret, bot_ready, get_me, get_webhook_info
 
-    zkey = _zyla_api_key()
-    zurl = _zyla_gas_url()
-    zst = _zyla_station_url()
     eia_co = price_meta("CO", fast=True)
     eia_disk = bool((_load_disk_eia() or {}).get("CO", {}).get("ok"))
     eia_mem = bool((_eia_mem.get("by_state") or {}).get("CO", {}).get("ok"))
@@ -156,12 +150,9 @@ def health():
         "telegram_bot": bot_ready(),
         "telegram": tg,
         "zyla": {
-            "key": bool(zkey),
-            "key_len": len(zkey) if zkey else 0,
-            "gas_url": bool(zurl),
-            "station_url": bool(zst),
-            "ready": bool(zkey and zurl and zst),
-            "note": "Opcional/cancelable. Precios base usan EIA gratis.",
+            "enabled": False,
+            "ready": False,
+            "note": "Desactivado. Precios: GasBuddy VPS + AAA/EIA.",
         },
         "eia": {
             "ok": bool(eia_co.get("eia_ok")),
@@ -328,46 +319,13 @@ def api_geocode(zip_code: str):
 
 @app.get("/api/zyla/test")
 def api_zyla_test(zip: str = Query("80903")):
-    """Diagnóstico Zyla (sin exponer la key)."""
-    import httpx
-
-    from backend.prices import (
-        _zyla_api_key,
-        _zyla_gas_url,
-        _zyla_headers,
-        _zyla_station_url,
-        fetch_zyla_zip_prices,
-    )
-
-    key = _zyla_api_key()
-    gas_url = _zyla_gas_url()
-    st_url = _zyla_station_url()
-    out: dict = {
-        "key_ok": bool(key),
-        "key_len": len(key),
-        "key_has_pipe": ("|" in key) if key else False,
-        "gas_url": gas_url,
-        "station_url": st_url,
+    """Zyla desactivado."""
+    return {
+        "enabled": False,
+        "ok": False,
+        "note": "Zyla no se usa. Precios: GasBuddy VPS + AAA/EIA.",
+        "zip": zip,
     }
-    if not key or not gas_url:
-        out["error"] = "Falta ZYLA_API_KEY o URL"
-        return out
-    z = "".join(c for c in zip if c.isdigit())[:5] or "80903"
-    try:
-        r = httpx.get(
-            gas_url,
-            params={"zip": z, "type": "regular"},
-            headers=_zyla_headers(),
-            timeout=20.0,
-        )
-        out["http_status"] = r.status_code
-        out["body_preview"] = (r.text or "")[:300]
-        if r.status_code == 200:
-            prices = fetch_zyla_zip_prices(z, "regular")
-            out["parsed"] = prices
-    except Exception as e:
-        out["exception"] = f"{type(e).__name__}: {e}"
-    return out
 
 
 @app.get("/api/search")

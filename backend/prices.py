@@ -145,19 +145,8 @@ def _eia_api_key() -> str:
 
 
 def _zyla_api_key() -> str:
-    """
-    Zyla Labs API key (formato id|token).
-    Env: ZYLA_API_KEY (u aliases) o config_local.
-    """
-    return _env_first(
-        "ZYLA_API_KEY",
-        "ZYLA_KEY",
-        "ZYLA_TOKEN",
-        "COLLECT_API_KEY",
-        "GAS_API_KEY",
-    ) or _secret_from_local(
-        "ZYLA_API_KEY", "ZYLA_KEY", "COLLECT_API_KEY", "GAS_API_KEY"
-    )
+    """Zyla desactivado — no se usa. GasBuddy VPS + AAA/EIA."""
+    return ""
 
 
 # URLs fijas Gas Price Locator #4808 (los + en env de Render a veces se rompen)
