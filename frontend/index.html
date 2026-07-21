@@ -90,10 +90,13 @@
     />
     <meta name="twitter:image" content="https://gasradarapp.com/static/logo-512.png?v=0.7.0" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!-- black (no translucent): evita franja/flash claro bajo la barra de iOS -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <meta name="apple-mobile-web-app-title" content="GasRadar" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="application-name" content="GasRadar" />
+    <meta name="msapplication-navbutton-color" content="#0b1220" />
+    <meta name="msapplication-TileColor" content="#0b1220" />
     <!-- Título pedido: no cambiar "GasRadar — Gas prices USA" -->
     <title>GasRadar — Gas prices USA</title>
     <link rel="manifest" href="/manifest.webmanifest" />
@@ -391,7 +394,7 @@
     </div>
 
     <script src="/static/brand-logos.js?v=0.9.1"></script>
-    <script src="/static/app.js?v=0.9.31"></script>
+    <script src="/static/app.js?v=0.9.32"></script>
     <script>
       /* Quita splash cuando la UI ya pintó */
       (function () {

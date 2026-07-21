@@ -16,7 +16,7 @@ from backend.prices import report_price
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.9.31"
+APP_VERSION = "0.9.32"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -77,7 +77,7 @@ async def add_headers(request, call_next):
     response.headers["X-App"] = "GasRadar"
     response.headers["X-App-Version"] = APP_VERSION
     response.headers["Permissions-Policy"] = "geolocation=(self)"
-    # HTML/CSS/JS sin cache agresivo (beta: los cambios se ven al recargar)
+    # Estáticos versionados + shell HTML cacheable en CDN (evita flash blanco en cold start)
     path = request.url.path
     if path.startswith("/static/"):
         if path.endswith((".png", ".svg", ".jpg", ".webp", ".ico")):
@@ -85,8 +85,12 @@ async def add_headers(request, call_next):
         elif path.endswith((".css", ".js")):
             response.headers["Cache-Control"] = "no-cache, must-revalidate"
     elif path == "/":
-        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-        response.headers["Pragma"] = "no-cache"
+        # Navegador revalida (max-age=0); Cloudflare puede servir shell oscuro del edge
+        # mientras Render despierta (s-maxage + stale-while-revalidate).
+        response.headers["Cache-Control"] = (
+            "public, max-age=0, s-maxage=300, stale-while-revalidate=86400"
+        )
+        response.headers.pop("Pragma", None)
     return response
 
 
@@ -529,11 +533,11 @@ def index():
     index_path = FRONTEND / "index.html"
     if not index_path.exists():
         return {"msg": "Frontend missing"}
-    # HTML con fondo oscuro inline: no cachear agresivo (PWA/SW lo actualizan)
+    # Shell oscuro inline: CDN edge puede servirla (cold start sin pantalla blanca)
     return FileResponse(
         index_path,
         headers={
-            "Cache-Control": "no-cache, must-revalidate",
+            "Cache-Control": "public, max-age=0, s-maxage=300, stale-while-revalidate=86400",
             "Content-Type": "text/html; charset=utf-8",
         },
     )

@@ -1693,21 +1693,51 @@ function registerServiceWorker() {
     window.isSecureContext ||
     ["localhost", "127.0.0.1"].includes(location.hostname);
   if (!ok) return;
-  window.addEventListener("load", () => {
+
+  // Registrar YA (no esperar load): precaché del shell oscuro antes
+  const go = () => {
     navigator.serviceWorker
       .register("/sw.js", { scope: "/" })
       .then((reg) => {
-        // Fuerza tomar el SW nuevo (flash blanco era caché vieja / red primero)
         try {
           reg.update();
         } catch (_) {}
+        // Toma el SW nuevo al instante
         if (reg.waiting) {
           reg.waiting.postMessage({ type: "SKIP_WAITING" });
         }
+        reg.addEventListener("updatefound", () => {
+          const nw = reg.installing;
+          if (!nw) return;
+          nw.addEventListener("statechange", () => {
+            if (nw.state === "installed" && navigator.serviceWorker.controller) {
+              nw.postMessage({ type: "SKIP_WAITING" });
+            }
+          });
+        });
       })
       .catch(() => {
         /* ignore: PWA opcional */
       });
+  };
+
+  if (document.readyState === "complete" || document.readyState === "interactive") {
+    go();
+  } else {
+    document.addEventListener("DOMContentLoaded", go, { once: true });
+  }
+
+  // Si un SW nuevo reemplaza al viejo, recarga 1 vez (no en la 1ª instalación)
+  let refreshing = false;
+  let hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!hadController) {
+      hadController = true;
+      return;
+    }
+    if (refreshing) return;
+    refreshing = true;
+    location.reload();
   });
 }
 
