@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from backend.geo import geocode_zip
 from backend.prices import report_price
 
 ROOT = Path(__file__).resolve().parent.parent

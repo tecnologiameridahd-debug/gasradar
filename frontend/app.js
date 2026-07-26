@@ -219,6 +219,8 @@ const state = {
   reportName: "",
   zip: null,
   searching: false,
+  searchToken: 0,
+  searchAbort: null,
   lastData: null,
   lang: loadLang(),
 };
@@ -388,8 +390,9 @@ function setLocDot(mode) {
   if (mode === "loading") dot.classList.add("loading");
 }
 
-function setBusy(busy) {
+function setBusy(busy, { background = false } = {}) {
   state.searching = busy;
+  if (background) return; // búsqueda silenciosa: no bloquear los controles del usuario
   ["#btnGps", "#btnZip", "#fuelSelect", "#radiusSelect"].forEach((sel) => {
     const el = $(sel);
     if (el) el.disabled = !!busy;
@@ -731,8 +734,20 @@ function applySearchData(data, { zip } = {}) {
   render(data);
 }
 
-async function search({ lat, lon, zip, force = false, soft = false } = {}) {
-  if (state.searching) return;
+async function search({ lat, lon, zip, force = false, soft = false, background = false } = {}) {
+  if (state.searching) {
+    // Una búsqueda silenciosa (auto-GPS al abrir la app) nunca debe pisar
+    // una búsqueda ya en curso; una búsqueda explícita del usuario (ZIP o
+    // botón GPS) sí tiene prioridad y cancela la que esté en vuelo.
+    if (background) return;
+    if (state.searchAbort) {
+      try {
+        state.searchAbort.abort();
+      } catch (_) {
+        /* ignore */
+      }
+    }
+  }
 
   const memKey = searchMemKey({ lat, lon, zip });
   if (force) {
@@ -749,9 +764,10 @@ async function search({ lat, lon, zip, force = false, soft = false } = {}) {
     }
   }
 
-  setBusy(true);
+  const myToken = ++state.searchToken;
+  setBusy(true, { background });
   // soft = pull-to-refresh: no vaciar lista (como GasBuddy)
-  if (!soft) {
+  if (!soft && !background) {
     setStatus(t("searching"), "loading");
     $("#results").innerHTML = "";
     const bestCard = $("#bestCard");
@@ -771,6 +787,7 @@ async function search({ lat, lon, zip, force = false, soft = false } = {}) {
   }
 
   const ctrl = new AbortController();
+  state.searchAbort = ctrl;
   const timer = setTimeout(() => ctrl.abort(), 22000);
 
   try {
@@ -778,6 +795,8 @@ async function search({ lat, lon, zip, force = false, soft = false } = {}) {
       signal: ctrl.signal,
     });
     clearTimeout(timer);
+    // Una búsqueda más nueva ya tomó el control mientras esta esperaba red: ignorar.
+    if (myToken !== state.searchToken) return;
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       const detail =
@@ -789,6 +808,7 @@ async function search({ lat, lon, zip, force = false, soft = false } = {}) {
       throw new Error(detail || `Error ${res.status}`);
     }
     const data = await res.json();
+    if (myToken !== state.searchToken) return;
     try {
       _searchMem.set(memKey, { ts: Date.now(), data });
       if (_searchMem.size > 40) {
@@ -801,6 +821,8 @@ async function search({ lat, lon, zip, force = false, soft = false } = {}) {
     applySearchData(data, { zip });
   } catch (e) {
     clearTimeout(timer);
+    // Abortada porque una búsqueda más nueva la reemplazó: no es un error real.
+    if (myToken !== state.searchToken) return;
     if (soft) {
       // pull-to-refresh: mantener lista y avisar
       showToast(e && e.name === "AbortError" ? t("timeout") : e.message || t("searchError"));
@@ -813,7 +835,9 @@ async function search({ lat, lon, zip, force = false, soft = false } = {}) {
       }
     }
   } finally {
-    setBusy(false);
+    if (myToken !== state.searchToken) return;
+    if (state.searchAbort === ctrl) state.searchAbort = null;
+    setBusy(false, { background });
   }
 }
 
@@ -1279,6 +1303,7 @@ function startApp() {
           search({
             lat: pos.coords.latitude,
             lon: pos.coords.longitude,
+            background: true,
           });
         }
       })
