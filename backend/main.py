@@ -607,3 +607,44 @@ def stats_page():
     if not path.exists():
         raise HTTPException(404, "Stats page missing")
     return FileResponse(path)
+
+
+def _apk_path() -> Path:
+    return FRONTEND / "downloads" / "GasRadar.apk"
+
+
+@app.get("/download")
+@app.get("/download/android")
+def download_page():
+    """Página simple para bajar la APK (compartir con amigos)."""
+    path = FRONTEND / "download.html"
+    if path.exists():
+        return FileResponse(path, media_type="text/html; charset=utf-8")
+    # fallback si no hay HTML
+    apk = _apk_path()
+    if not apk.exists():
+        raise HTTPException(404, "APK no publicada aún")
+    return {
+        "ok": True,
+        "app": "GasRadar",
+        "download": "/download/GasRadar.apk",
+        "size_mb": round(apk.stat().st_size / (1024 * 1024), 2),
+    }
+
+
+@app.get("/download/GasRadar.apk")
+@app.get("/apk")
+def download_apk():
+    """APK Android (debug) — listo para instalar en el teléfono."""
+    path = _apk_path()
+    if not path.exists():
+        raise HTTPException(404, "APK missing — sube frontend/downloads/GasRadar.apk")
+    return FileResponse(
+        path,
+        media_type="application/vnd.android.package-archive",
+        filename="GasRadar.apk",
+        headers={
+            "Content-Disposition": 'attachment; filename="GasRadar.apk"',
+            "Cache-Control": "public, max-age=3600",
+        },
+    )
