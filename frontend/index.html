@@ -73,10 +73,42 @@
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
-        "@type": "WebSite",
-        "name": "GasRadar",
-        "alternateName": "gasradarapp.com",
-        "url": "https://gasradarapp.com/"
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://gasradarapp.com/#organization",
+            "name": "GasRadar",
+            "alternateName": ["Gas Radar", "GasRadar App"],
+            "url": "https://gasradarapp.com/",
+            "logo": {
+              "@type": "ImageObject",
+              "url": "https://gasradarapp.com/static/logo-512.png"
+            },
+            "email": "contact@gasradarapp.com",
+            "sameAs": []
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://gasradarapp.com/#website",
+            "name": "GasRadar",
+            "url": "https://gasradarapp.com/",
+            "publisher": { "@id": "https://gasradarapp.com/#organization" },
+            "inLanguage": ["es-US", "en-US"]
+          },
+          {
+            "@type": "WebApplication",
+            "name": "GasRadar",
+            "url": "https://gasradarapp.com/",
+            "applicationCategory": "UtilitiesApplication",
+            "operatingSystem": "Android, iOS, Web",
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "USD"
+            },
+            "publisher": { "@id": "https://gasradarapp.com/#organization" }
+          }
+        ]
       }
     </script>
     <!-- Open Graph (WhatsApp / Facebook / redes) -->
