@@ -205,7 +205,12 @@ def handle_update_safe(update: dict) -> None:
             pass
 
 
-def set_webhook(public_base: str | None = None) -> dict:
+def set_webhook(
+    public_base: str | None = None,
+    *,
+    drop_pending: bool = False,
+) -> dict:
+    """Registra el webhook. Por defecto NO borra mensajes pendientes (evita perder /start en redeploy)."""
     base = (public_base or APP_URL).rstrip("/")
     secret = alerts_secret()
     # URL + key (por si el header no llega) y secret_token oficial de Telegram
@@ -215,7 +220,7 @@ def set_webhook(public_base: str | None = None) -> dict:
     return _api(
         "setWebhook",
         url=wh,
-        drop_pending_updates=True,
+        drop_pending_updates=bool(drop_pending),
         allowed_updates=["message"],
         secret_token=webhook_secret_token(),
     )
@@ -385,6 +390,9 @@ def handle_update(update: dict) -> None:
     chat_id = chat.get("id")
     if chat_id is None:
         return
+
+    # Respuesta rápida: typing ya (Render free a veces tarda al despertar)
+    send_typing(chat_id)
 
     # Idioma del usuario de Telegram la primera vez
     from_user = msg.get("from") or {}

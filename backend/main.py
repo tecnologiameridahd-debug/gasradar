@@ -63,11 +63,18 @@ def _startup_jobs():
         if not bot_ready():
             print("[telegram] sin TELEGRAM_BOT_TOKEN — webhook no registrado")
             return
-        res = set_webhook()
-        info = get_webhook_info()
-        url = ((info or {}).get("result") or {}).get("url") or ""
-        err = ((info or {}).get("result") or {}).get("last_error_message") or ""
-        print(f"[telegram] webhook set ok={res.get('ok')} url={url!r} last_err={err!r}")
+        # Solo re-registra si falta o apunta mal; no dropea cola en cada wake/redeploy
+        info0 = get_webhook_info()
+        cur = ((info0 or {}).get("result") or {}).get("url") or ""
+        want_host = "gasradarapp.com/api/telegram/webhook"
+        if want_host in cur and not ((info0 or {}).get("result") or {}).get("last_error_message"):
+            print(f"[telegram] webhook ya OK url={cur!r}")
+        else:
+            res = set_webhook(drop_pending=False)
+            info = get_webhook_info()
+            url = ((info or {}).get("result") or {}).get("url") or ""
+            err = ((info or {}).get("result") or {}).get("last_error_message") or ""
+            print(f"[telegram] webhook set ok={res.get('ok')} url={url!r} last_err={err!r}")
     except Exception as e:
         print(f"[telegram] webhook startup error: {type(e).__name__}: {e}")
 
@@ -408,8 +415,12 @@ async def api_telegram_webhook(
 
 
 @app.get("/api/telegram/setup")
-def api_telegram_setup(key: str | None = None, base: str | None = None):
-    """Registra el webhook en Telegram. ?key=ALERTS_SECRET"""
+def api_telegram_setup(
+    key: str | None = None,
+    base: str | None = None,
+    drop: int = 0,
+):
+    """Registra el webhook en Telegram. ?key=ALERTS_SECRET  (&drop=1 para vaciar cola)."""
     from backend.telegram_bot import (
         alerts_secret,
         bot_ready,
@@ -425,7 +436,7 @@ def api_telegram_setup(key: str | None = None, base: str | None = None):
     if not check_alerts_key(key):
         raise HTTPException(401, key_error_hint(key))
     me = get_me()
-    wh = set_webhook(base)
+    wh = set_webhook(base, drop_pending=bool(drop))
     info = get_webhook_info()
     return {
         "ok": bool(wh.get("ok")),
