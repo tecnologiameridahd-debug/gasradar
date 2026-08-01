@@ -230,8 +230,8 @@ function loadLang() {
     const s = localStorage.getItem(LANG_KEY);
     if (s === "en" || s === "es") return s;
   } catch (_) {}
-  const nav = (navigator.language || "es").toLowerCase();
-  return nav.startsWith("en") ? "en" : "es";
+  const nav = (navigator.language || "en").toLowerCase();
+  return nav.startsWith("es") ? "es" : "en";
 }
 
 function saveLang(lang) {
