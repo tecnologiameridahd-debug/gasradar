@@ -432,10 +432,8 @@
             if (el && el.parentNode) el.parentNode.removeChild(el);
           }, 320);
         }
-        if (document.readyState === "complete") setTimeout(hide, 80);
-        else window.addEventListener("load", function () { setTimeout(hide, 80); });
-        /* por si el load tarda: no dejar splash eterno */
-        setTimeout(hide, 2200);
+        /* Mostrar el splash 3s fijos, sin importar que tan rapido cargue */
+        setTimeout(hide, 3000);
       })();
     </script>
   </body>
