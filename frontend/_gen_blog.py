@@ -9,11 +9,61 @@ ROOT = Path(__file__).resolve().parent
 BLOG = ROOT / "blog"
 BLOG.mkdir(exist_ok=True)
 
-CSS_V = "0.9.41"
+CSS_V = "0.9.42"
 SITE = "https://gasradarapp.com"
 
 # Posts ordered newest-first for the index.
 POSTS = [
+    {
+        "slug": "gasradar-telemundo-denver",
+        "date": "2026-08-03",
+        "title_es": "GasRadar en Telemundo Denver: plataforma hispana para ahorrar en gasolina",
+        "title_en": "GasRadar on Telemundo Denver: Hispanic-built app to save on gas",
+        "desc_es": "Telemundo Denver / Telemundo Colorado destacó GasRadar: la plataforma creada por un hispano para comparar precios y ahorrar al llenar el tanque en EE.UU.",
+        "desc_en": "Telemundo Denver / Telemundo Colorado featured GasRadar—the platform built by a Hispanic founder to compare prices and save at the pump across the USA.",
+        "body_es": """
+        <p class="blog-press-badge">En los medios · Telemundo Denver</p>
+        <p><strong>GasRadar salió en las noticias.</strong> <a href="https://www.telemundodenver.com/video/local/sube-la-gasolina-esta-plataforma-creada-por-un-hispano-ayuda-a-ahorrar-al-llenar-el-tanque/2472447/" target="_blank" rel="noopener noreferrer">Telemundo Denver</a> (Telemundo Colorado) publicó un reportaje local sobre cómo, con la gasolina al alza, una <strong>plataforma creada por un hispano</strong> ayuda a ahorrar al llenar el tanque.</p>
+        <h3>El reportaje</h3>
+        <p>El video de Telemundo Denver se titula: <em>“Sube la gasolina: esta plataforma creada por un hispano ayuda a ahorrar al llenar el tanque”</em>. Muestra cómo GasRadar sirve para <strong>comparar precios cerca de ti</strong> y tomar mejores decisiones al cargar combustible.</p>
+        <p><a class="btn-blog" href="https://www.telemundodenver.com/video/local/sube-la-gasolina-esta-plataforma-creada-por-un-hispano-ayuda-a-ahorrar-al-llenar-el-tanque/2472447/" target="_blank" rel="noopener noreferrer">Ver el video en Telemundo Denver →</a></p>
+        <h3>Qué es GasRadar (y por qué lo cubrieron)</h3>
+        <p>GasRadar es una app y web para encontrar <strong>gasolina de referencia en Estados Unidos</strong> con GPS o código ZIP, en español e inglés. No es solo una ciudad: la idea es ayudar a conductores en todo el país a no pagar de más en la bomba.</p>
+        <ul>
+          <li>Busca por <strong>GPS o ZIP</strong> en los 50 estados.</li>
+          <li>Compara <strong>Regular, Premium y diésel</strong>.</li>
+          <li>Reportes de la comunidad y promedios de referencia por estado.</li>
+          <li>Cómo llegar con Apple Maps o Google Maps.</li>
+        </ul>
+        <h3>Orgullo hispano + utilidad real</h3>
+        <p>Nos enorgullece que un medio nacional de la comunidad hispana como <strong>Telemundo</strong> destaque una herramienta hecha para ahorrar en algo tan cotidiano como la gasolina. El reportaje nació en Colorado, pero <strong>GasRadar sirve en todo EE.UU.</strong> — de Denver a Miami, de Houston a Nueva York.</p>
+        <h3>Pruébalo tú</h3>
+        <p>Abre la web, pon tu ZIP o activa el GPS y compara estaciones cerca de ti. También puedes seguir novedades en nuestro <a href="https://www.whatsapp.com/channel/0029VbDQSOH42DcdzMZQb241" rel="noopener">canal de WhatsApp</a> o el bot de Telegram <a href="https://t.me/GasRadar_bot" rel="noopener">@GasRadar_bot</a>.</p>
+        <p class="blog-cta"><a class="btn-blog" href="/">Abrir GasRadar gratis</a></p>
+        <p class="privacy-meta">Fuente: <a href="https://www.telemundodenver.com/video/local/sube-la-gasolina-esta-plataforma-creada-por-un-hispano-ayuda-a-ahorrar-al-llenar-el-tanque/2472447/" target="_blank" rel="noopener noreferrer">Telemundo Denver — reportaje local</a>.</p>
+        """,
+        "body_en": """
+        <p class="blog-press-badge">In the news · Telemundo Denver</p>
+        <p><strong>GasRadar made the news.</strong> <a href="https://www.telemundodenver.com/video/local/sube-la-gasolina-esta-plataforma-creada-por-un-hispano-ayuda-a-ahorrar-al-llenar-el-tanque/2472447/" target="_blank" rel="noopener noreferrer">Telemundo Denver</a> (Telemundo Colorado) aired a local story on how, with gas prices rising, a <strong>platform built by a Hispanic founder</strong> helps drivers save when filling up.</p>
+        <h3>The report</h3>
+        <p>Telemundo Denver’s video is titled: <em>“Sube la gasolina: esta plataforma creada por un hispano ayuda a ahorrar al llenar el tanque”</em> (“Gas is up: this platform created by a Hispanic helps you save at the pump”). It shows how GasRadar helps you <strong>compare nearby prices</strong> and make smarter fuel stops.</p>
+        <p><a class="btn-blog" href="https://www.telemundodenver.com/video/local/sube-la-gasolina-esta-plataforma-creada-por-un-hispano-ayuda-a-ahorrar-al-llenar-el-tanque/2472447/" target="_blank" rel="noopener noreferrer">Watch the video on Telemundo Denver →</a></p>
+        <h3>What GasRadar is (and why it was covered)</h3>
+        <p>GasRadar is a web and app to find <strong>reference gas prices across the United States</strong> with GPS or ZIP code, in Spanish and English. It’s not one-city only: the goal is to help drivers nationwide avoid overpaying at the pump.</p>
+        <ul>
+          <li>Search by <strong>GPS or ZIP</strong> in all 50 states.</li>
+          <li>Compare <strong>Regular, Premium, and diesel</strong>.</li>
+          <li>Community reports and state reference averages.</li>
+          <li>Directions via Apple Maps or Google Maps.</li>
+        </ul>
+        <h3>Hispanic pride + real utility</h3>
+        <p>We’re proud that a major Spanish-language network like <strong>Telemundo</strong> highlighted a tool built to save money on something as everyday as gas. The story started in Colorado, but <strong>GasRadar works across the USA</strong>—from Denver to Miami, Houston to New York.</p>
+        <h3>Try it</h3>
+        <p>Open the site, enter your ZIP or turn on GPS, and compare stations near you. You can also follow updates on our <a href="https://www.whatsapp.com/channel/0029VbDQSOH42DcdzMZQb241" rel="noopener">WhatsApp channel</a> or Telegram bot <a href="https://t.me/GasRadar_bot" rel="noopener">@GasRadar_bot</a>.</p>
+        <p class="blog-cta"><a class="btn-blog" href="/">Open GasRadar free</a></p>
+        <p class="privacy-meta">Source: <a href="https://www.telemundodenver.com/video/local/sube-la-gasolina-esta-plataforma-creada-por-un-hispano-ayuda-a-ahorrar-al-llenar-el-tanque/2472447/" target="_blank" rel="noopener noreferrer">Telemundo Denver — local report</a>.</p>
+        """,
+    },
     {
         "slug": "cheapest-gas-usa-guide",
         "date": "2026-08-03",
@@ -708,18 +758,20 @@ def build_index() -> None:
     es = f"""
     <h2>Blog GasRadar — gasolina en todo EE.UU.</h2>
     <p class="privacy-meta">Guías para ahorrar en gasolina en los 50 estados (no solo una ciudad).</p>
-    <p>Consejos prácticos de costa a costa: precios por estado, grandes ciudades (NYC, LA, Chicago, Houston, Miami…), California vs Texas vs Florida, Costco/Sam’s, road trips por interestatales, Regular vs Premium y cómo usar GasRadar con GPS o ZIP.</p>
+    <p class="blog-press-banner">📺 <strong>En las noticias:</strong> salimos en <a href="/blog/gasradar-telemundo-denver">Telemundo Denver</a> — plataforma hispana para ahorrar al llenar el tanque. <a href="https://www.telemundodenver.com/video/local/sube-la-gasolina-esta-plataforma-creada-por-un-hispano-ayuda-a-ahorrar-al-llenar-el-tanque/2472447/" target="_blank" rel="noopener noreferrer">Ver video →</a></p>
+    <p>Consejos prácticos de costa a costa: precios por estado, grandes ciudades (NYC, LA, Chicago, Houston, Miami…), California vs Texas vs Florida, Costco/Sam’s, road trips, Regular vs Premium y cómo usar GasRadar con GPS o ZIP.</p>
     {''.join(cards_es)}
     """
     en = f"""
     <h2>GasRadar Blog — gas across the USA</h2>
     <p class="privacy-meta">Guides to save on gas in all 50 states (not just one city).</p>
+    <p class="blog-press-banner">📺 <strong>In the news:</strong> featured on <a href="/blog/gasradar-telemundo-denver">Telemundo Denver</a> — Hispanic-built platform to save at the pump. <a href="https://www.telemundodenver.com/video/local/sube-la-gasolina-esta-plataforma-creada-por-un-hispano-ayuda-a-ahorrar-al-llenar-el-tanque/2472447/" target="_blank" rel="noopener noreferrer">Watch video →</a></p>
     <p>Coast-to-coast tips: prices by state, major cities (NYC, LA, Chicago, Houston, Miami…), California vs Texas vs Florida, Costco/Sam’s, interstate road trips, Regular vs Premium, and how to use GasRadar with GPS or ZIP.</p>
     {''.join(cards_en)}
     """
     html = page_shell(
-        title="GasRadar Blog — Cheap gas tips for all 50 US states",
-        description="Guides to find cheap gas across the United States: by state, major cities, ZIP code, Costco, road trips, and GasRadar. ES/EN.",
+        title="GasRadar Blog — Cheap gas tips USA · Featured on Telemundo Denver",
+        description="GasRadar on Telemundo Denver. Guides to find cheap gas across the United States: by state, cities, ZIP, Costco, road trips. ES/EN.",
         canonical=f"{SITE}/blog",
         active_slug=None,
         content_es=es,
