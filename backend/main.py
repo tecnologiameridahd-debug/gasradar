@@ -17,7 +17,7 @@ from backend.prices import report_price
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.9.39"
+APP_VERSION = "0.9.40"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -636,6 +636,41 @@ def privacy():
     if not path.exists():
         raise HTTPException(404, "Privacy page missing")
     return FileResponse(path)
+
+
+@app.get("/blog")
+@app.get("/blog/")
+def blog_index():
+    """Blog SEO — guías de gasolina en EE.UU."""
+    path = FRONTEND / "blog" / "index.html"
+    if not path.exists():
+        raise HTTPException(404, "Blog missing")
+    return FileResponse(
+        path,
+        headers={
+            "Cache-Control": "public, max-age=0, s-maxage=600, stale-while-revalidate=86400",
+            "Content-Type": "text/html; charset=utf-8",
+        },
+    )
+
+
+@app.get("/blog/{slug}")
+def blog_post(slug: str):
+    """Post del blog (solo slugs seguros)."""
+    import re
+
+    if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", slug or ""):
+        raise HTTPException(404, "Post not found")
+    path = FRONTEND / "blog" / f"{slug}.html"
+    if not path.is_file():
+        raise HTTPException(404, "Post not found")
+    return FileResponse(
+        path,
+        headers={
+            "Cache-Control": "public, max-age=0, s-maxage=600, stale-while-revalidate=86400",
+            "Content-Type": "text/html; charset=utf-8",
+        },
+    )
 
 
 @app.get("/stats")
