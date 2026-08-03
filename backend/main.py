@@ -17,7 +17,7 @@ from backend.prices import report_price
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.9.44"
+APP_VERSION = "0.9.45"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -594,7 +594,6 @@ def _seo_file_response(path: Path, media_type: str, request: Request) -> Respons
         # Cache larga: menos cold-starts de Render Free al re-fetch de Google
         "Cache-Control": "public, max-age=86400, s-maxage=86400",
         "Content-Length": str(len(body)),
-        "X-Robots-Tag": "noindex",  # el sitemap no debe rankear como página
     }
     mt = f"{media_type}; charset=utf-8"
     if request.method == "HEAD":
