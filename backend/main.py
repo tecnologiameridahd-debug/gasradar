@@ -7,7 +7,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -17,7 +17,7 @@ from backend.prices import report_price
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.9.40"
+APP_VERSION = "0.9.43"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -584,20 +584,38 @@ def index():
     )
 
 
-@app.get("/robots.txt")
-def robots_txt():
+@app.api_route("/robots.txt", methods=["GET", "HEAD"])
+def robots_txt(request: Request):
+    """robots.txt — GET+HEAD (Google Search Console usa HEAD a veces)."""
     path = FRONTEND / "robots.txt"
     if not path.exists():
         raise HTTPException(404, "robots.txt missing")
-    return FileResponse(path, media_type="text/plain")
+    body = path.read_bytes()
+    headers = {
+        "Cache-Control": "public, max-age=3600",
+        "Content-Type": "text/plain; charset=utf-8",
+        "Content-Length": str(len(body)),
+    }
+    if request.method == "HEAD":
+        return Response(content=b"", status_code=200, headers=headers)
+    return Response(content=body, status_code=200, headers=headers)
 
 
-@app.get("/sitemap.xml")
-def sitemap_xml():
+@app.api_route("/sitemap.xml", methods=["GET", "HEAD"])
+def sitemap_xml(request: Request):
+    """Sitemap XML — GET+HEAD (sin HEAD, GSC dice 'no se ha podido leer')."""
     path = FRONTEND / "sitemap.xml"
     if not path.exists():
         raise HTTPException(404, "sitemap missing")
-    return FileResponse(path, media_type="application/xml")
+    body = path.read_bytes()
+    headers = {
+        "Cache-Control": "public, max-age=3600",
+        "Content-Type": "application/xml; charset=utf-8",
+        "Content-Length": str(len(body)),
+    }
+    if request.method == "HEAD":
+        return Response(content=b"", status_code=200, headers=headers)
+    return Response(content=body, status_code=200, headers=headers)
 
 
 @app.get("/manifest.webmanifest")

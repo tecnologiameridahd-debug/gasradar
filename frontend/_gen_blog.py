@@ -809,20 +809,22 @@ def build_posts() -> None:
 
 
 def build_sitemap() -> None:
-    urls = [
-        ("/", "daily", "1.0"),
-        ("/privacy", "monthly", "0.4"),
-        ("/blog", "weekly", "0.9"),
+    # lastmod ayuda a Google; formato W3C date
+    urls: list[tuple[str, str, str, str]] = [
+        ("/", "daily", "1.0", "2026-08-03"),
+        ("/privacy", "monthly", "0.4", "2026-08-01"),
+        ("/blog", "weekly", "0.9", "2026-08-03"),
     ]
     for p in POSTS:
-        urls.append((f"/blog/{p['slug']}", "monthly", "0.75"))
+        urls.append((f"/blog/{p['slug']}", "monthly", "0.75", p["date"]))
     lines = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
     ]
-    for loc, freq, pri in urls:
+    for loc, freq, pri, lastmod in urls:
         lines.append("  <url>")
         lines.append(f"    <loc>{SITE}{loc}</loc>")
+        lines.append(f"    <lastmod>{lastmod}</lastmod>")
         lines.append(f"    <changefreq>{freq}</changefreq>")
         lines.append(f"    <priority>{pri}</priority>")
         lines.append("  </url>")
