@@ -17,7 +17,7 @@ from backend.prices import report_price
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.9.43"
+APP_VERSION = "0.9.44"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -584,38 +584,36 @@ def index():
     )
 
 
+def _seo_file_response(path: Path, media_type: str, request: Request) -> Response:
+    """Sirve robots/sitemap con GET+HEAD, text/xml y sin redirects (exigencia GSC)."""
+    if not path.is_file():
+        raise HTTPException(404, f"{path.name} missing")
+    # Quitar BOM si existiera (rompe parsers de Google)
+    body = path.read_bytes().lstrip(b"\xef\xbb\xbf")
+    headers = {
+        # Cache larga: menos cold-starts de Render Free al re-fetch de Google
+        "Cache-Control": "public, max-age=86400, s-maxage=86400",
+        "Content-Length": str(len(body)),
+        "X-Robots-Tag": "noindex",  # el sitemap no debe rankear como página
+    }
+    mt = f"{media_type}; charset=utf-8"
+    if request.method == "HEAD":
+        return Response(content=b"", status_code=200, media_type=mt, headers=headers)
+    return Response(content=body, status_code=200, media_type=mt, headers=headers)
+
+
 @app.api_route("/robots.txt", methods=["GET", "HEAD"])
 def robots_txt(request: Request):
-    """robots.txt — GET+HEAD (Google Search Console usa HEAD a veces)."""
-    path = FRONTEND / "robots.txt"
-    if not path.exists():
-        raise HTTPException(404, "robots.txt missing")
-    body = path.read_bytes()
-    headers = {
-        "Cache-Control": "public, max-age=3600",
-        "Content-Type": "text/plain; charset=utf-8",
-        "Content-Length": str(len(body)),
-    }
-    if request.method == "HEAD":
-        return Response(content=b"", status_code=200, headers=headers)
-    return Response(content=body, status_code=200, headers=headers)
+    """robots.txt — GET+HEAD (Googlebot/GSC)."""
+    return _seo_file_response(FRONTEND / "robots.txt", "text/plain", request)
 
 
 @app.api_route("/sitemap.xml", methods=["GET", "HEAD"])
+@app.api_route("/sitemap_index.xml", methods=["GET", "HEAD"])
 def sitemap_xml(request: Request):
-    """Sitemap XML — GET+HEAD (sin HEAD, GSC dice 'no se ha podido leer')."""
-    path = FRONTEND / "sitemap.xml"
-    if not path.exists():
-        raise HTTPException(404, "sitemap missing")
-    body = path.read_bytes()
-    headers = {
-        "Cache-Control": "public, max-age=3600",
-        "Content-Type": "application/xml; charset=utf-8",
-        "Content-Length": str(len(body)),
-    }
-    if request.method == "HEAD":
-        return Response(content=b"", status_code=200, headers=headers)
-    return Response(content=body, status_code=200, headers=headers)
+    """Sitemap XML — GET+HEAD + text/xml (formato preferido por Google)."""
+    # text/xml es el tipo que GSC documenta con más frecuencia
+    return _seo_file_response(FRONTEND / "sitemap.xml", "text/xml", request)
 
 
 @app.get("/manifest.webmanifest")

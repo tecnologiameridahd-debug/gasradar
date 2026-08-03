@@ -1,0 +1,39 @@
+# Mantiene despierto Render Free y calienta sitemap para Google Search Console.
+# Sin esto, el cold start hace que GSC diga "no se ha podido leer el sitemap".
+name: keep-alive
+
+on:
+  schedule:
+    # Cada 10 minutos (UTC)
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Wake app + fetch sitemap
+        run: |
+          set -e
+          BASE="https://gasradarapp.com"
+          echo "Health..."
+          code=$(curl -sS -o /tmp/health.json -w "%{http_code}" --max-time 90 "$BASE/api/health" || true)
+          echo "health HTTP $code"
+          cat /tmp/health.json || true
+          echo
+          echo "Sitemap..."
+          code=$(curl -sS -o /tmp/sitemap.xml -w "%{http_code}" --max-time 90 -A "GasRadar-KeepAlive/1.0" "$BASE/sitemap.xml" || true)
+          echo "sitemap HTTP $code"
+          head -c 200 /tmp/sitemap.xml || true
+          echo
+          # Acepta 200; reintenta una vez si falló (cold start largo)
+          if [ "$code" != "200" ]; then
+            echo "retry after 20s..."
+            sleep 20
+            code=$(curl -sS -o /tmp/sitemap.xml -w "%{http_code}" --max-time 90 "$BASE/sitemap.xml" || true)
+            echo "sitemap retry HTTP $code"
+          fi
+          test "$code" = "200"
+          grep -q "<urlset" /tmp/sitemap.xml
+          echo "OK keep-alive"
