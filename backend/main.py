@@ -467,6 +467,12 @@ def api_telegram_status(key: str | None = None):
     me = get_me() if bot_ready() else {}
     info = get_webhook_info() if bot_ready() else {}
     result = (info or {}).get("result") or {}
+    try:
+        from backend.alerts import alert_stats
+
+        tg_users = alert_stats()
+    except Exception as e:
+        tg_users = {"error": str(e)}
     return {
         "bot_ready": bot_ready(),
         "has_alerts_secret": bool(secret),
@@ -477,6 +483,7 @@ def api_telegram_status(key: str | None = None):
         "pending_update_count": result.get("pending_update_count"),
         "last_error_message": result.get("last_error_message"),
         "last_error_date": result.get("last_error_date"),
+        "alerts_users": tg_users,
     }
 
 
@@ -529,12 +536,32 @@ def api_visit(body: VisitBody):
 
 @app.get("/api/stats")
 def api_stats(key: str | None = None, days: int = Query(14, ge=1, le=90)):
-    """Resumen de visitas — requiere ?key=STATS_KEY."""
+    """Resumen de visitas + alertas Telegram — requiere ?key=STATS_KEY o ALERTS_SECRET."""
     from backend.analytics import check_stats_key, summary
+    from backend.telegram_bot import check_alerts_key
 
-    if not check_stats_key(key):
-        raise HTTPException(401, "Clave incorrecta. Usa ?key= tu STATS_KEY")
-    return summary(days=days)
+    if not (check_stats_key(key) or check_alerts_key(key)):
+        raise HTTPException(401, "Clave incorrecta. Usa ?key= tu STATS_KEY o ALERTS_SECRET")
+    data = summary(days=days)
+    try:
+        from backend.alerts import alert_stats
+
+        data["telegram_alerts"] = alert_stats()
+    except Exception as e:
+        data["telegram_alerts"] = {"error": f"{type(e).__name__}: {e}"}
+    return data
+
+
+@app.get("/api/telegram/alerts-stats")
+def api_telegram_alerts_stats(key: str | None = None):
+    """Solo conteo de alertas del bot @GasRadar_bot. ?key=ALERTS_SECRET o STATS_KEY."""
+    from backend.alerts import alert_stats
+    from backend.analytics import check_stats_key
+    from backend.telegram_bot import check_alerts_key
+
+    if not (check_stats_key(key) or check_alerts_key(key)):
+        raise HTTPException(401, "Clave incorrecta")
+    return alert_stats()
 
 
 # Static frontend

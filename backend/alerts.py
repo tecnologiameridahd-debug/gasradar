@@ -135,6 +135,58 @@ def list_active_alerts() -> list[dict]:
     )
 
 
+def alert_stats() -> dict:
+    """
+    Conteos de usuarios del bot de alertas Telegram.
+    - total: filas en telegram_alerts (habló /start o configuró algo)
+    - with_zip: tienen zona
+    - with_price: tienen tope de precio
+    - active_full: alerta lista (activa + zip + max_price) — reciben /api/alerts/run
+    - paused: active=0
+    """
+    ensure_alerts_schema()
+
+    def _n(sql: str, params: tuple = ()) -> int:
+        row = fetchone(sql, params)
+        return int(row["n"]) if row and row.get("n") is not None else 0
+
+    total = _n("SELECT COUNT(*) AS n FROM telegram_alerts")
+    with_zip = _n(
+        "SELECT COUNT(*) AS n FROM telegram_alerts WHERE zip IS NOT NULL AND zip != ''"
+    )
+    with_price = _n(
+        "SELECT COUNT(*) AS n FROM telegram_alerts WHERE max_price IS NOT NULL"
+    )
+    active_full = _n(
+        """
+        SELECT COUNT(*) AS n FROM telegram_alerts
+        WHERE active = 1 AND zip IS NOT NULL AND zip != '' AND max_price IS NOT NULL
+        """
+    )
+    paused = _n("SELECT COUNT(*) AS n FROM telegram_alerts WHERE active = 0")
+    active_any = _n("SELECT COUNT(*) AS n FROM telegram_alerts WHERE active = 1")
+    top_zips = fetchall(
+        """
+        SELECT zip, COUNT(*) AS n FROM telegram_alerts
+        WHERE zip IS NOT NULL AND zip != ''
+        GROUP BY zip ORDER BY n DESC LIMIT 10
+        """
+    ) or []
+    return {
+        "total_users": total,
+        "active_users": active_any,
+        "paused_users": paused,
+        "with_zip": with_zip,
+        "with_price_cap": with_price,
+        "alerts_ready": active_full,
+        "note": (
+            "alerts_ready = reciben avisos del cron (ZIP + tope + activa). "
+            "total_users = chats que usaron el bot al menos una vez."
+        ),
+        "top_zips": [{"zip": r["zip"], "n": int(r["n"])} for r in top_zips],
+    }
+
+
 def mark_sent(chat_id: str | int, price: float) -> None:
     upsert_alert(chat_id, last_sent_day=_today(), last_price=float(price))
 
