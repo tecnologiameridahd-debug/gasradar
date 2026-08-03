@@ -1495,6 +1495,22 @@ button.btn-ghost:hover,
   margin: 0 2px;
 }
 
+.footer-links a,
+.footer-wa-channel {
+  color: var(--blue);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.footer-links a:hover,
+.footer-wa-channel:hover {
+  text-decoration: underline;
+}
+
+.footer-wa-channel {
+  color: #25d366;
+}
+
 .logo-link {
   display: block;
   line-height: 0;

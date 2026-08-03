@@ -277,6 +277,18 @@
           ·
           <a href="mailto:contact@gasradarapp.com">contact@gasradarapp.com</a>
         </div>
+        <div class="footer-links">
+          <a href="/privacy" id="footerPrivacy">Privacidad</a>
+          <span class="footer-sep" aria-hidden="true">·</span>
+          <a
+            class="footer-wa-channel"
+            id="footerWa"
+            href="https://www.whatsapp.com/channel/0029VbDQSOH42DcdzMZQb241"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Canal WhatsApp</a
+          >
+        </div>
       </footer>
     </div>
 
@@ -304,6 +316,10 @@
           lang === "en" ? "← Back to GasRadar" : "← Volver a GasRadar";
         document.title =
           lang === "en" ? "GasRadar — Privacy Policy" : "GasRadar — Política de privacidad";
+        const fp = document.getElementById("footerPrivacy");
+        if (fp) fp.textContent = lang === "en" ? "Privacy" : "Privacidad";
+        const fw = document.getElementById("footerWa");
+        if (fw) fw.textContent = lang === "en" ? "WhatsApp channel" : "Canal WhatsApp";
       }
       document.getElementById("btnLangEs").addEventListener("click", () => setLang("es"));
       document.getElementById("btnLangEn").addEventListener("click", () => setLang("en"));
