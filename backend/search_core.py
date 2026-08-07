@@ -79,6 +79,8 @@ def run_search(
     limit: int = 30,
     track: bool = True,
     quick: bool = False,
+    client_ip: str = "",
+    client_country: str = "",
 ) -> dict:
     """Misma lógica que GET /api/search. Lanza ValueError si ZIP inválido.
 
@@ -138,6 +140,8 @@ def run_search(
                     "search_cache",
                     path="/api/search",
                     detail=str(zip_code or "gps")[:40],
+                    ip=client_ip,
+                    ip_country=client_country,
                 )
             except Exception:
                 pass
@@ -373,7 +377,13 @@ def run_search(
             from backend.analytics import track_event
 
             detail = zip_code or (zip or "") or ("gps" if lat is not None else "")
-            track_event("search", path="/api/search", detail=str(detail)[:40])
+            track_event(
+                "search",
+                path="/api/search",
+                detail=str(detail)[:40],
+                ip=client_ip,
+                ip_country=client_country,
+            )
         except Exception:
             pass
 

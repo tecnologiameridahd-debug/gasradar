@@ -1,6 +1,6 @@
 """
-Estadísticas simples de visitas (sin nombres ni IPs).
-Solo el dueño ve el panel en /stats?key=...
+Estadísticas de visitas GasRadar (panel /stats?key=...).
+Guarda referrer, lang, detail e IP del visitante para el admin.
 """
 from __future__ import annotations
 
@@ -27,14 +27,48 @@ def _day_offset(days_ago: int) -> str:
     return (datetime.now(timezone.utc) - timedelta(days=days_ago)).strftime("%Y-%m-%d")
 
 
+def client_ip(request) -> str:
+    """IP real detrás de Render/proxy (X-Forwarded-For)."""
+    if request is None:
+        return ""
+    try:
+        xff = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
+        if xff:
+            return xff[:45]
+        if request.client and request.client.host:
+            return str(request.client.host)[:45]
+    except Exception:
+        pass
+    return ""
+
+
+def client_country(request) -> str:
+    """Código país si el proxy lo manda (Cloudflare, etc.)."""
+    if request is None:
+        return ""
+    for h in (
+        "cf-ipcountry",
+        "x-vercel-ip-country",
+        "cloudfront-viewer-country",
+        "x-country-code",
+    ):
+        val = (request.headers.get(h) or "").strip().upper()
+        if val and val != "XX" and len(val) <= 8:
+            return val[:8]
+    return ""
+
+
 def track_event(
     event_type: str,
     path: str | None = None,
     referrer: str | None = None,
     lang: str | None = None,
     detail: str | None = None,
+    ip: str | None = None,
+    ip_country: str | None = None,
+    request=None,
 ) -> None:
-    """Registra un evento anónimo. No guarda IP ni nombre."""
+    """Registra un evento. Con request o ip= se guarda la IP (panel admin)."""
     et = (event_type or "pageview")[:40]
     path = (path or "/")[:200]
     ref = (referrer or "")[:300]
@@ -48,13 +82,22 @@ def track_event(
             ref = ref[:80]
     lang = (lang or "")[:12]
     detail = (detail or "")[:120]
+    if request is not None:
+        if not ip:
+            ip = client_ip(request)
+        if not ip_country:
+            ip_country = client_country(request)
+    ip = (ip or "").strip()[:45] or None
+    ip_country = (ip_country or "").strip().upper()[:8] or None
     try:
         execute(
             """
-            INSERT INTO site_events(event_type, path, referrer, lang, detail, day, created_at)
-            VALUES (?,?,?,?,?,?,?)
+            INSERT INTO site_events(
+                event_type, path, referrer, lang, detail, day, created_at, ip, ip_country
+            )
+            VALUES (?,?,?,?,?,?,?,?,?)
             """,
-            (et, path, ref, lang, detail, _day_utc(), time.time()),
+            (et, path, ref, lang, detail, _day_utc(), time.time(), ip, ip_country),
         )
     except Exception as e:
         print(f"[analytics] track fail: {e}")
@@ -62,6 +105,14 @@ def track_event(
 
 def _n(row) -> int:
     return int(row["n"]) if row and row.get("n") is not None else 0
+
+
+def _fmt_ts(ts) -> str:
+    try:
+        t = float(ts)
+        return datetime.fromtimestamp(t, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return str(ts or "")[:19]
 
 
 def summary(days: int = 14) -> dict:
@@ -95,7 +146,6 @@ def summary(days: int = 14) -> dict:
         ("search", yesterday),
     )
 
-    # totales del periodo seleccionado
     period_views = fetchone(
         "SELECT COUNT(*) AS n FROM site_events WHERE event_type=? AND day>=?",
         ("pageview", since),
@@ -125,7 +175,6 @@ def summary(days: int = 14) -> dict:
         elif row["event_type"] == "search":
             day_map[d]["searches"] = int(row["n"])
     days_list = sorted(day_map.values(), key=lambda x: x["day"], reverse=True)[:days]
-    # cronológico para gráfica (viejo → nuevo)
     chart_days = list(reversed(days_list))
 
     top_refs = fetchall(
@@ -167,11 +216,54 @@ def summary(days: int = 14) -> dict:
     )
     recent = fetchall(
         """
-        SELECT event_type, path, referrer, lang, detail, day, created_at
+        SELECT event_type, path, referrer, lang, detail, day, created_at, ip, ip_country
         FROM site_events
         ORDER BY created_at DESC
-        LIMIT 40
+        LIMIT 50
         """
+    )
+
+    unique_ips = fetchone(
+        """
+        SELECT COUNT(DISTINCT ip) AS n FROM site_events
+        WHERE day >= ? AND ip IS NOT NULL AND TRIM(ip) != ''
+        """,
+        (since,),
+    )
+    top_ip_rows = fetchall(
+        """
+        SELECT ip,
+               MAX(ip_country) AS country,
+               COUNT(*) AS n,
+               MAX(created_at) AS last_seen
+        FROM site_events
+        WHERE day >= ? AND ip IS NOT NULL AND TRIM(ip) != ''
+        GROUP BY ip
+        ORDER BY n DESC
+        LIMIT 40
+        """,
+        (since,),
+    )
+    by_country = fetchall(
+        """
+        SELECT COALESCE(NULLIF(TRIM(ip_country), ''), '—') AS country, COUNT(*) AS n
+        FROM site_events
+        WHERE day >= ? AND ip IS NOT NULL AND TRIM(ip) != ''
+        GROUP BY 1
+        ORDER BY n DESC
+        LIMIT 20
+        """,
+        (since,),
+    )
+    recent_ips = fetchall(
+        """
+        SELECT created_at, event_type, path, referrer, detail, lang, ip, ip_country, day
+        FROM site_events
+        WHERE day >= ? AND ip IS NOT NULL AND TRIM(ip) != ''
+        ORDER BY created_at DESC
+        LIMIT 50
+        """,
+        (since,),
     )
 
     pv_today = _n(today_views)
@@ -212,6 +304,7 @@ def summary(days: int = 14) -> dict:
             "search_rate_all": _rate(se_all, pv_all),
             "delta_views_vs_yesterday": _delta(pv_today, pv_y),
             "delta_searches_vs_yesterday": _delta(se_today, se_y),
+            "unique_ips_period": _n(unique_ips),
         },
         "by_day": days_list,
         "chart": chart_days,
@@ -232,11 +325,44 @@ def summary(days: int = 14) -> dict:
                 "lang": r["lang"] or "—",
                 "detail": r["detail"] or "—",
                 "day": r["day"],
+                "ip": r.get("ip") or "",
+                "country": (r.get("ip_country") or "").strip(),
+                "when": _fmt_ts(r.get("created_at")),
             }
             for r in recent
         ],
+        "unique_ips": _n(unique_ips),
+        "top_ips": [
+            {
+                "ip": r["ip"],
+                "country": (r.get("country") or "").strip(),
+                "n": int(r["n"]),
+                "last_seen": _fmt_ts(r.get("last_seen")),
+                "lookup": f"https://ipinfo.io/{r['ip']}",
+            }
+            for r in top_ip_rows
+            if r.get("ip")
+        ],
+        "by_country": [
+            {"country": r["country"], "n": int(r["n"])} for r in by_country
+        ],
+        "recent_ips": [
+            {
+                "when": _fmt_ts(r.get("created_at")),
+                "ip": r.get("ip") or "",
+                "country": (r.get("ip_country") or "").strip(),
+                "type": r.get("event_type") or "",
+                "path": r.get("path") or "",
+                "detail": r.get("detail") or "—",
+                "from": r.get("referrer") or "—",
+                "lang": r.get("lang") or "—",
+                "lookup": f"https://ipinfo.io/{r['ip']}" if r.get("ip") else "",
+            }
+            for r in recent_ips
+        ],
         "note": (
-            "No se guardan nombres ni IPs. "
-            "En plan free de Render sin Postgres, las stats se pueden borrar al redeploy."
+            "IPs se guardan desde el deploy de tracking IP (panel admin). "
+            "Eventos viejos pueden no tener IP. "
+            "En plan free sin Postgres, las stats se pueden borrar al redeploy."
         ),
     }

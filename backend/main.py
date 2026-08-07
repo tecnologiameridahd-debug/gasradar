@@ -344,6 +344,7 @@ def api_zyla_test(zip: str = Query("80903")):
 
 @app.get("/api/search")
 def api_search(
+    request: Request,
     lat: float | None = None,
     lon: float | None = None,
     zip: str | None = Query(None, alias="zip"),
@@ -351,6 +352,7 @@ def api_search(
     fuel: str = Query("regular", pattern="^(regular|mid|premium|diesel)$"),
     limit: int = Query(30, ge=5, le=60),
 ):
+    from backend.analytics import client_country, client_ip
     from backend.search_core import run_search
 
     try:
@@ -362,6 +364,8 @@ def api_search(
             fuel=fuel,
             limit=limit,
             track=True,
+            client_ip=client_ip(request),
+            client_country=client_country(request),
         )
     except ValueError as e:
         raise HTTPException(404, str(e)) from e
@@ -521,8 +525,8 @@ class VisitBody(BaseModel):
 
 
 @app.post("/api/visit")
-def api_visit(body: VisitBody):
-    """Registro anónimo de visita (sin IP ni nombre)."""
+def api_visit(request: Request, body: VisitBody):
+    """Registro de visita para stats (incluye IP para el panel admin)."""
     from backend.analytics import track_event
 
     track_event(
@@ -530,6 +534,7 @@ def api_visit(body: VisitBody):
         path=body.path or "/",
         referrer=body.referrer,
         lang=body.lang,
+        request=request,
     )
     return {"ok": True}
 

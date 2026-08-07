@@ -110,7 +110,9 @@ def init_schema() -> None:
                         lang TEXT,
                         detail TEXT,
                         day TEXT NOT NULL,
-                        created_at DOUBLE PRECISION NOT NULL
+                        created_at DOUBLE PRECISION NOT NULL,
+                        ip TEXT,
+                        ip_country TEXT
                     )
                     """
                 )
@@ -119,6 +121,15 @@ def init_schema() -> None:
                     CREATE INDEX IF NOT EXISTS idx_events_day
                         ON site_events (day, event_type)
                     """
+                )
+                cur.execute(
+                    "ALTER TABLE site_events ADD COLUMN IF NOT EXISTS ip TEXT"
+                )
+                cur.execute(
+                    "ALTER TABLE site_events ADD COLUMN IF NOT EXISTS ip_country TEXT"
+                )
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_events_ip ON site_events (ip)"
                 )
         else:
             conn.executescript(
@@ -141,12 +152,25 @@ def init_schema() -> None:
                     lang TEXT,
                     detail TEXT,
                     day TEXT NOT NULL,
-                    created_at REAL NOT NULL
+                    created_at REAL NOT NULL,
+                    ip TEXT,
+                    ip_country TEXT
                 );
                 CREATE INDEX IF NOT EXISTS idx_events_day
                     ON site_events (day, event_type);
+                CREATE INDEX IF NOT EXISTS idx_events_ip
+                    ON site_events (ip);
                 """
             )
+            # Migración si la tabla ya existía sin columnas IP
+            cols = {
+                r[1]
+                for r in conn.execute("PRAGMA table_info(site_events)").fetchall()
+            }
+            if "ip" not in cols:
+                conn.execute("ALTER TABLE site_events ADD COLUMN ip TEXT")
+            if "ip_country" not in cols:
+                conn.execute("ALTER TABLE site_events ADD COLUMN ip_country TEXT")
 
     _schema_ready = True
 

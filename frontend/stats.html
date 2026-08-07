@@ -297,6 +297,21 @@
         <div id="recent"></div>
       </section>
 
+      <section class="card" id="ipsCard" hidden>
+        <h2 style="margin: 0 0 6px; font-size: 1.05rem">IPs de visitantes</h2>
+        <p class="privacy-meta" style="margin: 0 0 12px">
+          IPs únicas en el rango:
+          <strong id="uniqueIps">0</strong>. Clic en IP → ipinfo.io (ciudad/país aprox.).
+          Solo visitas nuevas tras el deploy de tracking.
+        </p>
+        <h3 style="margin: 0 0 8px; font-size: 0.95rem">Por país</h3>
+        <div id="byCountry" style="margin-bottom: 14px"></div>
+        <h3 style="margin: 0 0 8px; font-size: 0.95rem">Top IPs</h3>
+        <div id="topIps" style="margin-bottom: 14px; max-height: 280px; overflow: auto"></div>
+        <h3 style="margin: 0 0 8px; font-size: 0.95rem">Últimas visitas con IP</h3>
+        <div id="recentIps" style="max-height: 320px; overflow: auto"></div>
+      </section>
+
       <footer class="site-footer">
         <a href="/">← GasRadar</a> · <a href="/privacy">Privacidad</a>
         ·
@@ -492,6 +507,10 @@
             <div class="n">${t.searches || 0}</div>
             <div class="l">Búsquedas total</div>
           </div>
+          <div class="stat-box hi">
+            <div class="n">${t.unique_ips_period != null ? t.unique_ips_period : (data.unique_ips || 0)}</div>
+            <div class="l">IPs únicas (${currentDays}d)</div>
+          </div>
         `;
         $("#note").textContent = data.note || "";
 
@@ -523,15 +542,68 @@
         $("#recent").innerHTML = recent
           .map((r) => {
             const kind = r.type === "search" ? "search" : "";
+            const ipBit = r.ip
+              ? ` · <a href="https://ipinfo.io/${esc(r.ip)}" target="_blank" rel="noopener">${esc(r.ip)}</a>${r.country ? " (" + esc(r.country) + ")" : ""}`
+              : "";
             return `<div class="stat-row">
               <span style="min-width:0">
                 <span class="pill ${kind}">${esc(r.type)}</span>
-                <span class="muted"> ${esc(r.detail)} · ${esc(r.from)} · ${esc(r.lang)}</span>
+                <span class="muted"> ${esc(r.detail)} · ${esc(r.from)} · ${esc(r.lang)}${ipBit}</span>
               </span>
-              <span class="muted">${esc(r.day)}</span>
+              <span class="muted">${esc(r.when || r.day)}</span>
             </div>`;
           })
           .join("");
+
+        const topIps = data.top_ips || [];
+        const recentIps = data.recent_ips || [];
+        const byCountry = data.by_country || [];
+        const hasIp = topIps.length || recentIps.length;
+        $("#ipsCard").hidden = !hasIp;
+        if (hasIp) {
+          $("#uniqueIps").textContent = String(
+            data.unique_ips != null
+              ? data.unique_ips
+              : t.unique_ips_period != null
+                ? t.unique_ips_period
+                : 0
+          );
+          $("#byCountry").innerHTML = byCountry.length
+            ? byCountry
+                .map(
+                  (c) =>
+                    `<span class="pill" style="margin:0 6px 6px 0;display:inline-block">${esc(c.country)} <strong>${c.n}</strong></span>`
+                )
+                .join("")
+            : `<span class="muted">Sin código de país (Render a menudo no lo envía)</span>`;
+          $("#topIps").innerHTML = topIps
+            .map((row) => {
+              const link = row.lookup
+                ? `<a href="${esc(row.lookup)}" target="_blank" rel="noopener"><code>${esc(row.ip)}</code></a>`
+                : `<code>${esc(row.ip)}</code>`;
+              return `<div class="stat-row">
+                <span style="min-width:0;flex:1">${link}
+                  <span class="muted"> ${esc(row.country || "—")}</span>
+                </span>
+                <span class="muted"><strong>${row.n || 0}</strong> · ${esc(row.last_seen || "")}</span>
+              </div>`;
+            })
+            .join("");
+          $("#recentIps").innerHTML = recentIps
+            .map((row) => {
+              const link = row.lookup
+                ? `<a href="${esc(row.lookup)}" target="_blank" rel="noopener"><code>${esc(row.ip)}</code></a>`
+                : `<code>${esc(row.ip || "—")}</code>`;
+              return `<div class="stat-row">
+                <span style="min-width:0">
+                  ${link}
+                  <span class="muted"> ${esc(row.country || "—")} · ${esc(row.type)} · ${esc(row.detail)} · ${esc(row.from)}</span>
+                </span>
+                <span class="muted">${esc(row.when || "")}</span>
+              </div>`;
+            })
+            .join("");
+        }
       }
 
       $("#btnLoad").addEventListener("click", load);
