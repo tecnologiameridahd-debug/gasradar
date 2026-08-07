@@ -63,18 +63,21 @@ Debes ver algo así:
 ```json
 {
   "ok": true,
-  "version": "0.2.2",
   "db": {
     "backend": "postgres",
     "persistent": true,
     "ok": true,
     "reports_count": 0,
-    "note": "Postgres en la nube — reportes se conservan."
+    "events_count": 0,
+    "database_url_set": true,
+    "note": "Postgres — reportes, visitas, IPs y búsquedas se conservan entre deploys."
   }
 }
 ```
 
-Si `backend` dice `"sqlite"`, **no** se pegó bien `DATABASE_URL` en Render.
+Si `backend` dice `"sqlite"` o `persistent: false`, **no** se pegó bien `DATABASE_URL` en Render.
+
+Con Postgres se conservan: **reportes de precio**, **visitas**, **IPs**, **GPS vs ZIP** del panel `/stats`.
 
 Prueba real:
 
