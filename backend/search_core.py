@@ -134,12 +134,12 @@ def run_search(
     if cached is not None:
         if track:
             try:
-                from backend.analytics import track_event
+                from backend.analytics import track_event, search_detail
 
                 track_event(
                     "search_cache",
                     path="/api/search",
-                    detail=str(zip_code or "gps")[:40],
+                    detail=search_detail(zip_code=zip_code or zip, lat=lat, lon=lon),
                     ip=client_ip,
                     ip_country=client_country,
                 )
@@ -374,13 +374,12 @@ def run_search(
 
     if track:
         try:
-            from backend.analytics import track_event
+            from backend.analytics import track_event, search_detail
 
-            detail = zip_code or (zip or "") or ("gps" if lat is not None else "")
             track_event(
                 "search",
                 path="/api/search",
-                detail=str(detail)[:40],
+                detail=search_detail(zip_code=zip_code or zip, lat=lat, lon=lon),
                 ip=client_ip,
                 ip_country=client_country,
             )

@@ -58,6 +58,45 @@ def client_country(request) -> str:
     return ""
 
 
+def search_detail(
+    *,
+    zip_code: str | None = None,
+    lat: float | None = None,
+    lon: float | None = None,
+) -> str:
+    """Etiqueta clara para stats: zip:80903 | gps | unknown."""
+    z = (str(zip_code or "").strip())[:10]
+    if z and z.isdigit() and len(z) >= 5:
+        return f"zip:{z[:5]}"
+    if z and not z.replace("-", "").isdigit():
+        # por si viene label raro
+        pass
+    if z and len(z) >= 3:
+        # ZIP con formato o código
+        digits = "".join(c for c in z if c.isdigit())[:5]
+        if len(digits) == 5:
+            return f"zip:{digits}"
+    if lat is not None and lon is not None:
+        return "gps"
+    if z:
+        return f"zip:{z[:12]}"
+    return "unknown"
+
+
+def parse_search_mode(detail: str | None) -> str:
+    """gps | zip | other a partir del campo detail."""
+    d = (detail or "").strip().lower()
+    if not d:
+        return "other"
+    if d == "gps" or d.startswith("gps"):
+        return "gps"
+    if d.startswith("zip:") or (d.isdigit() and len(d) == 5):
+        return "zip"
+    if d in ("gps", "zip"):
+        return d
+    return "other"
+
+
 def track_event(
     event_type: str,
     path: str | None = None,
@@ -190,19 +229,87 @@ def summary(days: int = 14) -> dict:
         """,
         (since,),
     )
-    top_zips = fetchall(
+    # Búsquedas: ZIP vs GPS (search + search_cache en el periodo)
+    search_details = fetchall(
         """
-        SELECT detail AS zip, COUNT(*) AS n
+        SELECT detail, COUNT(*) AS n
         FROM site_events
-        WHERE event_type='search'
-          AND detail IS NOT NULL AND detail != ''
+        WHERE event_type IN ('search', 'search_cache')
           AND day >= ?
+          AND detail IS NOT NULL AND detail != ''
         GROUP BY detail
         ORDER BY n DESC
-        LIMIT 15
+        LIMIT 40
         """,
         (since,),
     )
+    mode_counts = {"gps": 0, "zip": 0, "other": 0}
+    top_zips_map: dict[str, int] = {}
+    for row in search_details:
+        detail = row.get("detail") or ""
+        n = int(row["n"])
+        mode = parse_search_mode(detail)
+        mode_counts[mode] = mode_counts.get(mode, 0) + n
+        if mode == "zip":
+            z = detail.split(":", 1)[-1] if ":" in detail else detail
+            z = "".join(c for c in z if c.isdigit())[:5] or z[:10]
+            if z:
+                top_zips_map[z] = top_zips_map.get(z, 0) + n
+    # Compat: también contaba solo event_type=search con detail=zip suelto
+    legacy_zips = fetchall(
+        """
+        SELECT detail AS zip, COUNT(*) AS n
+        FROM site_events
+        WHERE event_type IN ('search', 'search_cache')
+          AND detail IS NOT NULL AND detail != ''
+          AND day >= ?
+          AND detail NOT LIKE 'gps%'
+          AND detail != 'unknown'
+        GROUP BY detail
+        ORDER BY n DESC
+        LIMIT 20
+        """,
+        (since,),
+    )
+    for r in legacy_zips:
+        raw = (r.get("zip") or "").strip()
+        if not raw or raw.lower().startswith("gps"):
+            continue
+        z = raw.split(":", 1)[-1] if raw.lower().startswith("zip:") else raw
+        z = "".join(c for c in z if c.isdigit())[:5] or z[:10]
+        if len(z) >= 3:
+            top_zips_map[z] = max(top_zips_map.get(z, 0), int(r["n"]))
+    top_zips = sorted(
+        [{"zip": z, "n": n} for z, n in top_zips_map.items()],
+        key=lambda x: -x["n"],
+    )[:15]
+    search_mode_total = sum(mode_counts.values()) or 0
+    by_search_mode = [
+        {
+            "mode": "gps",
+            "label": "GPS",
+            "n": mode_counts["gps"],
+            "pct": round(100.0 * mode_counts["gps"] / search_mode_total, 1)
+            if search_mode_total
+            else 0.0,
+        },
+        {
+            "mode": "zip",
+            "label": "ZIP code",
+            "n": mode_counts["zip"],
+            "pct": round(100.0 * mode_counts["zip"] / search_mode_total, 1)
+            if search_mode_total
+            else 0.0,
+        },
+        {
+            "mode": "other",
+            "label": "Otro / sin dato",
+            "n": mode_counts["other"],
+            "pct": round(100.0 * mode_counts["other"] / search_mode_total, 1)
+            if search_mode_total
+            else 0.0,
+        },
+    ]
     top_langs = fetchall(
         """
         SELECT lang, COUNT(*) AS n
@@ -311,9 +418,9 @@ def summary(days: int = 14) -> dict:
         "top_referrers": [
             {"source": r["source"] or "(direct)", "n": int(r["n"])} for r in top_refs
         ],
-        "top_search_details": [
-            {"zip": r["zip"], "n": int(r["n"])} for r in top_zips if r.get("zip")
-        ],
+        "top_search_details": top_zips,
+        "by_search_mode": by_search_mode,
+        "search_mode_total": search_mode_total,
         "top_langs": [
             {"lang": (r["lang"] or "—")[:12], "n": int(r["n"])} for r in top_langs
         ],
@@ -324,6 +431,9 @@ def summary(days: int = 14) -> dict:
                 "from": r["referrer"] or "—",
                 "lang": r["lang"] or "—",
                 "detail": r["detail"] or "—",
+                "mode": parse_search_mode(r.get("detail"))
+                if (r.get("event_type") or "").startswith("search")
+                else "",
                 "day": r["day"],
                 "ip": r.get("ip") or "",
                 "country": (r.get("ip_country") or "").strip(),

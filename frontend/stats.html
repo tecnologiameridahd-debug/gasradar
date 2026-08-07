@@ -282,8 +282,18 @@
         <div id="refs"></div>
       </section>
 
+      <section class="card" id="modeCard" hidden>
+        <h2 style="margin: 0 0 10px; font-size: 1.05rem">GPS vs ZIP code</h2>
+        <p class="privacy-meta" style="margin: 0 0 10px">
+          Cómo buscaron gasolina en el periodo (búsquedas nuevas: <code>gps</code> o
+          <code>zip:12345</code>).
+        </p>
+        <div class="stats-grid wide" id="modeTotals"></div>
+        <div id="modeBars" style="margin-top: 12px"></div>
+      </section>
+
       <section class="card" id="zipsCard" hidden>
-        <h2 style="margin: 0 0 10px; font-size: 1.05rem">ZIP / zonas más buscadas</h2>
+        <h2 style="margin: 0 0 10px; font-size: 1.05rem">ZIP más buscados</h2>
         <div id="zips"></div>
       </section>
 
@@ -529,6 +539,37 @@
         $("#refsCard").hidden = !refs.length;
         $("#refs").innerHTML = rankRows(refs, "source");
 
+        const modes = data.by_search_mode || [];
+        const modeTotal = data.search_mode_total || 0;
+        $("#modeCard").hidden = !modeTotal && !modes.some((m) => m.n > 0);
+        if (!$("#modeCard").hidden) {
+          const gps = modes.find((m) => m.mode === "gps") || { n: 0, pct: 0 };
+          const zipM = modes.find((m) => m.mode === "zip") || { n: 0, pct: 0 };
+          const oth = modes.find((m) => m.mode === "other") || { n: 0, pct: 0 };
+          $("#modeTotals").innerHTML = `
+            <div class="stat-box hi">
+              <div class="n">${gps.n || 0}</div>
+              <div class="l">GPS (${gps.pct || 0}%)</div>
+            </div>
+            <div class="stat-box hi">
+              <div class="n">${zipM.n || 0}</div>
+              <div class="l">ZIP code (${zipM.pct || 0}%)</div>
+            </div>
+            <div class="stat-box">
+              <div class="n">${oth.n || 0}</div>
+              <div class="l">Otro / viejo (${oth.pct || 0}%)</div>
+            </div>
+            <div class="stat-box">
+              <div class="n">${modeTotal}</div>
+              <div class="l">Búsquedas (${currentDays}d)</div>
+            </div>
+          `;
+          $("#modeBars").innerHTML = rankRows(
+            modes.filter((m) => m.n > 0).map((m) => ({ source: m.label, n: m.n })),
+            "source"
+          );
+        }
+
         const zips = data.top_search_details || [];
         $("#zipsCard").hidden = !zips.length;
         $("#zips").innerHTML = rankRows(zips, "zip");
@@ -541,14 +582,22 @@
         $("#recentCard").hidden = !recent.length;
         $("#recent").innerHTML = recent
           .map((r) => {
-            const kind = r.type === "search" ? "search" : "";
+            const kind = r.type === "search" || r.type === "search_cache" ? "search" : "";
+            const modeLbl =
+              r.mode === "gps"
+                ? "📍 GPS"
+                : r.mode === "zip"
+                  ? "#️⃣ ZIP"
+                  : r.detail && r.detail !== "—"
+                    ? esc(r.detail)
+                    : "";
             const ipBit = r.ip
               ? ` · <a href="https://ipinfo.io/${esc(r.ip)}" target="_blank" rel="noopener">${esc(r.ip)}</a>${r.country ? " (" + esc(r.country) + ")" : ""}`
               : "";
             return `<div class="stat-row">
               <span style="min-width:0">
                 <span class="pill ${kind}">${esc(r.type)}</span>
-                <span class="muted"> ${esc(r.detail)} · ${esc(r.from)} · ${esc(r.lang)}${ipBit}</span>
+                <span class="muted"> ${modeLbl || esc(r.detail)} · ${esc(r.from)} · ${esc(r.lang)}${ipBit}</span>
               </span>
               <span class="muted">${esc(r.when || r.day)}</span>
             </div>`;
