@@ -34,7 +34,25 @@ git branch -M main
 git push -u origin main
 ```
 
-### 3. Crear el servicio web en Render
+### 3. Base de datos Postgres (importante — stats e IPs)
+
+Sin Postgres, Render usa SQLite y **borra visitas/IPs en cada redeploy**.
+
+**Opción recomendada — Blueprint:**
+1. Dashboard → **New** → **Blueprint**
+2. Repo `gasradar` (incluye `render.yaml`)
+3. Crea el web service **y** la DB `gasradar-db`
+4. `DATABASE_URL` se enlaza sola
+
+**Si ya tienes el Web Service sin DB:**
+1. **New** → **PostgreSQL** (plan Free) → nombre `gasradar-db`
+2. Copia **Internal Database URL**
+3. En el servicio **gasradar** → **Environment** → `DATABASE_URL` = esa URL
+4. **Manual Deploy** → Clear build cache + deploy
+
+Comprueba: `https://TU-URL/api/health` → `"backend":"postgres"`, `"persistent":true`.
+
+### 4. Crear el servicio web en Render (manual, si no usas Blueprint)
 1. Dashboard → **New** → **Web Service**
 2. Conecta el repo `gasradar`
 3. Configura:
@@ -43,9 +61,10 @@ git push -u origin main
    - **Build Command:** `pip install -r requirements.txt`
    - **Start Command:** `uvicorn backend.main:app --host 0.0.0.0 --port $PORT`
 4. Plan: **Free**
-5. **Create Web Service**
+5. Env: `DATABASE_URL` (paso 3), `STATS_KEY`, etc.
+6. **Create Web Service**
 
-### 4. Espera 2–5 minutos
+### 5. Espera 2–5 minutos
 Te dan una URL tipo:
 
 ```text

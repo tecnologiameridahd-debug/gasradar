@@ -117,13 +117,19 @@ def health():
     import os
     from datetime import datetime, timezone
 
-    from backend.db import db_status
+    from backend.db import db_status, init_schema
     from backend.prices import (
         _eia_mem,
         _load_disk_eia,
         price_meta,
     )
     from backend.telegram_bot import alerts_secret, bot_ready, get_me, get_webhook_info
+
+    # Asegura tablas (Postgres/SQLite) en cada health de cold start
+    try:
+        init_schema()
+    except Exception as e:
+        print(f"[health] init_schema: {type(e).__name__}: {e}")
 
     eia_co = price_meta("CO", fast=True)
     eia_disk = bool((_load_disk_eia() or {}).get("CO", {}).get("ok"))
@@ -154,13 +160,14 @@ def health():
         except Exception as e:
             tg["last_error"] = f"{type(e).__name__}: {e}"
 
+    db = db_status()
     return {
         "ok": True,
         "app": "gasradar",
         "version": APP_VERSION,
         "utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "status": "alive",
-        "db": db_status(),
+        "db": db,
         "telegram_bot": bot_ready(),
         "telegram": tg,
         "zyla": {

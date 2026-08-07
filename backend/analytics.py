@@ -471,8 +471,8 @@ def summary(days: int = 14) -> dict:
             for r in recent_ips
         ],
         "note": (
-            "IPs se guardan desde el deploy de tracking IP (panel admin). "
-            "Eventos viejos pueden no tener IP. "
-            "En plan free sin Postgres, las stats se pueden borrar al redeploy."
+            "IPs y modo GPS/ZIP se guardan en site_events. "
+            "Con DATABASE_URL (Postgres) los datos sobreviven al redeploy. "
+            "Sin Postgres en Render free, SQLite se borra al redeploy."
         ),
     }

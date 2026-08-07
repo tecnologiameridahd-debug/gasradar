@@ -207,22 +207,36 @@ def fetchone(sql: str, params: tuple | list = ()) -> dict | None:
 def db_status() -> dict:
     """Info para /api/health (sin exponer contraseñas)."""
     backend = db_backend()
+    on_render = bool(os.environ.get("RENDER") or os.environ.get("RENDER_SERVICE_ID"))
     info: dict[str, Any] = {
         "backend": backend,
         "persistent": backend == "postgres",
         "ok": False,
         "reports_count": None,
+        "events_count": None,
+        "on_render": on_render,
+        "database_url_set": bool(database_url()),
     }
     try:
         init_schema()
         row = fetchone("SELECT COUNT(*) AS n FROM price_reports")
         n = int(row["n"]) if row and row.get("n") is not None else 0
+        ev = fetchone("SELECT COUNT(*) AS n FROM site_events")
         info["ok"] = True
         info["reports_count"] = n
-        if backend == "sqlite":
-            info["note"] = "SQLite local — en Render free se borra al redeploy. Usa DATABASE_URL."
+        info["events_count"] = int(ev["n"]) if ev and ev.get("n") is not None else 0
+        if backend == "postgres":
+            info["note"] = (
+                "Postgres — reportes, visitas, IPs y búsquedas se conservan entre deploys."
+            )
+        elif on_render:
+            info["note"] = (
+                "⚠️ Render sin DATABASE_URL: SQLite se borra en cada redeploy. "
+                "Enlaza Postgres (Blueprint o Dashboard → Environment → DATABASE_URL)."
+            )
+            info["warn"] = "missing_database_url"
         else:
-            info["note"] = "Postgres en la nube — reportes se conservan."
+            info["note"] = "SQLite local (dev). En producción usa DATABASE_URL (Postgres)."
     except Exception as e:
         info["ok"] = False
         info["error"] = str(e)[:200]

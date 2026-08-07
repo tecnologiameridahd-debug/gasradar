@@ -1,6 +1,13 @@
-# Despliegue en Render.com (gratis)
-# 1) Sube este repo a GitHub
-# 2) En render.com: New → Blueprint → selecciona el repo
+# Despliegue en Render.com
+# New → Blueprint → este repo
+# La base Postgres se crea y se enlaza a DATABASE_URL (stats e IPs no se borran).
+
+databases:
+  - name: gasradar-db
+    plan: free
+    databaseName: gasradar
+    user: gasradar
+
 services:
   - type: web
     name: gasradar
@@ -11,14 +18,15 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.12.8"
-      # Pegar en Dashboard Render → Environment (no van en git):
       - key: DATABASE_URL
+        fromDatabase:
+          name: gasradar-db
+          property: connectionString
+      - key: STATS_KEY
+        sync: false
+      - key: ALERTS_SECRET
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: ZYLA_API_KEY
-        sync: false
-      - key: ZYLA_GAS_URL
-        sync: false
-      - key: ZYLA_STATION_URL
-        sync: false
-      - key: STATS_KEY
         sync: false
