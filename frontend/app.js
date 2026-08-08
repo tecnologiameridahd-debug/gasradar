@@ -1470,65 +1470,99 @@ function bind() {
   }
   $("#btnGps").addEventListener("click", useGps);
   function runZipSearch() {
-    const zip = ($("#zipInput") && $("#zipInput").value.trim()) || "";
-    if (!zip) {
-      showToast(t("needZip"));
-      $("#zipInput")?.focus();
-      return;
-    }
-    const digits = zip.replace(/\D/g, "");
-    if (digits.length < 5) {
-      showToast(t("zip5"));
-      return;
-    }
-    const newZip = digits.slice(0, 5);
-    const changing =
-      state.zip && state.zip !== newZip && state.stations && state.stations.length > 0;
-    state.zip = newZip;
-    // Soltar aspecto “presionado” al instante (iOS/Android)
     try {
-      $("#btnZip")?.blur();
-      $("#zipInput")?.blur();
-    } catch (_) {
-      /* ignore */
+      var input = document.getElementById("zipInput");
+      var zip = (input && input.value ? String(input.value).trim() : "") || "";
+      if (!zip) {
+        showToast(t("needZip"));
+        if (input) input.focus();
+        return;
+      }
+      var digits = zip.replace(/\D/g, "");
+      if (digits.length < 5) {
+        showToast(t("zip5"));
+        return;
+      }
+      var newZip = digits.slice(0, 5);
+      var prevZip = state.zip || "";
+      var hasList = state.stations && state.stations.length > 0;
+      var changing = prevZip && prevZip !== newZip && hasList;
+
+      state.zip = newZip;
+      if (input) input.value = newZip;
+
+      // Feedback inmediato (el usuario ve que el botón SÍ hizo algo)
+      try {
+        showToast(
+          state.lang === "en"
+            ? "Searching ZIP " + newZip + "…"
+            : "Buscando ZIP " + newZip + "…"
+        );
+      } catch (_) {}
+      setStatus(
+        typeof t("searchingZip") === "function"
+          ? t("searchingZip")(newZip)
+          : t("searching"),
+        "loading"
+      );
+
+      var btn = document.getElementById("btnZip");
+      if (btn) {
+        try {
+          btn.blur();
+        } catch (_) {}
+      }
+
+      // force:true = siempre red (no cache silencioso al cambiar ZIP)
+      search({
+        zip: newZip,
+        soft: !!changing,
+        force: true,
+        background: false,
+      });
+    } catch (err) {
+      console.error("[GasRadar] runZipSearch", err);
+      try {
+        showToast(t("searchError"));
+        unlockSearchUi({ abortFetch: false });
+      } catch (_) {}
     }
-    search({ zip: state.zip, soft: changing, force: false });
   }
-  $("#btnZip").addEventListener("click", (e) => {
-    e.preventDefault();
-    e.currentTarget?.blur();
-    runZipSearch();
-  });
-  // pointerup: en móvil a veces :active se queda pegado
-  $("#btnZip").addEventListener(
-    "pointerup",
-    (e) => {
-      try {
-        e.currentTarget?.blur();
-        e.currentTarget?.classList.remove("is-loading", "is-pressed");
-      } catch (_) {
-        /* ignore */
-      }
-    },
-    { passive: true }
-  );
-  $("#btnZip").addEventListener(
-    "touchend",
-    (e) => {
-      try {
-        e.currentTarget?.blur();
-      } catch (_) {
-        /* ignore */
-      }
-    },
-    { passive: true }
-  );
-  $("#zipInput").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
+
+  // Expuesto global: respaldo si el listener falla o hay SW viejo
+  window.gasradarSearchZip = runZipSearch;
+
+  var btnZipEl = document.getElementById("btnZip");
+  if (btnZipEl) {
+    btnZipEl.addEventListener("click", function (e) {
       e.preventDefault();
+      e.stopPropagation();
+      try {
+        e.currentTarget.blur();
+      } catch (_) {}
       runZipSearch();
-    }
-  });
+    });
+    btnZipEl.addEventListener(
+      "touchend",
+      function (e) {
+        // No preventDefault aquí (rompe el click en algunos Android);
+        // solo soltar aspecto visual
+        try {
+          e.currentTarget.blur();
+        } catch (_) {}
+      },
+      { passive: true }
+    );
+  }
+  var zipInputEl = document.getElementById("zipInput");
+  if (zipInputEl) {
+    zipInputEl.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        runZipSearch();
+      }
+    });
+  }
   $("#zipInput").addEventListener("input", (e) => {
     const v = e.target.value.replace(/[^\d-]/g, "").slice(0, 10);
     if (v !== e.target.value) e.target.value = v;
@@ -1859,7 +1893,7 @@ function registerServiceWorker() {
 
   const go = () => {
     navigator.serviceWorker
-      .register("/sw.js?v=0.9.53", { scope: "/" })
+      .register("/sw.js?v=0.9.55", { scope: "/" })
       .then((reg) => {
         try {
           reg.update();

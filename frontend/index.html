@@ -154,7 +154,7 @@
     <link rel="icon" href="/static/favicon-64.png?v=0.2.9" type="image/png" sizes="64x64" />
     <link rel="apple-touch-icon" href="/static/logo-192.png?v=0.5.0" sizes="192x192" />
     <link rel="apple-touch-icon" href="/static/logo-512.png?v=0.5.0" sizes="512x512" />
-    <link rel="stylesheet" href="/static/styles.css?v=0.9.53" />
+    <link rel="stylesheet" href="/static/styles.css?v=0.9.55" />
   </head>
   <body style="background:#0b1220;margin:0">
     <div class="boot-splash" id="bootSplash" aria-hidden="true">
@@ -285,7 +285,13 @@
               maxlength="10"
             />
           </div>
-          <button class="btn-secondary" id="btnZip" type="button" data-i18n="btnSearch">Buscar</button>
+          <button
+            class="btn-secondary"
+            id="btnZip"
+            type="button"
+            data-i18n="btnSearch"
+            onclick="if(window.gasradarSearchZip){window.gasradarSearchZip();return false;}"
+          >Buscar</button>
         </div>
         <div class="filters">
           <label class="field">
@@ -437,7 +443,7 @@
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script src="/static/brand-logos.js?v=0.9.1"></script>
-    <script src="/static/app.js?v=0.9.53"></script>
+    <script src="/static/app.js?v=0.9.55"></script>
     <script>
       /* Quita splash cuando la UI ya pintó */
       (function () {
@@ -455,7 +461,7 @@
 
       /* Una sola vez: borrar SW/caché viejos (app.js 0.9.40 rompía la búsqueda) */
       (function () {
-        var KEY = "gr_purge_sw_v053";
+        var KEY = "gr_purge_sw_v055";
         try {
           if (localStorage.getItem(KEY)) return;
           localStorage.setItem(KEY, "1");

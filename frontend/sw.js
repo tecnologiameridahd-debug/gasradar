@@ -2,12 +2,12 @@
  * JS/CSS: red primero (evita app.js viejo que “no busca”).
  * HTML: red primero + fallback caché (sin flash blanco en cold start).
  */
-const CACHE = "gasradar-v0.9.53";
+const CACHE = "gasradar-v0.9.55";
 const PRECACHE = [
   "/",
-  "/static/styles.css?v=0.9.53",
+  "/static/styles.css?v=0.9.55",
   "/static/brand-logos.js?v=0.9.1",
-  "/static/app.js?v=0.9.53",
+  "/static/app.js?v=0.9.55",
   "/static/logo.svg?v=0.2.9",
   "/static/logo-192.png?v=0.5.0",
   "/static/logo-512.png?v=0.5.0",
@@ -37,8 +37,8 @@ animation:p .9s ease infinite alternate}
 <div class="d"></div></div>
 <script>
 try {
-  if (!sessionStorage.getItem("gr_sw_boot_53")) {
-    sessionStorage.setItem("gr_sw_boot_53", "1");
+  if (!sessionStorage.getItem("gr_sw_boot_55")) {
+    sessionStorage.setItem("gr_sw_boot_55", "1");
     setTimeout(function () { location.reload(); }, 900);
   }
 } catch (e) {}
