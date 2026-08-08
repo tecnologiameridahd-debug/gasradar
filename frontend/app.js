@@ -42,6 +42,8 @@ const I18N = {
     save: "Guardar",
     report: "Reportar",
     searching: "Buscando estaciones…",
+    searchingZip: (z) => `Buscando ZIP ${z}…`,
+    searchingZipChange: (z) => `Cambiando a ZIP ${z}… (mantenemos la lista anterior un momento)`,
     emptyTitle: "Sin resultados aún",
     emptyStart: "Escribe tu ZIP o toca Usar mi ubicación.",
     loadLast: "Cargando tu última zona…",
@@ -146,6 +148,8 @@ const I18N = {
     save: "Save",
     report: "Report",
     searching: "Searching stations…",
+    searchingZip: (z) => `Searching ZIP ${z}…`,
+    searchingZipChange: (z) => `Switching to ZIP ${z}… (keeping previous list a moment)`,
     emptyTitle: "No results yet",
     emptyStart: "Enter your ZIP or tap Use my location.",
     loadLast: "Loading your last area…",
@@ -711,7 +715,8 @@ function vsAvgHtml(vs) {
 
 /* Cache local: misma búsqueda = respuesta al instante (8 min) */
 const _searchMem = new Map();
-const SEARCH_MEM_MS = 8 * 60 * 1000;
+// Cache más largo: al volver a un ZIP reciente no se siente lag
+const SEARCH_MEM_MS = 30 * 60 * 1000;
 
 function searchMemKey({ lat, lon, zip }) {
   const z = zip || state.zip || "";
@@ -772,14 +777,33 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
 
   const myToken = ++state.searchToken;
   setBusy(true, { background });
-  // soft = pull-to-refresh: no vaciar lista (como GasBuddy)
-  if (!soft && !background) {
-    setStatus(t("searching"), "loading");
+
+  // Al cambiar de ZIP: no borrar la lista anterior (se siente menos “lagueado”)
+  const zipDigits = zip ? String(zip).replace(/\D/g, "").slice(0, 5) : "";
+  const keepList =
+    soft ||
+    background ||
+    (zipDigits &&
+      state.stations &&
+      state.stations.length > 0 &&
+      state.zip &&
+      state.zip !== zipDigits);
+
+  if (!keepList && !background) {
+    setStatus(
+      zipDigits ? t("searchingZip")(zipDigits) : t("searching"),
+      "loading"
+    );
     $("#results").innerHTML = "";
     const bestCard = $("#bestCard");
     if (bestCard) bestCard.hidden = true;
     const head = $("#resultsHead");
     if (head) head.hidden = true;
+  } else if (!background) {
+    setStatus(
+      zipDigits ? t("searchingZipChange")(zipDigits) : t("searching"),
+      "loading"
+    );
   }
 
   const params = new URLSearchParams();
@@ -794,7 +818,8 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
 
   const ctrl = new AbortController();
   state.searchAbort = ctrl;
-  const timer = setTimeout(() => ctrl.abort(), 22000);
+  // Techo cliente: el servidor ya corta ~7–8s; un poco más de margen
+  const timer = setTimeout(() => ctrl.abort(), 16000);
 
   try {
     const res = await fetch(`/api/search?${params.toString()}`, {
@@ -1343,8 +1368,11 @@ function bind() {
       showToast(t("zip5"));
       return;
     }
-    state.zip = digits.slice(0, 5);
-    search({ zip: state.zip });
+    const newZip = digits.slice(0, 5);
+    const changing = state.zip && state.zip !== newZip && state.stations.length > 0;
+    state.zip = newZip;
+    // soft: al cambiar ZIP no vaciar pantalla (menos sensación de lag)
+    search({ zip: state.zip, soft: changing });
   });
   $("#zipInput").addEventListener("keydown", (e) => {
     if (e.key === "Enter") $("#btnZip").click();

@@ -22,8 +22,8 @@ from backend.stations import stations_near
 
 # Cache de resultados completos (misma zona / fuel / radio)
 _SEARCH_CACHE: dict[str, dict] = {}
-_SEARCH_CACHE_TTL = 10 * 60  # 10 min
-_SEARCH_CACHE_MAX = 80
+_SEARCH_CACHE_TTL = 25 * 60  # 25 min — reabrir mismo ZIP / ciudad es instantáneo
+_SEARCH_CACHE_MAX = 120
 
 
 def _search_cache_key(
@@ -187,17 +187,33 @@ def run_search(
             print(f"[search] stations_near: {e}")
             return []
 
+    # Techo total ~7s: al cambiar de ZIP la UI no debe colgarse 20–30s.
+    # Si el VPS tarda, devolvemos OSM/AAA; la 2ª búsqueda del mismo ZIP va a cache.
+    from concurrent.futures import wait, FIRST_COMPLETED
+
     t0 = time.time()
     with ThreadPoolExecutor(max_workers=2) as pool:
         fut_vps = pool.submit(_job_vps)
         fut_osm = pool.submit(_job_osm)
+        # Espera corta; si uno termina antes, el otro tiene el resto del tiempo
+        wait([fut_vps, fut_osm], timeout=6.5, return_when=FIRST_COMPLETED)
+        remain = max(0.5, 7.5 - (time.time() - t0))
+        wait([fut_vps, fut_osm], timeout=remain)
         try:
-            gb_stations = fut_vps.result(timeout=12)
+            if fut_vps.done():
+                gb_stations = fut_vps.result(timeout=0.1) or []
+            else:
+                print("[search] vps still running — skip for this response")
+                gb_stations = []
         except Exception as e:
             print(f"[search] vps timeout/fail: {e}")
             gb_stations = []
         try:
-            stations = fut_osm.result(timeout=14)
+            if fut_osm.done():
+                stations = fut_osm.result(timeout=0.1) or []
+            else:
+                print("[search] osm still running — skip for this response")
+                stations = []
         except Exception as e:
             print(f"[search] osm timeout/fail: {e}")
             stations = []
