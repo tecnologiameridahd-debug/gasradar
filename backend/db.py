@@ -136,6 +136,7 @@ def init_schema() -> None:
                     "CREATE INDEX IF NOT EXISTS idx_events_ip ON site_events (ip)"
                 )
         else:
+            # Crear tablas base SIN índice sobre ip (la tabla vieja puede no tener ip aún)
             conn.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS price_reports (
@@ -156,17 +157,13 @@ def init_schema() -> None:
                     lang TEXT,
                     detail TEXT,
                     day TEXT NOT NULL,
-                    created_at REAL NOT NULL,
-                    ip TEXT,
-                    ip_country TEXT
+                    created_at REAL NOT NULL
                 );
                 CREATE INDEX IF NOT EXISTS idx_events_day
                     ON site_events (day, event_type);
-                CREATE INDEX IF NOT EXISTS idx_events_ip
-                    ON site_events (ip);
                 """
             )
-            # Migración si la tabla ya existía sin columnas IP
+            # Migración: añadir columnas IP si faltan, LUEGO el índice
             cols = {
                 r[1]
                 for r in conn.execute("PRAGMA table_info(site_events)").fetchall()
@@ -175,6 +172,9 @@ def init_schema() -> None:
                 conn.execute("ALTER TABLE site_events ADD COLUMN ip TEXT")
             if "ip_country" not in cols:
                 conn.execute("ALTER TABLE site_events ADD COLUMN ip_country TEXT")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_events_ip ON site_events (ip)"
+            )
 
     _schema_ready = True
 

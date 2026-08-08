@@ -17,7 +17,7 @@ from backend.prices import report_price
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.9.51"
+APP_VERSION = "0.9.52"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -554,7 +554,14 @@ def api_stats(key: str | None = None, days: int = Query(14, ge=1, le=90)):
 
     if not (check_stats_key(key) or check_alerts_key(key)):
         raise HTTPException(401, "Clave incorrecta. Usa ?key= tu STATS_KEY o ALERTS_SECRET")
-    data = summary(days=days)
+    try:
+        data = summary(days=days)
+    except Exception as e:
+        print(f"[api/stats] summary fail: {type(e).__name__}: {e}")
+        raise HTTPException(
+            500,
+            f"Error al cargar stats: {type(e).__name__}: {e}",
+        ) from e
     try:
         from backend.alerts import alert_stats
 

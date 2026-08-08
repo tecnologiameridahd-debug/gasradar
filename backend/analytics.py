@@ -321,57 +321,126 @@ def summary(days: int = 14) -> dict:
         """,
         (since,),
     )
-    recent = fetchall(
-        """
-        SELECT event_type, path, referrer, lang, detail, day, created_at, ip, ip_country
-        FROM site_events
-        ORDER BY created_at DESC
-        LIMIT 50
-        """
-    )
+    try:
+        recent = fetchall(
+            """
+            SELECT event_type, path, referrer, lang, detail, day, created_at, ip, ip_country
+            FROM site_events
+            ORDER BY created_at DESC
+            LIMIT 50
+            """
+        )
+    except Exception:
+        recent = fetchall(
+            """
+            SELECT event_type, path, referrer, lang, detail, day, created_at
+            FROM site_events
+            ORDER BY created_at DESC
+            LIMIT 50
+            """
+        )
+        for r in recent:
+            r["ip"] = ""
+            r["ip_country"] = ""
 
-    unique_ips = fetchone(
-        """
-        SELECT COUNT(DISTINCT ip) AS n FROM site_events
-        WHERE day >= ? AND ip IS NOT NULL AND TRIM(ip) != ''
-        """,
-        (since,),
-    )
-    top_ip_rows = fetchall(
-        """
-        SELECT ip,
-               MAX(ip_country) AS country,
-               COUNT(*) AS n,
-               MAX(created_at) AS last_seen
-        FROM site_events
-        WHERE day >= ? AND ip IS NOT NULL AND TRIM(ip) != ''
-        GROUP BY ip
-        ORDER BY n DESC
-        LIMIT 40
-        """,
-        (since,),
-    )
-    by_country = fetchall(
-        """
-        SELECT COALESCE(NULLIF(TRIM(ip_country), ''), '—') AS country, COUNT(*) AS n
-        FROM site_events
-        WHERE day >= ? AND ip IS NOT NULL AND TRIM(ip) != ''
-        GROUP BY 1
-        ORDER BY n DESC
-        LIMIT 20
-        """,
-        (since,),
-    )
-    recent_ips = fetchall(
-        """
-        SELECT created_at, event_type, path, referrer, detail, lang, ip, ip_country, day
-        FROM site_events
-        WHERE day >= ? AND ip IS NOT NULL AND TRIM(ip) != ''
-        ORDER BY created_at DESC
-        LIMIT 50
-        """,
-        (since,),
-    )
+    # Bloque IPs: si la columna no existe o falla SQL, no tumbar todo /stats
+    unique_ips = {"n": 0}
+    top_ip_rows: list = []
+    by_country: list = []
+    recent_ips: list = []
+    try:
+        unique_ips = fetchone(
+            """
+            SELECT COUNT(DISTINCT ip) AS n FROM site_events
+            WHERE day >= ? AND ip IS NOT NULL AND BTRIM(CAST(ip AS TEXT)) <> ''
+            """,
+            (since,),
+        ) or {"n": 0}
+        top_ip_rows = fetchall(
+            """
+            SELECT ip,
+                   MAX(ip_country) AS country,
+                   COUNT(*) AS n,
+                   MAX(created_at) AS last_seen
+            FROM site_events
+            WHERE day >= ? AND ip IS NOT NULL AND BTRIM(CAST(ip AS TEXT)) <> ''
+            GROUP BY ip
+            ORDER BY n DESC
+            LIMIT 40
+            """,
+            (since,),
+        )
+        by_country = fetchall(
+            """
+            SELECT COALESCE(NULLIF(BTRIM(CAST(ip_country AS TEXT)), ''), '-') AS country,
+                   COUNT(*) AS n
+            FROM site_events
+            WHERE day >= ? AND ip IS NOT NULL AND BTRIM(CAST(ip AS TEXT)) <> ''
+            GROUP BY 1
+            ORDER BY n DESC
+            LIMIT 20
+            """,
+            (since,),
+        )
+        recent_ips = fetchall(
+            """
+            SELECT created_at, event_type, path, referrer, detail, lang, ip, ip_country, day
+            FROM site_events
+            WHERE day >= ? AND ip IS NOT NULL AND BTRIM(CAST(ip AS TEXT)) <> ''
+            ORDER BY created_at DESC
+            LIMIT 50
+            """,
+            (since,),
+        )
+    except Exception as e:
+        # SQLite no tiene BTRIM → reintentar con TRIM
+        print(f"[analytics] ip block (btrim) fail: {type(e).__name__}: {e}")
+        try:
+            unique_ips = fetchone(
+                """
+                SELECT COUNT(DISTINCT ip) AS n FROM site_events
+                WHERE day >= ? AND ip IS NOT NULL AND TRIM(ip) <> ''
+                """,
+                (since,),
+            ) or {"n": 0}
+            top_ip_rows = fetchall(
+                """
+                SELECT ip, MAX(ip_country) AS country, COUNT(*) AS n, MAX(created_at) AS last_seen
+                FROM site_events
+                WHERE day >= ? AND ip IS NOT NULL AND TRIM(ip) <> ''
+                GROUP BY ip
+                ORDER BY n DESC
+                LIMIT 40
+                """,
+                (since,),
+            )
+            by_country = fetchall(
+                """
+                SELECT COALESCE(NULLIF(TRIM(ip_country), ''), '-') AS country, COUNT(*) AS n
+                FROM site_events
+                WHERE day >= ? AND ip IS NOT NULL AND TRIM(ip) <> ''
+                GROUP BY 1
+                ORDER BY n DESC
+                LIMIT 20
+                """,
+                (since,),
+            )
+            recent_ips = fetchall(
+                """
+                SELECT created_at, event_type, path, referrer, detail, lang, ip, ip_country, day
+                FROM site_events
+                WHERE day >= ? AND ip IS NOT NULL AND TRIM(ip) <> ''
+                ORDER BY created_at DESC
+                LIMIT 50
+                """,
+                (since,),
+            )
+        except Exception as e2:
+            print(f"[analytics] ip block fail: {type(e2).__name__}: {e2}")
+            unique_ips = {"n": 0}
+            top_ip_rows = []
+            by_country = []
+            recent_ips = []
 
     pv_today = _n(today_views)
     se_today = _n(today_searches)
