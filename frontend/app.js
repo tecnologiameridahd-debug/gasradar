@@ -1469,7 +1469,15 @@ function bind() {
     });
   }
   $("#btnGps").addEventListener("click", useGps);
+  var _lastZipSearchAt = 0;
   function runZipSearch() {
+    // Evita doble disparo: el botón tiene onclick inline (respaldo si el
+    // listener no se registra por SW viejo) + este addEventListener; ambos
+    // se ejecutan en el mismo click y duplicaban la búsqueda (se sentía
+    // "pegado" y lageaba al cambiar de ZIP).
+    var now = Date.now();
+    if (now - _lastZipSearchAt < 400) return;
+    _lastZipSearchAt = now;
     try {
       var input = document.getElementById("zipInput");
       var zip = (input && input.value ? String(input.value).trim() : "") || "";
