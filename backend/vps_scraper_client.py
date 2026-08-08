@@ -93,7 +93,12 @@ def fetch_vps_stations(
         params["key"] = key
 
     try:
-        r = httpx.get(f"{base}/prices", params=params, timeout=45.0)
+        # Timeout corto: si el VPS va lento, la web no se cuelga 45–120s
+        r = httpx.get(
+            f"{base}/prices",
+            params=params,
+            timeout=httpx.Timeout(9.0, connect=3.0),
+        )
         if r.status_code != 200:
             print(f"[vps_scraper] HTTP {r.status_code}: {r.text[:200]}")
             return []

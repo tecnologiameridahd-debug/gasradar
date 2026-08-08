@@ -149,13 +149,22 @@ def run_search(
 
     # EIA/AAA: price_meta(fast=True) más abajo. Sin Zyla.
 
-    # Precios + dirección: VPS GasBuddy (todo USA, por ZIP/GPS)
+    # VPS + OSM en paralelo (antes era VPS 45s y luego OSM 30s+ = lag de 1–2 min)
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    from backend.geo import haversine_miles
+    from backend.stations import _display_brand, _pretty_station_name, _station_id
+
     gb_stations: list = []
-    if not quick:
+    stations: list = []
+
+    def _job_vps() -> list:
+        if quick:
+            return []
         try:
             from backend.vps_scraper_client import fetch_vps_stations
 
-            gb_stations = fetch_vps_stations(
+            return fetch_vps_stations(
                 zip_code=str(zip_code) if zip_code else None,
                 lat=float(lat) if lat is not None else None,
                 lon=float(lon) if lon is not None else None,
@@ -164,26 +173,38 @@ def run_search(
             )
         except Exception as e:
             print(f"[search] vps_scraper: {e}")
+            return []
+
+    def _job_osm() -> list:
+        try:
+            return stations_near(
+                float(lat),
+                float(lon),
+                radius_mi=radius_mi,
+                limit=min(int(limit) + 10, 30),
+            )
+        except Exception as e:
+            print(f"[search] stations_near: {e}")
+            return []
+
+    t0 = time.time()
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        fut_vps = pool.submit(_job_vps)
+        fut_osm = pool.submit(_job_osm)
+        try:
+            gb_stations = fut_vps.result(timeout=12)
+        except Exception as e:
+            print(f"[search] vps timeout/fail: {e}")
             gb_stations = []
-        if not gb_stations:
-            try:
-                from backend.gasbuddy_src import _enabled as gasbuddy_enabled
-                from backend.gasbuddy_src import fetch_gasbuddy_stations
-
-                if gasbuddy_enabled():
-                    gb_stations = fetch_gasbuddy_stations(
-                        zip_code=str(zip_code) if zip_code else None,
-                        lat=float(lat) if lat is not None else None,
-                        lon=float(lon) if lon is not None else None,
-                        fuel=fuel,
-                        limit=min(int(limit), 20),
-                    )
-            except Exception as e:
-                print(f"[search] gasbuddy: {e}")
-                gb_stations = []
-
-    from backend.geo import haversine_miles
-    from backend.stations import _display_brand, _pretty_station_name, _station_id
+        try:
+            stations = fut_osm.result(timeout=14)
+        except Exception as e:
+            print(f"[search] osm timeout/fail: {e}")
+            stations = []
+    print(
+        f"[search] parallel vps={len(gb_stations)} osm={len(stations)} "
+        f"in {time.time() - t0:.1f}s"
+    )
 
     def _live_row(src: dict, source_tag: str) -> dict | None:
         if src.get("lat") is None or src.get("lon") is None or src.get("price") is None:
@@ -262,12 +283,7 @@ def run_search(
             priced.append(row)
         print(f"[search] gasbuddy primary n={len(priced)}")
 
-    # 2) OSM + AAA: SIEMPRE rellenar huecos cercanos (ej. Conoco a 0.7 mi que
-    # GasBuddy no trajo). No omitir solo porque ya hay 8+ de GasBuddy.
-    # Sí filtramos basura: "Gas station" anónimo, dispensarios, etc.
-    stations = stations_near(
-        float(lat), float(lon), radius_mi=radius_mi, limit=min(int(limit) + 10, 30)
-    )
+    # 2) OSM + AAA: rellenar huecos (ya cargado en paralelo arriba)
     osm_priced = (
         attach_prices(stations, state=state, fuel=fuel, city=city) if stations else []
     )

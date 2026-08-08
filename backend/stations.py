@@ -425,20 +425,20 @@ def _fetch_overpass(lat: float, lon: float, radius_mi: float) -> list[dict]:
     radius_m = int(min(max(radius_mi, 1) * 1609.34, 25000))
     # timeout moderado: si un mirror tarda, pasamos al siguiente / Photon
     query = (
-        f'[out:json][timeout:18];'
+        f'[out:json][timeout:8];'
         f'('
         f'node["amenity"="fuel"](around:{radius_m},{lat},{lon});'
         f'way["amenity"="fuel"](around:{radius_m},{lat},{lon});'
         f');'
         f"out center tags 50;"
     )
-    for url in OVERPASS_URLS:
+    for url in OVERPASS_URLS[:2]:
         try:
             r = httpx.post(
                 url,
                 data={"data": query},
                 headers=HTTP_HEADERS,
-                timeout=16.0,
+                timeout=httpx.Timeout(9.0, connect=3.0),
             )
             if r.status_code != 200:
                 print(f"[stations] overpass {url} status={r.status_code}")
@@ -476,7 +476,8 @@ def _fetch_photon(lat: float, lon: float, radius_mi: float) -> list[dict]:
     """Photon (Komoot) — respaldo cuando Overpass/Nominatim fallan en la nube."""
     out: list[dict] = []
     seen: set[str] = set()
-    queries = ("gas station", "fuel", "petrol")
+    # Una sola query: 3 en serie (12s c/u) hacían lag enorme en la nube
+    queries = ("gas station",)
     for q in queries:
         try:
             r = httpx.get(
@@ -489,7 +490,7 @@ def _fetch_photon(lat: float, lon: float, radius_mi: float) -> list[dict]:
                     "lang": "en",
                 },
                 headers=HTTP_HEADERS,
-                timeout=12.0,
+                timeout=httpx.Timeout(6.0, connect=2.5),
             )
             if r.status_code != 200:
                 continue

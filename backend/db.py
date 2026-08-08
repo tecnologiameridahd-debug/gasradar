@@ -50,7 +50,11 @@ def connect() -> Iterator[Any]:
         import psycopg
         from psycopg.rows import dict_row
 
-        conn = psycopg.connect(_pg_dsn(database_url()), row_factory=dict_row)
+        conn = psycopg.connect(
+            _pg_dsn(database_url()),
+            row_factory=dict_row,
+            connect_timeout=5,
+        )
         try:
             yield conn
             conn.commit()
