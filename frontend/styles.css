@@ -513,6 +513,14 @@ a.btn-primary:hover {
   filter: brightness(1.05);
 }
 
+/* Buscando: se ve activo pero NO se deshabilita (evita freeze al cambiar ZIP) */
+.btn-primary.is-loading,
+.btn-secondary.is-loading,
+.btn-gps.is-loading {
+  opacity: 0.85;
+  cursor: progress;
+}
+
 .btn-secondary,
 a.btn-secondary {
   background: #22304a;
