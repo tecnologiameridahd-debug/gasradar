@@ -69,8 +69,8 @@ def _cache_put(key: str, data: dict) -> None:
     _SEARCH_CACHE[key] = {"ts": time.time(), "data": data}
 
 
-# Techo duro total de la búsqueda (ZIP nuevo). No superar ~10s de reloj.
-_SEARCH_HARD_DEADLINE_S = 9.0
+# Techo para precios REALES (VPS). Prioridad: GasBuddy en vivo, no estimados AAA/EIA.
+_SEARCH_HARD_DEADLINE_S = 16.0
 
 
 def run_search(
@@ -89,7 +89,7 @@ def run_search(
     """Misma lógica que GET /api/search. Lanza ValueError si ZIP inválido.
 
     quick=True: modo bot Telegram (sin GasBuddy, menos estaciones, más rápido).
-    Techo ~9s: si VPS/mapa van lentos, devuelve lo que haya (nunca 30s).
+    Solo precios REALES (VPS GasBuddy / reportes). No listar estimados AAA/EIA.
     """
     t_start = time.time()
 
@@ -110,9 +110,8 @@ def run_search(
         zip_code = g.get("zip") or zip
         city = g.get("city") or None
     elif lat is not None and lon is not None:
-        # Reverse geo es lento; solo si hay presupuesto (evita +3s en GPS)
         rev = None
-        if _budget_left() > 2.5:
+        if _budget_left() > 3.0:
             rev = reverse_geocode(float(lat), float(lon))
         if rev:
             label = rev["label"]
@@ -145,23 +144,30 @@ def run_search(
     )
     cached = _cache_get(ck)
     if cached is not None:
-        if track:
-            try:
-                from backend.analytics import track_event, search_detail
+        # No servir cache solo de estimados si pedimos precios reales
+        st0 = cached.get("stations") or []
+        live0 = sum(
+            1
+            for s in st0
+            if s.get("price_source") in ("gasbuddy", "user")
+        )
+        if live0 > 0 or quick:
+            if track:
+                try:
+                    from backend.analytics import track_event, search_detail
 
-                track_event(
-                    "search_cache",
-                    path="/api/search",
-                    detail=search_detail(zip_code=zip_code or zip, lat=lat, lon=lon),
-                    ip=client_ip,
-                    ip_country=client_country,
-                )
-            except Exception:
-                pass
-        return cached
+                    track_event(
+                        "search_cache",
+                        path="/api/search",
+                        detail=search_detail(zip_code=zip_code or zip, lat=lat, lon=lon),
+                        ip=client_ip,
+                        ip_country=client_country,
+                    )
+                except Exception:
+                    pass
+            return cached
 
-    # VPS + OSM en paralelo, techo duro (ZIP nuevo ≤ ~10s)
-    from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
+    from concurrent.futures import ThreadPoolExecutor, wait
 
     from backend.geo import haversine_miles
     from backend.stations import _display_brand, _pretty_station_name, _station_id
@@ -169,6 +175,7 @@ def run_search(
     gb_stations: list = []
     stations: list = []
     partial = False
+    live_only = not quick  # web: solo precios reales; bot puede usar estimados
 
     def _job_vps() -> list:
         if quick:
@@ -201,46 +208,55 @@ def run_search(
             return []
 
     t0 = time.time()
-    # wait=False: no bloquear la respuesta aunque VPS siga en segundo plano
+    # Prioridad: ESPERAR al VPS (precios reales). OSM solo de apoyo / bot.
     pool = ThreadPoolExecutor(max_workers=2)
     try:
         fut_vps = pool.submit(_job_vps)
-        fut_osm = pool.submit(_job_osm)
-        # Máx. ~5.5s de espera a fuentes externas (dentro del techo de 9s)
-        wait_cap = min(5.5, max(0.5, _budget_left() - 1.2))
-        wait([fut_vps, fut_osm], timeout=wait_cap, return_when=FIRST_COMPLETED)
-        remain = min(2.0, max(0.3, _budget_left() - 0.8))
-        wait([fut_vps, fut_osm], timeout=remain)
+        fut_osm = pool.submit(_job_osm) if (quick or True) else None
+        # Dar al VPS casi todo el presupuesto (precios reales)
+        vps_wait = min(14.0, max(3.0, _budget_left() - 1.0))
+        wait([fut_vps], timeout=vps_wait)
         try:
             if fut_vps.done():
                 gb_stations = fut_vps.result(timeout=0.05) or []
             else:
-                print("[search] vps skip (deadline) — respuesta rápida sin VPS")
+                print("[search] vps still running after wait")
                 gb_stations = []
-                partial = True
         except Exception as e:
-            print(f"[search] vps timeout/fail: {e}")
+            print(f"[search] vps fail: {e}")
             gb_stations = []
-            partial = True
+
+        # Si no hay precios reales, un reintento corto del VPS
+        if not gb_stations and not quick and _budget_left() > 4.0:
+            print("[search] vps empty — retry once")
+            try:
+                gb_stations = _job_vps() or []
+            except Exception as e:
+                print(f"[search] vps retry: {e}")
+                gb_stations = []
+
+        # OSM: solo si hace falta (sin VPS o bot) y queda presupuesto
         try:
-            if fut_osm.done():
+            if fut_osm and fut_osm.done():
                 stations = fut_osm.result(timeout=0.05) or []
-            else:
-                print("[search] osm skip (deadline)")
-                stations = []
-                partial = True
+            elif fut_osm and not gb_stations and _budget_left() > 2.0:
+                wait([fut_osm], timeout=min(4.0, _budget_left() - 0.5))
+                if fut_osm.done():
+                    stations = fut_osm.result(timeout=0.05) or []
         except Exception as e:
-            print(f"[search] osm timeout/fail: {e}")
+            print(f"[search] osm: {e}")
             stations = []
-            partial = True
     finally:
         try:
             pool.shutdown(wait=False, cancel_futures=True)
         except TypeError:
             pool.shutdown(wait=False)
+
+    if not gb_stations and not quick:
+        partial = True  # sin precios en vivo aún
     print(
-        f"[search] parallel vps={len(gb_stations)} osm={len(stations)} "
-        f"partial={partial} in {time.time() - t0:.1f}s budget_left={_budget_left():.1f}s"
+        f"[search] vps={len(gb_stations)} osm={len(stations)} "
+        f"live_only={live_only} in {time.time() - t0:.1f}s"
     )
 
     def _live_row(src: dict, source_tag: str) -> dict | None:
@@ -309,7 +325,7 @@ def run_search(
 
     priced: list = []
 
-    # 1) PRIORIDAD: GasBuddy/VPS (nombre + dirección + precio real) en cualquier ZIP USA
+    # 1) SOLO precios REALES del VPS/GasBuddy (y reportes de usuario si hay)
     if gb_stations:
         for gs in gb_stations:
             row = _live_row(gs, "gasbuddy")
@@ -318,83 +334,41 @@ def run_search(
             if any(_near(row, p, 0.12) for p in priced):
                 continue
             priced.append(row)
-        print(f"[search] gasbuddy primary n={len(priced)}")
+        print(f"[search] live gasbuddy n={len(priced)}")
 
-    # 2) OSM + AAA: rellenar huecos (ya cargado en paralelo arriba)
-    osm_priced = (
-        attach_prices(stations, state=state, fuel=fuel, city=city) if stations else []
-    )
-    for item in osm_priced:
-        if (item.get("address") or "").strip():
-            continue
-        for gb in priced:
-            if gb.get("price_source") != "gasbuddy":
+    # 2) Web (live_only): NO añadir estimados AAA/EIA de OSM
+    #    Bot Telegram (quick): sí puede rellenar con estimados si no hay VPS
+    if (not live_only or not priced) and stations and (quick or not live_only):
+        osm_priced = attach_prices(stations, state=state, fuel=fuel, city=city)
+        for item in osm_priced:
+            low = f"{item.get('name')} {item.get('brand') or ''}".lower()
+            if any(x in low for x in ("dispensary", "cannabis", "marijuana", "weed")):
                 continue
-            if not (gb.get("address") or "").strip():
+            if any(_near(item, p, 0.12) for p in priced):
                 continue
-            if _near(item, gb, 0.2):
-                item["address"] = gb["address"]
-                item["maps_query"] = f"{item.get('name') or 'Gas'}, {gb['address']}"
-                if item.get("price_source") not in ("user", "gasbuddy"):
-                    item["price"] = gb["price"]
-                    item["price_source"] = "gasbuddy"
-                    item["price_confidence"] = "high"
-                    item["prices"] = dict(gb.get("prices") or {})
-                break
+            try:
+                if float(item.get("distance_mi") or 99) > float(radius_mi) + 0.35:
+                    continue
+            except Exception:
+                pass
+            priced.append(item)
 
-    for item in osm_priced:
-        low = f"{item.get('name')} {item.get('brand') or ''}".lower()
-        if any(x in low for x in ("dispensary", "cannabis", "marijuana", "weed")):
-            continue
-        nm = (item.get("name") or "").strip().lower()
-        brand = (item.get("brand") or "").strip().lower()
-        # Basura: sin marca y sin nombre útil
-        if nm in ("gas station", "gas", "fuel", "") and not brand:
-            if not (item.get("address") or "").strip():
-                continue
-        if "maybe closed" in nm or "tacos" in nm:
-            continue
-        # Duplicado de un live GasBuddy muy cerca → no añadir otra ficha
-        if any(_near(item, p, 0.12) for p in priced):
-            continue
-        # Fuera de radio del usuario
-        try:
-            if float(item.get("distance_mi") or 99) > float(radius_mi) + 0.35:
-                continue
-        except Exception:
-            pass
-        priced.append(item)
+    # Solo live en web
+    if live_only:
+        priced = [
+            p
+            for p in priced
+            if p.get("price_source") in ("gasbuddy", "user")
+        ]
 
-    # Orden: más barato primero, pero live/GB antes que estimado a mismo precio;
-    # distancia como desempate (la Conoco a 0.7 mi no se “pierde” del todo)
     priced.sort(
         key=lambda x: (
             round(float(x.get("price") or 99), 3),
-            0 if x.get("price_source") in ("gasbuddy", "user") else 1,
             float(x.get("distance_mi") or 99),
         )
     )
-    # Cap final: preferir las más cercanas entre las baratas del top
     if len(priced) > int(limit):
-        # Mantener todos los gasbuddy; completar con cercanos
-        gb_keep = [p for p in priced if p.get("price_source") == "gasbuddy"]
-        rest = [p for p in priced if p.get("price_source") != "gasbuddy"]
-        rest.sort(key=lambda x: float(x.get("distance_mi") or 99))
-        room = max(0, int(limit) - len(gb_keep))
-        priced = gb_keep + rest[:room]
-        priced.sort(
-            key=lambda x: (
-                round(float(x.get("price") or 99), 3),
-                0 if x.get("price_source") in ("gasbuddy", "user") else 1,
-                float(x.get("distance_mi") or 99),
-            )
-        )
-
-    # NUNCA re-llamar stations_near aquí (duplicaba 15–30s y causaba "Tardó mucho")
-    if not priced and stations:
-        priced = (
-            attach_prices(stations, state=state, fuel=fuel, city=city) if stations else []
-        )
+        priced = priced[: int(limit)]
 
     best = cheapest_summary(priced) if priced else None
     meta = price_meta(state, fast=True, city=city)
@@ -408,24 +382,23 @@ def run_search(
     eia_txt = ""
     gb_hits = sum(1 for s in priced if s.get("price_source") == "gasbuddy")
     if gb_hits:
-        eia_txt = f" {gb_hits} precios vía GasBuddy (scraper)."
-    elif meta.get("eia_ok") and meta.get("eia_period"):
-        eia_txt = f" Promedio estatal EIA (semana {meta['eia_period']})."
-    elif meta.get("avg_source") in ("aaa", "aaa_metro"):
-        eia_txt = " Promedio AAA / zona."
+        eia_txt = f" {gb_hits} precios en vivo (GasBuddy)."
+    elif quick:
+        eia_txt = " Precios de referencia (bot)."
     else:
-        eia_txt = " Precios de referencia (estimados). Reporta al pasar por la bomba."
+        eia_txt = ""
 
     note = ""
-    if not priced:
+    if not priced and live_only:
+        note = (
+            " No hay precios en vivo cerca ahora. "
+            "Prueba de nuevo en unos segundos o sube el radio a 10 mi."
+        )
+        partial = True
+    elif not priced:
         note = (
             " No se encontraron estaciones reales cerca. "
             "Prueba un radio mayor (10 mi) o otro ZIP."
-        )
-    elif partial and not gb_hits:
-        note = (
-            " Resultados rápidos (precios de referencia). "
-            "Vuelve a buscar en unos segundos para precios en vivo si el scraper responde."
         )
 
     user_reports = sum(1 for s in priced if s.get("price_source") == "user")
@@ -476,12 +449,20 @@ def run_search(
         "stations": priced,
         "cached": False,
         "disclaimer": (
-            "Estaciones reales (OpenStreetMap). "
-            "Precios: reportes de la comunidad o estimación EIA + marca."
-            f"{eia_txt} "
-            "No es precio de bomba en vivo — reporta el precio real al pasar."
-            f"{note}"
+            (
+                "Precios en vivo del scraper GasBuddy cerca de ti."
+                f"{eia_txt} "
+                "Pueden variar en la bomba; reporta el precio real al pasar."
+                if gb_hits
+                else (
+                    "Sin precios en vivo en esta búsqueda."
+                    f"{eia_txt} "
+                    "Toca Buscar de nuevo o amplía el radio."
+                )
+            )
+            + f"{note}"
         ),
+        "live_prices": bool(gb_hits),
     }
     try:
         _cache_put(ck, out)

@@ -745,13 +745,13 @@ function applySearchData(data, { zip } = {}) {
     $("#zipInput").value = state.zip;
   }
   render(data);
-  // Respuesta rápida (<10s) sin precios VPS: avisar, no es error
-  if (data.partial && state.stations.length) {
+  // Sin precios en vivo: avisar (ya no mostramos estimados)
+  if (data.partial && (!state.stations || !state.stations.length)) {
     try {
       showToast(
         state.lang === "en"
-          ? "Quick results (ref. prices). Search again for live pump prices."
-          : "Resultados rápidos (precios de referencia). Busca otra vez para precios en vivo."
+          ? "No live prices right now. Tap Search again in a few seconds."
+          : "Sin precios en vivo ahora. Toca Buscar de nuevo en unos segundos."
       );
     } catch (_) {
       /* ignore */
@@ -833,7 +833,8 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
   const ctrl = new AbortController();
   state.searchAbort = ctrl;
   // Con el fix del servidor (~8s), 18s de margen sobra; no cortar tan pronto
-  const timer = setTimeout(() => ctrl.abort(), 18000);
+  // Más margen: esperamos precios reales del VPS (~14–16s)
+  const timer = setTimeout(() => ctrl.abort(), 28000);
 
   try {
     const res = await fetch(`/api/search?${params.toString()}`, {
