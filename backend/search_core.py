@@ -69,6 +69,10 @@ def _cache_put(key: str, data: dict) -> None:
     _SEARCH_CACHE[key] = {"ts": time.time(), "data": data}
 
 
+# Techo duro total de la búsqueda (ZIP nuevo). No superar ~10s de reloj.
+_SEARCH_HARD_DEADLINE_S = 9.0
+
+
 def run_search(
     *,
     lat: float | None = None,
@@ -85,7 +89,13 @@ def run_search(
     """Misma lógica que GET /api/search. Lanza ValueError si ZIP inválido.
 
     quick=True: modo bot Telegram (sin GasBuddy, menos estaciones, más rápido).
+    Techo ~9s: si VPS/mapa van lentos, devuelve lo que haya (nunca 30s).
     """
+    t_start = time.time()
+
+    def _budget_left() -> float:
+        return max(0.0, _SEARCH_HARD_DEADLINE_S - (time.time() - t_start))
+
     label = DEFAULT_LABEL
     state = "CO"
     zip_code = None
@@ -100,7 +110,10 @@ def run_search(
         zip_code = g.get("zip") or zip
         city = g.get("city") or None
     elif lat is not None and lon is not None:
-        rev = reverse_geocode(float(lat), float(lon))
+        # Reverse geo es lento; solo si hay presupuesto (evita +3s en GPS)
+        rev = None
+        if _budget_left() > 2.5:
+            rev = reverse_geocode(float(lat), float(lon))
         if rev:
             label = rev["label"]
             state = rev.get("state") or "CO"
@@ -147,16 +160,15 @@ def run_search(
                 pass
         return cached
 
-    # EIA/AAA: price_meta(fast=True) más abajo. Sin Zyla.
-
-    # VPS + OSM en paralelo (antes era VPS 45s y luego OSM 30s+ = lag de 1–2 min)
-    from concurrent.futures import ThreadPoolExecutor, as_completed
+    # VPS + OSM en paralelo, techo duro (ZIP nuevo ≤ ~10s)
+    from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 
     from backend.geo import haversine_miles
     from backend.stations import _display_brand, _pretty_station_name, _station_id
 
     gb_stations: list = []
     stations: list = []
+    partial = False
 
     def _job_vps() -> list:
         if quick:
@@ -182,43 +194,45 @@ def run_search(
                 float(lon),
                 radius_mi=radius_mi,
                 limit=min(int(limit) + 10, 30),
+                enrich=False,
             )
         except Exception as e:
             print(f"[search] stations_near: {e}")
             return []
 
-    # Techo total ~7s: al cambiar de ZIP la UI no debe colgarse 20–30s.
-    # Si el VPS tarda, devolvemos OSM/AAA; la 2ª búsqueda del mismo ZIP va a cache.
-    from concurrent.futures import wait, FIRST_COMPLETED
-
     t0 = time.time()
-    # wait=False: si no, al salir del with se espera a que el VPS termine
-    # (aunque ya hayamos “saltado” el result) → mensaje "Tardó mucho" en el cliente
+    # wait=False: no bloquear la respuesta aunque VPS siga en segundo plano
     pool = ThreadPoolExecutor(max_workers=2)
     try:
         fut_vps = pool.submit(_job_vps)
         fut_osm = pool.submit(_job_osm)
-        wait([fut_vps, fut_osm], timeout=6.0, return_when=FIRST_COMPLETED)
-        remain = max(0.4, 7.0 - (time.time() - t0))
+        # Máx. ~5.5s de espera a fuentes externas (dentro del techo de 9s)
+        wait_cap = min(5.5, max(0.5, _budget_left() - 1.2))
+        wait([fut_vps, fut_osm], timeout=wait_cap, return_when=FIRST_COMPLETED)
+        remain = min(2.0, max(0.3, _budget_left() - 0.8))
         wait([fut_vps, fut_osm], timeout=remain)
         try:
             if fut_vps.done():
                 gb_stations = fut_vps.result(timeout=0.05) or []
             else:
-                print("[search] vps still running — skip for this response")
+                print("[search] vps skip (deadline) — respuesta rápida sin VPS")
                 gb_stations = []
+                partial = True
         except Exception as e:
             print(f"[search] vps timeout/fail: {e}")
             gb_stations = []
+            partial = True
         try:
             if fut_osm.done():
                 stations = fut_osm.result(timeout=0.05) or []
             else:
-                print("[search] osm still running — skip for this response")
+                print("[search] osm skip (deadline)")
                 stations = []
+                partial = True
         except Exception as e:
             print(f"[search] osm timeout/fail: {e}")
             stations = []
+            partial = True
     finally:
         try:
             pool.shutdown(wait=False, cancel_futures=True)
@@ -226,7 +240,7 @@ def run_search(
             pool.shutdown(wait=False)
     print(
         f"[search] parallel vps={len(gb_stations)} osm={len(stations)} "
-        f"in {time.time() - t0:.1f}s"
+        f"partial={partial} in {time.time() - t0:.1f}s budget_left={_budget_left():.1f}s"
     )
 
     def _live_row(src: dict, source_tag: str) -> dict | None:
@@ -376,8 +390,8 @@ def run_search(
             )
         )
 
-    if not priced:
-        stations = stations_near(float(lat), float(lon), radius_mi=radius_mi, limit=limit)
+    # NUNCA re-llamar stations_near aquí (duplicaba 15–30s y causaba "Tardó mucho")
+    if not priced and stations:
         priced = (
             attach_prices(stations, state=state, fuel=fuel, city=city) if stations else []
         )
@@ -408,22 +422,39 @@ def run_search(
             " No se encontraron estaciones reales cerca. "
             "Prueba un radio mayor (10 mi) o otro ZIP."
         )
+    elif partial and not gb_hits:
+        note = (
+            " Resultados rápidos (precios de referencia). "
+            "Vuelve a buscar en unos segundos para precios en vivo si el scraper responde."
+        )
 
     user_reports = sum(1 for s in priced if s.get("price_source") == "user")
 
+    # Analytics en background: no sumar latencia de Neon a la búsqueda
     if track:
-        try:
-            from backend.analytics import track_event, search_detail
+        def _bg_track() -> None:
+            try:
+                from backend.analytics import track_event, search_detail
 
-            track_event(
-                "search",
-                path="/api/search",
-                detail=search_detail(zip_code=zip_code or zip, lat=lat, lon=lon),
-                ip=client_ip,
-                ip_country=client_country,
-            )
+                track_event(
+                    "search",
+                    path="/api/search",
+                    detail=search_detail(zip_code=zip_code or zip, lat=lat, lon=lon),
+                    ip=client_ip,
+                    ip_country=client_country,
+                )
+            except Exception:
+                pass
+
+        try:
+            import threading
+
+            threading.Thread(target=_bg_track, daemon=True).start()
         except Exception:
-            pass
+            _bg_track()
+
+    elapsed = round(time.time() - t_start, 2)
+    print(f"[search] done total={elapsed}s stations={len(priced)} partial={partial}")
 
     out = {
         "center": {
@@ -435,6 +466,8 @@ def run_search(
         },
         "fuel": fuel,
         "radius_mi": radius_mi,
+        "partial": partial,
+        "elapsed_s": elapsed,
         "state_avg": avg,
         "price_meta": meta,
         "count": len(priced),

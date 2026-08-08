@@ -745,6 +745,18 @@ function applySearchData(data, { zip } = {}) {
     $("#zipInput").value = state.zip;
   }
   render(data);
+  // Respuesta rápida (<10s) sin precios VPS: avisar, no es error
+  if (data.partial && state.stations.length) {
+    try {
+      showToast(
+        state.lang === "en"
+          ? "Quick results (ref. prices). Search again for live pump prices."
+          : "Resultados rápidos (precios de referencia). Busca otra vez para precios en vivo."
+      );
+    } catch (_) {
+      /* ignore */
+    }
+  }
 }
 
 async function search({ lat, lon, zip, force = false, soft = false, background = false } = {}) {

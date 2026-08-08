@@ -642,11 +642,17 @@ def _enrich_missing_addresses(
 
 
 def stations_near(
-    lat: float, lon: float, radius_mi: float = 5.0, limit: int = 40
+    lat: float,
+    lon: float,
+    radius_mi: float = 5.0,
+    limit: int = 40,
+    *,
+    enrich: bool = False,
 ) -> list[dict]:
     """
     Lista estaciones REALES cerca de lat/lon.
-    Orden: caché → Overpass → Photon → Nominatim.
+    Orden: caché → Photon → Overpass → Nominatim.
+    enrich=False por defecto: reverse Nominatim hacía ~30s en ZIP nuevos.
     """
     lat_f, lon_f = float(lat), float(lon)
     radius_mi = float(radius_mi)
@@ -669,29 +675,39 @@ def stations_near(
                 s.get("address"),
             )
             s["brand"] = _display_brand(brand, s["name"])
+            if not (s.get("maps_query") or "").strip():
+                s["maps_query"] = (
+                    f"{s['name']} @{float(s['lat']):.5f},{float(s['lon']):.5f}"
+                )
         cached = [s for s in cached if s["distance_mi"] <= radius_mi + 0.5]
         cached.sort(key=lambda x: x["distance_mi"])
         if cached:
-            # Caché vieja puede no tener address: enriquecer huecos
-            return _enrich_missing_addresses(cached[:limit])[:limit]
+            if enrich:
+                return _enrich_missing_addresses(cached[:limit], max_lookups=1)[:limit]
+            return cached[:limit]
 
-    # Parallel-ish fail-over rápido: Photon primero (rápido en nube),
-    # luego Overpass, luego Nominatim.
+    # Photon primero (rápido), Overpass solo si hace falta, Nominatim último
     stations = _fetch_photon(lat_f, lon_f, radius_mi)
 
-    if len(stations) < 8:
+    if len(stations) < 6:
         stations = _merge_stations(
             stations, _fetch_overpass(lat_f, lon_f, radius_mi), radius_mi=radius_mi
         )
 
-    if len(stations) < 5:
+    if len(stations) < 4:
         stations = _merge_stations(
             stations, _fetch_nominatim(lat_f, lon_f, radius_mi), radius_mi=radius_mi
         )
 
     if stations:
-        # Solo las primeras del listado final (antes: 60× reverse = lag brutal)
-        stations = _enrich_missing_addresses(stations[:limit], max_lookups=2)
+        for s in stations:
+            if not (s.get("maps_query") or "").strip():
+                s["maps_query"] = (
+                    f"{s.get('name') or 'Gas'} "
+                    f"@{float(s['lat']):.5f},{float(s['lon']):.5f}"
+                )
+        if enrich:
+            stations = _enrich_missing_addresses(stations[:limit], max_lookups=1)
         _save_cache(lat_f, lon_f, radius_mi, stations[:60])
         return stations[:limit]
 

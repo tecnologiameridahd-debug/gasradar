@@ -93,11 +93,11 @@ def fetch_vps_stations(
         params["key"] = key
 
     try:
-        # Timeout corto: ZIP nuevo no debe esperar 45s al VPS
+        # Timeout corto: techo total búsqueda ~9s
         r = httpx.get(
             f"{base}/prices",
             params=params,
-            timeout=httpx.Timeout(6.5, connect=2.5),
+            timeout=httpx.Timeout(5.0, connect=2.0),
         )
         if r.status_code != 200:
             print(f"[vps_scraper] HTTP {r.status_code}: {r.text[:200]}")
