@@ -1852,21 +1852,18 @@ function setupPwaInstall() {
 
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
-  // solo en https o localhost
   const ok =
     window.isSecureContext ||
     ["localhost", "127.0.0.1"].includes(location.hostname);
   if (!ok) return;
 
-  // Registrar YA (no esperar load): precaché del shell oscuro antes
   const go = () => {
     navigator.serviceWorker
-      .register("/sw.js", { scope: "/" })
+      .register("/sw.js?v=0.9.53", { scope: "/" })
       .then((reg) => {
         try {
           reg.update();
         } catch (_) {}
-        // Toma el SW nuevo al instante
         if (reg.waiting) {
           reg.waiting.postMessage({ type: "SKIP_WAITING" });
         }
@@ -1885,13 +1882,9 @@ function registerServiceWorker() {
       });
   };
 
-  if (document.readyState === "complete" || document.readyState === "interactive") {
-    go();
-  } else {
-    document.addEventListener("DOMContentLoaded", go, { once: true });
-  }
+  // Registrar SW después de un tick para no pelear con el purge de index
+  setTimeout(go, 1500);
 
-  // Si un SW nuevo reemplaza al viejo, recarga 1 vez (no en la 1ª instalación)
   let refreshing = false;
   let hadController = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.addEventListener("controllerchange", () => {

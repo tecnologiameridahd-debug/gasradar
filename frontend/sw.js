@@ -1,10 +1,13 @@
-/* GasRadar service worker — shell oscura al instante (sin flash blanco) */
-const CACHE = "gasradar-v0.9.40";
+/* GasRadar service worker — v0.9.53
+ * JS/CSS: red primero (evita app.js viejo que “no busca”).
+ * HTML: red primero + fallback caché (sin flash blanco en cold start).
+ */
+const CACHE = "gasradar-v0.9.53";
 const PRECACHE = [
   "/",
-  "/static/styles.css?v=0.9.40",
+  "/static/styles.css?v=0.9.53",
   "/static/brand-logos.js?v=0.9.1",
-  "/static/app.js?v=0.9.40",
+  "/static/app.js?v=0.9.53",
   "/static/logo.svg?v=0.2.9",
   "/static/logo-192.png?v=0.5.0",
   "/static/logo-512.png?v=0.5.0",
@@ -12,7 +15,6 @@ const PRECACHE = [
   "/manifest.webmanifest",
 ];
 
-/** Shell mínima oscura si no hay red ni caché (nunca pantalla blanca). */
 const DARK_SHELL = `<!DOCTYPE html>
 <html lang="en" style="background:#0b1220;color-scheme:dark">
 <head>
@@ -35,9 +37,9 @@ animation:p .9s ease infinite alternate}
 <div class="d"></div></div>
 <script>
 try {
-  if (!sessionStorage.getItem("gr_dark_boot")) {
-    sessionStorage.setItem("gr_dark_boot", "1");
-    setTimeout(function () { location.reload(); }, 1200);
+  if (!sessionStorage.getItem("gr_sw_boot_53")) {
+    sessionStorage.setItem("gr_sw_boot_53", "1");
+    setTimeout(function () { location.reload(); }, 900);
   }
 } catch (e) {}
 </script>
@@ -57,7 +59,6 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {
       const cache = await caches.open(CACHE);
-      // Uno a uno: si uno falla, el resto sí se cachea (addAll es todo-o-nada)
       await Promise.all(
         PRECACHE.map((url) =>
           cache.add(url).catch((err) => {
@@ -85,6 +86,11 @@ self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "SKIP_WAITING") {
     self.skipWaiting();
   }
+  if (event.data && event.data.type === "CLEAR_CACHES") {
+    event.waitUntil(
+      caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
+    );
+  }
 });
 
 self.addEventListener("fetch", (event) => {
@@ -108,55 +114,63 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Navegación HTML: CACHÉ PRIMERO (evita pantalla blanca en cold start)
+  // JS/CSS: RED PRIMERO (crítico — no servir app.js roto de caché vieja)
+  if (
+    url.pathname.endsWith(".js") ||
+    url.pathname.endsWith(".css") ||
+    url.pathname.includes("/static/app.js") ||
+    url.pathname.includes("/static/styles.css")
+  ) {
+    event.respondWith(
+      fetch(req)
+        .then((res) => {
+          if (res && res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put(req, copy));
+          }
+          return res;
+        })
+        .catch(() => caches.match(req))
+    );
+    return;
+  }
+
+  // HTML / navegación: red primero, caché si offline
   if (req.mode === "navigate" || url.pathname === "/" || url.pathname.endsWith(".html")) {
     event.respondWith(
       (async () => {
-        const cached = await caches.match("/");
-        const networkPromise = fetch(req)
-          .then((res) => {
-            if (res && res.ok) {
-              const copy = res.clone();
-              caches.open(CACHE).then((c) => {
-                c.put("/", copy);
-                try {
-                  c.put(req, res.clone());
-                } catch (_) {}
-              });
-            }
-            return res;
-          })
-          .catch(() => null);
-
-        if (cached) {
-          // Actualiza en segundo plano; pinta shell oscura YA
-          networkPromise.catch(() => {});
-          return cached;
+        try {
+          const res = await fetch(req);
+          if (res && res.ok) {
+            const copy = res.clone();
+            const cache = await caches.open(CACHE);
+            await cache.put("/", copy.clone());
+            await cache.put(req, copy);
+          }
+          return res;
+        } catch (_) {
+          const cached =
+            (await caches.match(req)) ||
+            (await caches.match("/")) ||
+            (await caches.match("/static/app.js?v=0.9.53"));
+          return cached || darkShellResponse();
         }
-
-        const net = await networkPromise;
-        if (net) return net;
-        return darkShellResponse();
       })()
     );
     return;
   }
 
-  // Estáticos: cache primero
-  if (url.pathname.startsWith("/static/") || url.pathname === "/manifest.webmanifest") {
-    event.respondWith(
-      caches.match(req).then((cached) => {
-        const network = fetch(req)
-          .then((res) => {
-            if (res && res.ok) {
-              const copy = res.clone();
-              caches.open(CACHE).then((c) => c.put(req, copy));
-            }
-            return res;
-          })
-          .catch(() => cached);
-        return cached || network;
-      })
-    );
-  }
+  // Resto: caché o red
+  event.respondWith(
+    caches.match(req).then((hit) => {
+      const net = fetch(req).then((res) => {
+        if (res && res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(req, copy));
+        }
+        return res;
+      });
+      return hit || net.catch(() => darkShellResponse());
+    })
+  );
 });
