@@ -263,13 +263,13 @@ def summary(days: int = 14) -> dict:
         WHERE event_type IN ('search', 'search_cache')
           AND detail IS NOT NULL AND detail != ''
           AND day >= ?
-          AND detail NOT LIKE 'gps%'
+          AND detail NOT LIKE ?
           AND detail != 'unknown'
         GROUP BY detail
         ORDER BY n DESC
         LIMIT 20
         """,
-        (since,),
+        (since, "gps%"),
     )
     for r in legacy_zips:
         raw = (r.get("zip") or "").strip()
