@@ -22,6 +22,19 @@ APP_VERSION = "0.9.57"
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
 
+@app.middleware("http")
+async def _head_as_get(request: Request, call_next):
+    """FastAPI no añade HEAD automáticamente a las rutas @app.get — sin esto,
+    la home y otras páginas devuelven 405 a peticiones HEAD, que usan los
+    crawlers (Google, monitores de uptime, etc.) para verificar antes de
+    leer el contenido completo."""
+    if request.method == "HEAD":
+        request.scope["method"] = "GET"
+        response = await call_next(request)
+        return Response(status_code=response.status_code, headers=dict(response.headers))
+    return await call_next(request)
+
+
 @app.on_event("startup")
 def _startup_jobs():
     """Webhook Telegram + calentar precios EIA (gratis, ~1× al día)."""
