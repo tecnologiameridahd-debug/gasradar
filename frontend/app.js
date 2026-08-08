@@ -403,11 +403,32 @@ function setLocDot(mode) {
 }
 
 function setBusy(busy, { background = false } = {}) {
-  state.searching = busy;
-  if (background) return; // búsqueda silenciosa: no bloquear los controles del usuario
-  ["#btnGps", "#btnZip", "#fuelSelect", "#radiusSelect"].forEach((sel) => {
+  state.searching = !!busy;
+  if (background) return;
+  // NUNCA deshabilitar ZIP / Buscar / GPS: al cambiar de código el usuario
+  // debe poder buscar otra vez sin que la app se “congele”.
+  const btnZip = $("#btnZip");
+  if (btnZip) {
+    btnZip.classList.toggle("is-loading", !!busy);
+    btnZip.setAttribute("aria-busy", busy ? "true" : "false");
+  }
+  const btnGps = $("#btnGps");
+  if (btnGps) {
+    btnGps.classList.toggle("is-loading", !!busy);
+  }
+}
+
+/** Libera la UI sí o sí (por si una búsqueda vieja abortó mal). */
+function unlockSearchUi() {
+  state.searching = false;
+  state.searchAbort = null;
+  ["#btnGps", "#btnZip", "#fuelSelect", "#radiusSelect", "#zipInput"].forEach((sel) => {
     const el = $(sel);
-    if (el) el.disabled = !!busy;
+    if (el) {
+      el.disabled = false;
+      el.classList.remove("is-loading");
+      el.removeAttribute("aria-busy");
+    }
   });
 }
 
@@ -760,18 +781,17 @@ function applySearchData(data, { zip } = {}) {
 }
 
 async function search({ lat, lon, zip, force = false, soft = false, background = false } = {}) {
-  if (state.searching) {
-    // Una búsqueda silenciosa (auto-GPS al abrir la app) nunca debe pisar
-    // una búsqueda ya en curso; una búsqueda explícita del usuario (ZIP o
-    // botón GPS) sí tiene prioridad y cancela la que esté en vuelo.
-    if (background) return;
-    if (state.searchAbort) {
-      try {
-        state.searchAbort.abort();
-      } catch (_) {
-        /* ignore */
-      }
+  // Búsqueda en segundo plano: no pisar una del usuario
+  if (background && state.searching) return;
+
+  // Nueva búsqueda del usuario: cancela la anterior (cambio de ZIP)
+  if (!background && state.searchAbort) {
+    try {
+      state.searchAbort.abort();
+    } catch (_) {
+      /* ignore */
     }
+    state.searchAbort = null;
   }
 
   const memKey = searchMemKey({ lat, lon, zip });
@@ -785,6 +805,7 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
     const memHit = _searchMem.get(memKey);
     if (memHit && Date.now() - memHit.ts < SEARCH_MEM_MS && memHit.data) {
       applySearchData(memHit.data, { zip });
+      unlockSearchUi();
       return;
     }
   }
@@ -792,8 +813,8 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
   const myToken = ++state.searchToken;
   setBusy(true, { background });
 
-  // Al cambiar de ZIP: no borrar la lista anterior (se siente menos “lagueado”)
   const zipDigits = zip ? String(zip).replace(/\D/g, "").slice(0, 5) : "";
+  // Al cambiar ZIP: mantener lista anterior en pantalla
   const keepList =
     soft ||
     background ||
@@ -803,21 +824,24 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
       state.zip &&
       state.zip !== zipDigits);
 
-  if (!keepList && !background) {
-    setStatus(
-      zipDigits ? t("searchingZip")(zipDigits) : t("searching"),
-      "loading"
-    );
-    $("#results").innerHTML = "";
-    const bestCard = $("#bestCard");
-    if (bestCard) bestCard.hidden = true;
-    const head = $("#resultsHead");
-    if (head) head.hidden = true;
-  } else if (!background) {
-    setStatus(
-      zipDigits ? t("searchingZipChange")(zipDigits) : t("searching"),
-      "loading"
-    );
+  if (!background) {
+    if (!keepList) {
+      setStatus(
+        zipDigits ? t("searchingZip")(zipDigits) : t("searching"),
+        "loading"
+      );
+      const resEl = $("#results");
+      if (resEl) resEl.innerHTML = "";
+      const bestCard = $("#bestCard");
+      if (bestCard) bestCard.hidden = true;
+      const head = $("#resultsHead");
+      if (head) head.hidden = true;
+    } else {
+      setStatus(
+        zipDigits ? t("searchingZipChange")(zipDigits) : t("searching"),
+        "loading"
+      );
+    }
   }
 
   const params = new URLSearchParams();
@@ -825,23 +849,28 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
   params.set("radius_mi", String(state.radius));
   params.set("limit", "30");
   if (zip) params.set("zip", zip);
-  if (lat != null && lon != null) {
+  // Solo GPS si no hay ZIP explícito (evita mezclar ubicación vieja con ZIP nuevo)
+  if (!zip && lat != null && lon != null) {
     params.set("lat", String(lat));
     params.set("lon", String(lon));
   }
 
   const ctrl = new AbortController();
   state.searchAbort = ctrl;
-  // Con el fix del servidor (~8s), 18s de margen sobra; no cortar tan pronto
-  // Más margen: esperamos precios reales del VPS (~14–16s)
-  const timer = setTimeout(() => ctrl.abort(), 28000);
+  // Precios reales VPS ~14s + margen; no más de 22s
+  const timer = setTimeout(() => {
+    try {
+      ctrl.abort();
+    } catch (_) {
+      /* ignore */
+    }
+  }, 22000);
 
   try {
     const res = await fetch(`/api/search?${params.toString()}`, {
       signal: ctrl.signal,
     });
     clearTimeout(timer);
-    // Una búsqueda más nueva ya tomó el control mientras esta esperaba red: ignorar.
     if (myToken !== state.searchToken) return;
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -867,54 +896,37 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
     applySearchData(data, { zip });
   } catch (e) {
     clearTimeout(timer);
-    // Abortada porque una búsqueda más nueva la reemplazó: no es un error real.
+    // Reemplazada por otra búsqueda (otro ZIP): no mostrar error ni bloquear
     if (myToken !== state.searchToken) return;
-    const isAbort = e && e.name === "AbortError";
-    // Si el usuario canceló al buscar otro ZIP, no mostrar "Tardó mucho"
-    if (isAbort && state.searchToken !== myToken) return;
 
+    const isAbort = e && e.name === "AbortError";
     if (keepList || soft) {
-      showToast(isAbort ? t("timeoutSoft") : e.message || t("searchError"));
-      // Mantener lista anterior visible
       if (state.stations && state.stations.length) {
+        showToast(isAbort ? t("timeoutSoft") : e.message || t("searchError"));
         setStatus(
-          zipDigits
-            ? t("searchingZipChange")(zipDigits)
-            : t("searching"),
-          "loading"
+          state.stations.length +
+            " · " +
+            (state.lang === "en"
+              ? "previous area — try Search again"
+              : "zona anterior — toca Buscar otra vez"),
+          "ok"
         );
-        // Quitar estado loading al rato
-        setTimeout(() => {
-          if (myToken === state.searchToken && state.stations.length) {
-            setStatus(
-              state.stations.length +
-                " · " +
-                (state.lang === "en" ? "previous area still shown" : "sigue la zona anterior"),
-              "ok"
-            );
-          }
-        }, 400);
+      } else {
+        setStatus(isAbort ? t("timeout") : e.message || t("searchError"), "error");
       }
     } else {
       setLocDot("off");
-      if (isAbort) {
-        setStatus(t("timeout"), "error");
-        // Un reintento automático silencioso (misma búsqueda)
-        if (!force && !background) {
-          setTimeout(() => {
-            if (state.searchToken === myToken) {
-              search({ lat, lon, zip, force: true, soft: true, background: false });
-            }
-          }, 600);
-        }
-      } else {
-        setStatus(e.message || t("searchError"), "error");
-      }
+      setStatus(isAbort ? t("timeout") : e.message || t("searchError"), "error");
     }
   } finally {
-    if (myToken !== state.searchToken) return;
-    if (state.searchAbort === ctrl) state.searchAbort = null;
-    setBusy(false, { background });
+    clearTimeout(timer);
+    // Siempre liberar si somos la búsqueda activa (nunca dejar botones muertos)
+    if (myToken === state.searchToken) {
+      if (state.searchAbort === ctrl) state.searchAbort = null;
+      setBusy(false, { background });
+      // Cinturón de seguridad: por si quedó disabled de código viejo en caché
+      unlockSearchUi();
+    }
   }
 }
 
@@ -1402,11 +1414,11 @@ function bind() {
     });
   }
   $("#btnGps").addEventListener("click", useGps);
-  $("#btnZip").addEventListener("click", () => {
-    const zip = $("#zipInput").value.trim();
+  function runZipSearch() {
+    const zip = ($("#zipInput") && $("#zipInput").value.trim()) || "";
     if (!zip) {
       showToast(t("needZip"));
-      $("#zipInput").focus();
+      $("#zipInput")?.focus();
       return;
     }
     const digits = zip.replace(/\D/g, "");
@@ -1415,13 +1427,23 @@ function bind() {
       return;
     }
     const newZip = digits.slice(0, 5);
-    const changing = state.zip && state.zip !== newZip && state.stations.length > 0;
+    const changing =
+      state.zip && state.zip !== newZip && state.stations && state.stations.length > 0;
     state.zip = newZip;
-    // soft: al cambiar ZIP no vaciar pantalla (menos sensación de lag)
-    search({ zip: state.zip, soft: changing });
+    // Limpiar GPS viejo para no mezclar con el ZIP nuevo
+    // (la búsqueda manda solo zip)
+    unlockSearchUi();
+    search({ zip: state.zip, soft: changing, force: false });
+  }
+  $("#btnZip").addEventListener("click", (e) => {
+    e.preventDefault();
+    runZipSearch();
   });
   $("#zipInput").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") $("#btnZip").click();
+    if (e.key === "Enter") {
+      e.preventDefault();
+      runZipSearch();
+    }
   });
   $("#zipInput").addEventListener("input", (e) => {
     const v = e.target.value.replace(/[^\d-]/g, "").slice(0, 10);
