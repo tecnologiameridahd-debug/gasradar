@@ -117,7 +117,7 @@ def reverse_geocode_street(lat: float, lon: float) -> str | None:
                 "User-Agent": "GasRadar/1.0 (contact@gasradarapp.com)",
                 "Accept-Language": "en",
             },
-            timeout=3.5,
+            timeout=httpx.Timeout(1.8, connect=1.0),
         )
         if r.status_code != 200:
             return None

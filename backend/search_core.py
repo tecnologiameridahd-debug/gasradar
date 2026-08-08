@@ -192,16 +192,18 @@ def run_search(
     from concurrent.futures import wait, FIRST_COMPLETED
 
     t0 = time.time()
-    with ThreadPoolExecutor(max_workers=2) as pool:
+    # wait=False: si no, al salir del with se espera a que el VPS termine
+    # (aunque ya hayamos “saltado” el result) → mensaje "Tardó mucho" en el cliente
+    pool = ThreadPoolExecutor(max_workers=2)
+    try:
         fut_vps = pool.submit(_job_vps)
         fut_osm = pool.submit(_job_osm)
-        # Espera corta; si uno termina antes, el otro tiene el resto del tiempo
-        wait([fut_vps, fut_osm], timeout=6.5, return_when=FIRST_COMPLETED)
-        remain = max(0.5, 7.5 - (time.time() - t0))
+        wait([fut_vps, fut_osm], timeout=6.0, return_when=FIRST_COMPLETED)
+        remain = max(0.4, 7.0 - (time.time() - t0))
         wait([fut_vps, fut_osm], timeout=remain)
         try:
             if fut_vps.done():
-                gb_stations = fut_vps.result(timeout=0.1) or []
+                gb_stations = fut_vps.result(timeout=0.05) or []
             else:
                 print("[search] vps still running — skip for this response")
                 gb_stations = []
@@ -210,13 +212,18 @@ def run_search(
             gb_stations = []
         try:
             if fut_osm.done():
-                stations = fut_osm.result(timeout=0.1) or []
+                stations = fut_osm.result(timeout=0.05) or []
             else:
                 print("[search] osm still running — skip for this response")
                 stations = []
         except Exception as e:
             print(f"[search] osm timeout/fail: {e}")
             stations = []
+    finally:
+        try:
+            pool.shutdown(wait=False, cancel_futures=True)
+        except TypeError:
+            pool.shutdown(wait=False)
     print(
         f"[search] parallel vps={len(gb_stations)} osm={len(stations)} "
         f"in {time.time() - t0:.1f}s"

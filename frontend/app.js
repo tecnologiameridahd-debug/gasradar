@@ -48,7 +48,8 @@ const I18N = {
     emptyStart: "Escribe tu ZIP o toca Usar mi ubicación.",
     loadLast: "Cargando tu última zona…",
     noStations: "No hay estaciones reales aquí. Prueba 10 millas u otro ZIP.",
-    timeout: "Tardó mucho. Prueba de nuevo o escribe un ZIP.",
+    timeout: "La red tardó. Toca Buscar otra vez (o prueba el mismo ZIP de nuevo).",
+    timeoutSoft: "Aún cargando precios de esa zona… prueba Buscar otra vez en un momento.",
     searchError: "Error de búsqueda. Prueba un ZIP.",
     stateAvg: (st, price) => `Promedio del estado${st}: ${price}`,
     eiaTitle: "Promedio esta semana",
@@ -154,7 +155,8 @@ const I18N = {
     emptyStart: "Enter your ZIP or tap Use my location.",
     loadLast: "Loading your last area…",
     noStations: "No real stations here. Try 10 miles or another ZIP.",
-    timeout: "Took too long. Try again or enter a ZIP.",
+    timeout: "Network was slow. Tap Search again (or try the same ZIP once more).",
+    timeoutSoft: "Still loading that area… tap Search again in a moment.",
     searchError: "Search error. Try a ZIP.",
     stateAvg: (st, price) => `State average${st}: ${price}`,
     eiaTitle: "This week's average",
@@ -818,8 +820,8 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
 
   const ctrl = new AbortController();
   state.searchAbort = ctrl;
-  // Techo cliente: el servidor ya corta ~7–8s; un poco más de margen
-  const timer = setTimeout(() => ctrl.abort(), 16000);
+  // Con el fix del servidor (~8s), 18s de margen sobra; no cortar tan pronto
+  const timer = setTimeout(() => ctrl.abort(), 18000);
 
   try {
     const res = await fetch(`/api/search?${params.toString()}`, {
@@ -854,13 +856,44 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
     clearTimeout(timer);
     // Abortada porque una búsqueda más nueva la reemplazó: no es un error real.
     if (myToken !== state.searchToken) return;
-    if (soft) {
-      // pull-to-refresh: mantener lista y avisar
-      showToast(e && e.name === "AbortError" ? t("timeout") : e.message || t("searchError"));
+    const isAbort = e && e.name === "AbortError";
+    // Si el usuario canceló al buscar otro ZIP, no mostrar "Tardó mucho"
+    if (isAbort && state.searchToken !== myToken) return;
+
+    if (keepList || soft) {
+      showToast(isAbort ? t("timeoutSoft") : e.message || t("searchError"));
+      // Mantener lista anterior visible
+      if (state.stations && state.stations.length) {
+        setStatus(
+          zipDigits
+            ? t("searchingZipChange")(zipDigits)
+            : t("searching"),
+          "loading"
+        );
+        // Quitar estado loading al rato
+        setTimeout(() => {
+          if (myToken === state.searchToken && state.stations.length) {
+            setStatus(
+              state.stations.length +
+                " · " +
+                (state.lang === "en" ? "previous area still shown" : "sigue la zona anterior"),
+              "ok"
+            );
+          }
+        }, 400);
+      }
     } else {
       setLocDot("off");
-      if (e && e.name === "AbortError") {
+      if (isAbort) {
         setStatus(t("timeout"), "error");
+        // Un reintento automático silencioso (misma búsqueda)
+        if (!force && !background) {
+          setTimeout(() => {
+            if (state.searchToken === myToken) {
+              search({ lat, lon, zip, force: true, soft: true, background: false });
+            }
+          }, 600);
+        }
       } else {
         setStatus(e.message || t("searchError"), "error");
       }

@@ -605,11 +605,11 @@ def _merge_stations(*lists: list[dict], radius_mi: float) -> list[dict]:
 
 
 def _enrich_missing_addresses(
-    stations: list[dict], *, max_lookups: int = 12
+    stations: list[dict], *, max_lookups: int = 2
 ) -> list[dict]:
     """
     Si OSM/Photon no traen calle, rellena con reverse Nominatim (calle).
-    Límite de lookups para no alargar la búsqueda en ciudades con muchos huecos.
+    Muy pocos lookups: 12×Nominatim hacía “Tardó mucho” al cambiar de ZIP.
     """
     from backend.geo import reverse_geocode_street
 
@@ -618,7 +618,7 @@ def _enrich_missing_addresses(
         if (s.get("address") or "").strip():
             continue
         if n >= max_lookups:
-            # fallback suave: al menos ciudad no queda en blanco en UI
+            # fallback suave: coords para Maps sin más HTTP
             if not s.get("maps_query"):
                 s["maps_query"] = (
                     f"{s.get('name') or 'Gas'} "
@@ -690,7 +690,8 @@ def stations_near(
         )
 
     if stations:
-        stations = _enrich_missing_addresses(stations[:60])
+        # Solo las primeras del listado final (antes: 60× reverse = lag brutal)
+        stations = _enrich_missing_addresses(stations[:limit], max_lookups=2)
         _save_cache(lat_f, lon_f, radius_mi, stations[:60])
         return stations[:limit]
 
