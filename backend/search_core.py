@@ -465,7 +465,11 @@ def run_search(
         "live_prices": bool(gb_hits),
     }
     try:
-        _cache_put(ck, out)
+        # No cachear vacío: si no, el usuario reintenta y “no busca”
+        if priced:
+            _cache_put(ck, out)
+        else:
+            _SEARCH_CACHE.pop(ck, None)
     except Exception:
         pass
     return out

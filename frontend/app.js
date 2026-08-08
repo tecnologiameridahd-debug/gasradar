@@ -410,17 +410,21 @@ function setBusy(busy, { background = false } = {}) {
   if (!busy) unlockSearchUi();
 }
 
-/** Libera la UI sí o sí (botón pegado / disabled / is-loading). */
-function unlockSearchUi() {
+/**
+ * Libera la UI (botón pegado / disabled).
+ * abortFetch=true solo al cancelar a propósito; NO abortar al terminar bien
+ * (si no, se cancela la búsqueda en curso y “no busca”).
+ */
+function unlockSearchUi({ abortFetch = false } = {}) {
   state.searching = false;
-  try {
-    if (state.searchAbort) {
+  if (abortFetch && state.searchAbort) {
+    try {
       state.searchAbort.abort();
+    } catch (_) {
+      /* ignore */
     }
-  } catch (_) {
-    /* ignore */
+    state.searchAbort = null;
   }
-  state.searchAbort = null;
   ["#btnGps", "#btnZip", "#fuelSelect", "#radiusSelect", "#zipInput"].forEach((sel) => {
     const el = $(sel);
     if (!el) return;
@@ -433,7 +437,6 @@ function unlockSearchUi() {
       /* ignore */
     }
   });
-  // Por si el navegador dejó :active en el botón (muy común en iPhone)
   try {
     if (document.activeElement && document.activeElement.blur) {
       document.activeElement.blur();
@@ -814,9 +817,17 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
     }
   } else {
     const memHit = _searchMem.get(memKey);
-    if (memHit && Date.now() - memHit.ts < SEARCH_MEM_MS && memHit.data) {
+    // No reutilizar cache vacío (parecía que “no busca”)
+    const hitStations = memHit && memHit.data && memHit.data.stations;
+    if (
+      memHit &&
+      Date.now() - memHit.ts < SEARCH_MEM_MS &&
+      memHit.data &&
+      Array.isArray(hitStations) &&
+      hitStations.length > 0
+    ) {
       applySearchData(memHit.data, { zip });
-      unlockSearchUi();
+      unlockSearchUi({ abortFetch: false });
       return;
     }
   }
@@ -876,9 +887,17 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
     }
   }, 22000);
 
-  // Si algo se cuelga, a los 25s el botón deja de verse “presionado”
+  // Solo soltar UI visual; no abortar el fetch (abortFetch mataba la búsqueda)
   const safety = setTimeout(() => {
-    if (myToken === state.searchToken) unlockSearchUi();
+    if (myToken === state.searchToken) {
+      state.searching = false;
+      try {
+        $("#btnZip")?.classList.remove("is-loading", "is-pressed");
+        $("#btnZip")?.blur();
+      } catch (_) {
+        /* ignore */
+      }
+    }
   }, 25000);
 
   try {
@@ -900,10 +919,15 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
     const data = await res.json();
     if (myToken !== state.searchToken) return;
     try {
-      _searchMem.set(memKey, { ts: Date.now(), data });
-      if (_searchMem.size > 40) {
-        const first = _searchMem.keys().next().value;
-        _searchMem.delete(first);
+      // Solo cachear si hay estaciones (vacío no se guarda)
+      if (data && Array.isArray(data.stations) && data.stations.length > 0) {
+        _searchMem.set(memKey, { ts: Date.now(), data });
+        if (_searchMem.size > 40) {
+          const first = _searchMem.keys().next().value;
+          _searchMem.delete(first);
+        }
+      } else {
+        _searchMem.delete(memKey);
       }
     } catch (_) {
       /* ignore */
@@ -936,16 +960,17 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
   } finally {
     clearTimeout(timer);
     clearTimeout(safety);
-    // SIEMPRE soltar el botón (aunque otra búsqueda haya empezado, quitamos :active)
     try {
       const bz = $("#btnZip");
       if (bz) {
         bz.classList.remove("is-loading", "is-pressed");
+        bz.disabled = false;
         bz.blur();
       }
       const bg = $("#btnGps");
       if (bg) {
         bg.classList.remove("is-loading", "is-pressed");
+        bg.disabled = false;
         bg.blur();
       }
     } catch (_) {
@@ -953,7 +978,9 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
     }
     if (myToken === state.searchToken) {
       if (state.searchAbort === ctrl) state.searchAbort = null;
-      unlockSearchUi();
+      state.searching = false;
+      // No abortFetch: la búsqueda ya terminó
+      unlockSearchUi({ abortFetch: false });
     }
   }
 }
