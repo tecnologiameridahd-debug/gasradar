@@ -404,32 +404,43 @@ function setLocDot(mode) {
 
 function setBusy(busy, { background = false } = {}) {
   state.searching = !!busy;
+  // No tocamos el aspecto del botón "Buscar" (en móvil se queda “pegado”
+  // con :active / is-loading). El estado se ve en el mensaje de status.
   if (background) return;
-  // NUNCA deshabilitar ZIP / Buscar / GPS: al cambiar de código el usuario
-  // debe poder buscar otra vez sin que la app se “congele”.
-  const btnZip = $("#btnZip");
-  if (btnZip) {
-    btnZip.classList.toggle("is-loading", !!busy);
-    btnZip.setAttribute("aria-busy", busy ? "true" : "false");
-  }
-  const btnGps = $("#btnGps");
-  if (btnGps) {
-    btnGps.classList.toggle("is-loading", !!busy);
-  }
+  if (!busy) unlockSearchUi();
 }
 
-/** Libera la UI sí o sí (por si una búsqueda vieja abortó mal). */
+/** Libera la UI sí o sí (botón pegado / disabled / is-loading). */
 function unlockSearchUi() {
   state.searching = false;
+  try {
+    if (state.searchAbort) {
+      state.searchAbort.abort();
+    }
+  } catch (_) {
+    /* ignore */
+  }
   state.searchAbort = null;
   ["#btnGps", "#btnZip", "#fuelSelect", "#radiusSelect", "#zipInput"].forEach((sel) => {
     const el = $(sel);
-    if (el) {
-      el.disabled = false;
-      el.classList.remove("is-loading");
-      el.removeAttribute("aria-busy");
+    if (!el) return;
+    el.disabled = false;
+    el.classList.remove("is-loading", "is-pressed");
+    el.removeAttribute("aria-busy");
+    try {
+      el.blur();
+    } catch (_) {
+      /* ignore */
     }
   });
+  // Por si el navegador dejó :active en el botón (muy común en iPhone)
+  try {
+    if (document.activeElement && document.activeElement.blur) {
+      document.activeElement.blur();
+    }
+  } catch (_) {
+    /* ignore */
+  }
 }
 
 function buildShareText(station) {
@@ -811,7 +822,7 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
   }
 
   const myToken = ++state.searchToken;
-  setBusy(true, { background });
+  if (!background) state.searching = true;
 
   const zipDigits = zip ? String(zip).replace(/\D/g, "").slice(0, 5) : "";
   // Al cambiar ZIP: mantener lista anterior en pantalla
@@ -857,7 +868,6 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
 
   const ctrl = new AbortController();
   state.searchAbort = ctrl;
-  // Precios reales VPS ~14s + margen; no más de 22s
   const timer = setTimeout(() => {
     try {
       ctrl.abort();
@@ -865,6 +875,11 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
       /* ignore */
     }
   }, 22000);
+
+  // Si algo se cuelga, a los 25s el botón deja de verse “presionado”
+  const safety = setTimeout(() => {
+    if (myToken === state.searchToken) unlockSearchUi();
+  }, 25000);
 
   try {
     const res = await fetch(`/api/search?${params.toString()}`, {
@@ -920,11 +935,24 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
     }
   } finally {
     clearTimeout(timer);
-    // Siempre liberar si somos la búsqueda activa (nunca dejar botones muertos)
+    clearTimeout(safety);
+    // SIEMPRE soltar el botón (aunque otra búsqueda haya empezado, quitamos :active)
+    try {
+      const bz = $("#btnZip");
+      if (bz) {
+        bz.classList.remove("is-loading", "is-pressed");
+        bz.blur();
+      }
+      const bg = $("#btnGps");
+      if (bg) {
+        bg.classList.remove("is-loading", "is-pressed");
+        bg.blur();
+      }
+    } catch (_) {
+      /* ignore */
+    }
     if (myToken === state.searchToken) {
       if (state.searchAbort === ctrl) state.searchAbort = null;
-      setBusy(false, { background });
-      // Cinturón de seguridad: por si quedó disabled de código viejo en caché
       unlockSearchUi();
     }
   }
@@ -1430,15 +1458,44 @@ function bind() {
     const changing =
       state.zip && state.zip !== newZip && state.stations && state.stations.length > 0;
     state.zip = newZip;
-    // Limpiar GPS viejo para no mezclar con el ZIP nuevo
-    // (la búsqueda manda solo zip)
-    unlockSearchUi();
+    // Soltar aspecto “presionado” al instante (iOS/Android)
+    try {
+      $("#btnZip")?.blur();
+      $("#zipInput")?.blur();
+    } catch (_) {
+      /* ignore */
+    }
     search({ zip: state.zip, soft: changing, force: false });
   }
   $("#btnZip").addEventListener("click", (e) => {
     e.preventDefault();
+    e.currentTarget?.blur();
     runZipSearch();
   });
+  // pointerup: en móvil a veces :active se queda pegado
+  $("#btnZip").addEventListener(
+    "pointerup",
+    (e) => {
+      try {
+        e.currentTarget?.blur();
+        e.currentTarget?.classList.remove("is-loading", "is-pressed");
+      } catch (_) {
+        /* ignore */
+      }
+    },
+    { passive: true }
+  );
+  $("#btnZip").addEventListener(
+    "touchend",
+    (e) => {
+      try {
+        e.currentTarget?.blur();
+      } catch (_) {
+        /* ignore */
+      }
+    },
+    { passive: true }
+  );
   $("#zipInput").addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();

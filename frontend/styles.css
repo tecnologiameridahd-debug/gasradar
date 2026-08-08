@@ -475,6 +475,11 @@ button {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Evitar que :active se vea pegado en touch devices */
+button {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
 button:active {
   transform: scale(0.98);
 }
@@ -513,13 +518,7 @@ a.btn-primary:hover {
   filter: brightness(1.05);
 }
 
-/* Buscando: se ve activo pero NO se deshabilita (evita freeze al cambiar ZIP) */
-.btn-primary.is-loading,
-.btn-secondary.is-loading,
-.btn-gps.is-loading {
-  opacity: 0.85;
-  cursor: progress;
-}
+/* No usar is-loading en botones: en móvil parece “pegado/presionado” */
 
 .btn-secondary,
 a.btn-secondary {
