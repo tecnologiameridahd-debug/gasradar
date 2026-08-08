@@ -849,7 +849,7 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
   if (!background) {
     if (!keepList) {
       setStatus(
-        zipDigits ? t("searchingZip")(zipDigits) : t("searching"),
+        zipDigits ? t("searchingZip", zipDigits) : t("searching"),
         "loading"
       );
       const resEl = $("#results");
@@ -860,7 +860,7 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
       if (head) head.hidden = true;
     } else {
       setStatus(
-        zipDigits ? t("searchingZipChange")(zipDigits) : t("searching"),
+        zipDigits ? t("searchingZipChange", zipDigits) : t("searching"),
         "loading"
       );
     }
@@ -1507,12 +1507,7 @@ function bind() {
             : "Buscando ZIP " + newZip + "…"
         );
       } catch (_) {}
-      setStatus(
-        typeof t("searchingZip") === "function"
-          ? t("searchingZip")(newZip)
-          : t("searching"),
-        "loading"
-      );
+      setStatus(t("searchingZip", newZip), "loading");
 
       var btn = document.getElementById("btnZip");
       if (btn) {
@@ -1901,7 +1896,7 @@ function registerServiceWorker() {
 
   const go = () => {
     navigator.serviceWorker
-      .register("/sw.js?v=0.9.56", { scope: "/" })
+      .register("/sw.js?v=0.9.57", { scope: "/" })
       .then((reg) => {
         try {
           reg.update();
