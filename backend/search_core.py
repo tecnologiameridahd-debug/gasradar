@@ -88,13 +88,17 @@ def run_search(
 ) -> dict:
     """Misma lógica que GET /api/search. Lanza ValueError si ZIP inválido.
 
-    quick=True: modo bot Telegram (sin GasBuddy, menos estaciones, más rápido).
-    Solo precios REALES (VPS GasBuddy / reportes). No listar estimados AAA/EIA.
+    quick=True: modo bot Telegram — menos estaciones, deadline más corto,
+    pero SÍ intenta VPS/GasBuddy (antes se saltaba y el bot quedaba sin datos).
+    Si no hay VPS, rellena con estimados AAA/EIA (bot). Web (quick=False):
+    solo precios reales GasBuddy/reportes.
     """
     t_start = time.time()
+    # Bot: 14s; web: 16s — deja margen al timeout del webhook Telegram (~18–25s)
+    hard_deadline = 14.0 if quick else _SEARCH_HARD_DEADLINE_S
 
     def _budget_left() -> float:
-        return max(0.0, _SEARCH_HARD_DEADLINE_S - (time.time() - t_start))
+        return max(0.0, hard_deadline - (time.time() - t_start))
 
     label = DEFAULT_LABEL
     state = "CO"
@@ -178,17 +182,18 @@ def run_search(
     live_only = not quick  # web: solo precios reales; bot puede usar estimados
 
     def _job_vps() -> list:
-        if quick:
-            return []
+        # Importante: el bot (quick) también necesita VPS — si se omite, a menudo
+        # no hay datos (OSM/estimados fallan o llegan vacíos en Render).
         try:
             from backend.vps_scraper_client import fetch_vps_stations
 
+            lim = min(max(int(limit), 15), 30) if quick else min(max(int(limit), 25), 40)
             return fetch_vps_stations(
                 zip_code=str(zip_code) if zip_code else None,
                 lat=float(lat) if lat is not None else None,
                 lon=float(lon) if lon is not None else None,
                 fuel=fuel,
-                limit=min(max(int(limit), 25), 40),
+                limit=lim,
             )
         except Exception as e:
             print(f"[search] vps_scraper: {e}")
@@ -208,13 +213,13 @@ def run_search(
             return []
 
     t0 = time.time()
-    # Prioridad: ESPERAR al VPS (precios reales). OSM solo de apoyo / bot.
+    # Prioridad: VPS (precios reales). OSM en paralelo como respaldo (bot / sin VPS).
     pool = ThreadPoolExecutor(max_workers=2)
     try:
         fut_vps = pool.submit(_job_vps)
-        fut_osm = pool.submit(_job_osm) if (quick or True) else None
-        # Dar al VPS casi todo el presupuesto (precios reales)
-        vps_wait = min(14.0, max(3.0, _budget_left() - 1.0))
+        fut_osm = pool.submit(_job_osm)
+        # Bot: ~11s al VPS; web: hasta ~14s
+        vps_wait = min(11.0 if quick else 14.0, max(3.0, _budget_left() - 1.0))
         wait([fut_vps], timeout=vps_wait)
         try:
             if fut_vps.done():
@@ -226,8 +231,8 @@ def run_search(
             print(f"[search] vps fail: {e}")
             gb_stations = []
 
-        # Si no hay precios reales, un reintento corto del VPS
-        if not gb_stations and not quick and _budget_left() > 4.0:
+        # Reintento corto si no hay precios reales y queda presupuesto
+        if not gb_stations and _budget_left() > (3.0 if quick else 4.0):
             print("[search] vps empty — retry once")
             try:
                 gb_stations = _job_vps() or []
@@ -235,12 +240,12 @@ def run_search(
                 print(f"[search] vps retry: {e}")
                 gb_stations = []
 
-        # OSM: solo si hace falta (sin VPS o bot) y queda presupuesto
+        # OSM: siempre útil en bot; en web solo si no hay VPS y queda tiempo
         try:
-            if fut_osm and fut_osm.done():
+            if fut_osm.done():
                 stations = fut_osm.result(timeout=0.05) or []
-            elif fut_osm and not gb_stations and _budget_left() > 2.0:
-                wait([fut_osm], timeout=min(4.0, _budget_left() - 0.5))
+            elif (quick or not gb_stations) and _budget_left() > 1.5:
+                wait([fut_osm], timeout=min(4.0 if quick else 4.0, _budget_left() - 0.3))
                 if fut_osm.done():
                     stations = fut_osm.result(timeout=0.05) or []
         except Exception as e:

@@ -146,13 +146,13 @@ def _keyboard(lang: str = "es") -> dict:
         rows = [
             [{"text": "⛽ Prices now"}, {"text": "📍 Set ZIP"}],
             [{"text": "🔔 My alert"}, {"text": "⚙️ Status"}],
-            [{"text": "❓ Help"}],
+            [{"text": "❓ Help"}, {"text": "🌐 Español"}],
         ]
     else:
         rows = [
             [{"text": "⛽ Precios ahora"}, {"text": "📍 Poner ZIP"}],
             [{"text": "🔔 Mi alerta"}, {"text": "⚙️ Estado"}],
-            [{"text": "❓ Ayuda"}],
+            [{"text": "❓ Ayuda"}, {"text": "🌐 English"}],
         ]
     return {
         "keyboard": rows,
@@ -197,9 +197,13 @@ def handle_update_safe(update: dict) -> None:
             msg = (update or {}).get("message") or (update or {}).get("edited_message") or {}
             chat_id = (msg.get("chat") or {}).get("id")
             if chat_id is not None:
+                lg = _lang(chat_id)
                 send_message(
                     chat_id,
-                    "⚠️ Error interno. Toca ⛽ Precios ahora o escribe /ahora",
+                    "⚠️ Error interno. Toca ⛽ Precios ahora o escribe /ahora"
+                    if lg != "en"
+                    else "⚠️ Internal error. Tap ⛽ Prices now or type /now",
+                    lang=lg,
                 )
         except Exception:
             pass
@@ -238,43 +242,170 @@ def get_webhook_info() -> dict:
     return _api("getWebhookInfo")
 
 
-HELP_ES = """⛽ *GasRadar* — gasolina barata
+HELP_ES = """⛽ GasRadar — gasolina barata
 
-Usa los *botones* de abajo o escribe:
+Usa los botones de abajo o escribe:
 
-1️⃣ ZIP de 5 dígitos → `80903`
-2️⃣ Tope de precio → `3.50` o `/alerta 3.50`
-3️⃣ `⛽ Precios ahora` → ver la más barata
+1️⃣ ZIP de 5 dígitos → 80903
+2️⃣ Tope de precio → 3.50 o /alerta 3.50
+3️⃣ ⛽ Precios ahora → ver las más baratas
 
-También:
+Comandos:
 /zona 80903 · /alerta 3.50 · /ahora
 /mis · /pausa · /activar · /borrar
-/es · /en
+/es · /en  (idioma)
 
 App: gasradarapp.com
 """
 
-HELP_EN = """⛽ *GasRadar* — cheap gas alerts
+HELP_EN = """⛽ GasRadar — cheap gas nearby
 
-Use the *buttons* below or type:
+Use the buttons below or type:
 
-1️⃣ 5-digit ZIP → `80903`
-2️⃣ Max price → `3.50` or `/alerta 3.50`
-3️⃣ `⛽ Prices now` → cheapest station
+1️⃣ 5-digit ZIP → 80903
+2️⃣ Max price → 3.50 or /alert 3.50
+3️⃣ ⛽ Prices now → cheapest stations
 
-Also:
-/zona 80903 · /alerta 3.50 · /ahora
-/mis · /pausa · /activar · /borrar
-/es · /en
+Commands:
+/zip 80903 · /alert 3.50 · /now
+/status · /pause · /resume · /delete
+/es · /en  (language)
 
 App: gasradarapp.com
 """
+
+# Mensajes i18n (es / en)
+_MSG: dict[str, dict[str, str]] = {
+    "empty_text": {
+        "es": "Escribe un ZIP (80903) o toca un botón 👇",
+        "en": "Type a ZIP (80903) or tap a button 👇",
+    },
+    "welcome": {
+        "es": (
+            "¡Hola! ⛽ Soy GasRadar.\n\n"
+            "Te ayudo a ver la gasolina más barata y a avisarte si baja.\n\n"
+            "👉 Escribe tu ZIP (ej. 80903)\n"
+            "o toca un botón abajo."
+        ),
+        "en": (
+            "Hi! ⛽ I'm GasRadar.\n\n"
+            "I show the cheapest gas nearby and can alert you when it drops.\n\n"
+            "👉 Type your ZIP (e.g. 80903)\n"
+            "or tap a button below."
+        ),
+    },
+    "ask_zip": {
+        "es": "📍 Escribe tu ZIP de 5 dígitos\nEjemplo: 80903",
+        "en": "📍 Type your 5-digit ZIP\nExample: 80903",
+    },
+    "need_zip_first": {
+        "es": "Primero pon tu ZIP (ej. 80903), luego el tope (ej. 3.50)",
+        "en": "First set your ZIP (e.g. 80903), then max price (e.g. 3.50)",
+    },
+    "ask_max": {
+        "es": "🔔 Zona {zip}.\nEscribe el precio tope, ej: 3.50\n(Te aviso si baja de ese precio)",
+        "en": "🔔 Zone {zip}.\nType max price, e.g. 3.50\n(I'll alert if gas goes under that)",
+    },
+    "lang_en": {"es": "Language: English ✅", "en": "Language: English ✅"},
+    "lang_es": {"es": "Idioma: español ✅", "en": "Idioma: español ✅"},
+    "paused": {
+        "es": "⏸️ Alerta pausada. /activar para reanudar",
+        "en": "⏸️ Alert paused. /resume to turn back on",
+    },
+    "resumed": {"es": "▶️ Alerta activa.", "en": "▶️ Alert ON."},
+    "deleted": {
+        "es": "🗑️ Alerta eliminada. Escribe un ZIP para empezar de nuevo.",
+        "en": "🗑️ Alert removed. Type a ZIP to start again.",
+    },
+    "need_zip_prices": {
+        "es": "📍 Primero tu ZIP.\nEscribe ej: 80903",
+        "en": "📍 First set your ZIP.\nType e.g. 80903",
+    },
+    "searching": {
+        "es": "🔎 Buscando precios en {label}…",
+        "en": "🔎 Searching prices in {label}…",
+    },
+    "timeout": {
+        "es": "⏱️ Tardó mucho. Prueba otra vez ⛽ o abre:\n{url}",
+        "en": "⏱️ Timed out. Try ⛽ again or open:\n{url}",
+    },
+    "search_fail": {
+        "es": "No pude buscar ahora ({err}).\nAbre la app: {url}",
+        "en": "Search failed ({err}).\nOpen the app: {url}",
+    },
+    "bad_zip": {
+        "es": "ZIP de 5 dígitos, ej: 80903",
+        "en": "5-digit ZIP, e.g. 80903",
+    },
+    "zip_not_found": {
+        "es": "ZIP {zip} no encontrado. Prueba otro.",
+        "en": "ZIP {zip} not found. Try another.",
+    },
+    "bad_price": {
+        "es": "Ejemplo de tope: 3.50",
+        "en": "Example max: 3.50",
+    },
+    "price_range": {
+        "es": "Precio entre $1 y $12.",
+        "en": "Price between $1 and $12.",
+    },
+    "unknown": {
+        "es": (
+            "No entendí 😅\n\n"
+            "• ZIP: 80903\n"
+            "• Tope: 3.50\n"
+            "• O toca ⛽ Precios ahora\n"
+            "• Idioma: /en o /es"
+        ),
+        "en": (
+            "Didn't get that 😅\n\n"
+            "• ZIP: 80903\n"
+            "• Max: 3.50\n"
+            "• Or tap ⛽ Prices now\n"
+            "• Language: /en or /es"
+        ),
+    },
+    "no_prices": {
+        "es": (
+            "Sin precios en {label} ahora.\n"
+            "Prueba de nuevo en unos segundos, sube el radio (/radio 10)\n"
+            "o abre la app:\n{url}"
+        ),
+        "en": (
+            "No prices in {label} right now.\n"
+            "Try again in a few seconds, widen radius (/radius 10)\n"
+            "or open the app:\n{url}"
+        ),
+    },
+}
+
+
+def _t(key: str, lang: str, **kwargs: Any) -> str:
+    block = _MSG.get(key) or {}
+    text = block.get("en" if lang == "en" else "es") or block.get("es") or key
+    if kwargs:
+        try:
+            return text.format(**kwargs)
+        except Exception:
+            return text
+    return text
 
 
 def _lang(chat_id: str | int) -> str:
     row = get_alert(chat_id)
-    if row and row.get("lang") == "en":
+    if row and str(row.get("lang") or "").lower().startswith("en"):
         return "en"
+    return "es"
+
+
+def _detect_lang(language_code: str | None) -> str:
+    """Mapea language_code de Telegram a es/en."""
+    lc = (language_code or "").lower().replace("_", "-")
+    if not lc:
+        return "es"
+    if lc.startswith("en"):
+        return "en"
+    # es, es-MX, es-ES, pt, fr… → español por defecto (comunidad GasRadar)
     return "es"
 
 
@@ -294,9 +425,36 @@ def _money(p: float | None) -> str:
     return f"${float(p):.2f}"
 
 
+def _is_live_price(station: dict) -> bool:
+    src = (
+        station.get("price_source")
+        or station.get("source")
+        or ""
+    )
+    src = str(src).lower()
+    if src in ("gasbuddy", "user", "live", "vps", "report"):
+        return True
+    prices = station.get("prices") or {}
+    if isinstance(prices, dict):
+        for v in prices.values():
+            if isinstance(v, dict) and str(v.get("source") or "").lower() in (
+                "gasbuddy",
+                "user",
+                "live",
+                "vps",
+            ):
+                return True
+    return False
+
+
 def _map_button(text: str, lang: str) -> tuple[str, str] | None:
-    """Convierte texto de botón en comando."""
+    """Convierte texto de botón en comando (ES y EN, independientes del idioma guardado)."""
     t = (text or "").strip().lower()
+    # Idioma
+    if t in ("🌐 english", "english", "idioma english", "language english"):
+        return "/en", ""
+    if t in ("🌐 español", "español", "espanol", "idioma español", "language español"):
+        return "/es", ""
     # ES
     if t in ("⛽ precios ahora", "precios ahora", "precios", "ahora"):
         return "/ahora", ""
@@ -306,7 +464,7 @@ def _map_button(text: str, lang: str) -> tuple[str, str] | None:
         return "/pedir_alerta", ""
     if t in ("⚙️ estado", "estado", "mis", "config"):
         return "/mis", ""
-    if t in ("❓ ayuda", "ayuda", "help"):
+    if t in ("❓ ayuda", "ayuda"):
         return "/help", ""
     # EN
     if t in ("⛽ prices now", "prices now", "prices", "now"):
@@ -317,7 +475,7 @@ def _map_button(text: str, lang: str) -> tuple[str, str] | None:
         return "/pedir_alerta", ""
     if t in ("⚙️ status", "status"):
         return "/mis", ""
-    if t in ("❓ help",):
+    if t in ("❓ help", "help"):
         return "/help", ""
     return None
 
@@ -330,14 +488,17 @@ def _format_now(data: dict, lang: str) -> str:
     label = center.get("label") or center.get("zip") or "—"
     zip_c = center.get("zip") or ""
     cached = " ⚡" if data.get("cached") else ""
+    live_flag = bool(data.get("live_prices"))
+    stations = list(data.get("stations") or [])
 
+    if (not best or best.get("price") is None) and stations:
+        best = stations[0]
     if not best or best.get("price") is None:
-        return (
-            f"Sin precios claros en {label}.\n"
-            f"Prueba otro ZIP o abre la app:\n{APP_URL}/?zip={zip_c}"
-            if lang != "en"
-            else f"No clear prices in {label}.\n"
-            f"Try another ZIP or open the app:\n{APP_URL}/?zip={zip_c}"
+        return _t(
+            "no_prices",
+            lang,
+            label=label,
+            url=f"{APP_URL}/?zip={zip_c}" if zip_c else APP_URL,
         )
 
     price = best.get("price")
@@ -351,29 +512,78 @@ def _format_now(data: dict, lang: str) -> str:
         )
     app = f"{APP_URL}/?zip={zip_c}" if zip_c else APP_URL
     save = best.get("savings_vs_avg")
+    best_live = _is_live_price(best) or live_flag
 
     if lang == "en":
+        src_tag = "🟢 live" if best_live else "🟡 estimate"
         lines = [
             f"⛽ GasRadar · {label}{cached}",
-            f"Cheapest ({fuel}): {_money(price)}",
+            f"Cheapest ({fuel}): {_money(price)}  {src_tag}",
             f"★ {name}" + (f" · ~{float(dist):.1f} mi" if dist is not None else ""),
         ]
         if save is not None and float(save) > 0.01:
             lines.append(f"💰 ~{_money(float(save))}/gal under area avg")
-        lines.append(f"{n} stations")
+        # Top 3
+        extras = []
+        for s in stations[:3]:
+            if s is best or (
+                s.get("name") == name and s.get("price") == price
+            ):
+                continue
+            if s.get("price") is None:
+                continue
+            tag = "🟢" if _is_live_price(s) else "🟡"
+            d = s.get("distance_mi")
+            extras.append(
+                f"{tag} {_money(s.get('price'))} · {s.get('name') or '—'}"
+                + (f" · ~{float(d):.1f} mi" if d is not None else "")
+            )
+            if len(extras) >= 2:
+                break
+        if extras:
+            lines.append("")
+            lines.append("Also nearby:")
+            lines.extend(extras)
+        lines.append("")
+        lines.append(f"{n} station(s)" + (" · live prices" if live_flag else " · ref. prices"))
         if maps:
             lines.append(f"📍 Directions:\n{maps}")
         lines.append(f"🌐 App: {app}")
         lines.append("\n🔔 Alert: type e.g. 3.50")
     else:
+        src_tag = "🟢 en vivo" if best_live else "🟡 estimado"
         lines = [
             f"⛽ GasRadar · {label}{cached}",
-            f"Más barata ({fuel}): {_money(price)}",
+            f"Más barata ({fuel}): {_money(price)}  {src_tag}",
             f"★ {name}" + (f" · ~{float(dist):.1f} mi" if dist is not None else ""),
         ]
         if save is not None and float(save) > 0.01:
             lines.append(f"💰 Ahorras ~{_money(float(save))}/gal vs promedio")
-        lines.append(f"{n} estaciones")
+        extras = []
+        for s in stations[:3]:
+            if s is best or (
+                s.get("name") == name and s.get("price") == price
+            ):
+                continue
+            if s.get("price") is None:
+                continue
+            tag = "🟢" if _is_live_price(s) else "🟡"
+            d = s.get("distance_mi")
+            extras.append(
+                f"{tag} {_money(s.get('price'))} · {s.get('name') or '—'}"
+                + (f" · ~{float(d):.1f} mi" if d is not None else "")
+            )
+            if len(extras) >= 2:
+                break
+        if extras:
+            lines.append("")
+            lines.append("Cerca también:")
+            lines.extend(extras)
+        lines.append("")
+        lines.append(
+            f"{n} estación(es)"
+            + (" · precios en vivo" if live_flag else " · precios de referencia")
+        )
         if maps:
             lines.append(f"📍 Cómo llegar:\n{maps}")
         lines.append(f"🌐 App: {app}")
@@ -394,21 +604,16 @@ def handle_update(update: dict) -> None:
     # Respuesta rápida: typing ya (Render free a veces tarda al despertar)
     send_typing(chat_id)
 
-    # Idioma del usuario de Telegram la primera vez
+    # Idioma: primera vez desde language_code de Telegram; luego preferencia guardada
     from_user = msg.get("from") or {}
-    lc = (from_user.get("language_code") or "").lower()
     row0 = get_alert(chat_id)
-    if not row0 and lc.startswith("en"):
-        upsert_alert(chat_id, lang="en")
+    if not row0:
+        detected = _detect_lang(from_user.get("language_code"))
+        upsert_alert(chat_id, lang=detected)
 
     text = (msg.get("text") or "").strip()
     if not text:
-        send_message(
-            chat_id,
-            "Escribe un ZIP (80903) o toca un botón 👇"
-            if _lang(chat_id) != "en"
-            else "Type a ZIP (80903) or tap a button 👇",
-        )
+        send_message(chat_id, _t("empty_text", _lang(chat_id)), lang=_lang(chat_id))
         return
 
     lang = _lang(chat_id)
@@ -425,73 +630,61 @@ def handle_update(update: dict) -> None:
         payload = (arg or "").strip()
         if payload.startswith("zip_"):
             payload = payload[4:]
+        # /start puede traer idioma si el usuario no tenía fila (ya se creó arriba)
         if re.fullmatch(r"\d{5}", payload):
             _cmd_zona(chat_id, payload, lang, auto_prices=True)
             return
-        welcome = (
-            "¡Hola! ⛽ Soy *GasRadar*.\n\n"
-            "Te ayudo a ver la gasolina más barata y a avisarte si baja.\n\n"
-            "👉 Escribe tu *ZIP* (ej. 80903)\n"
-            "o toca un botón abajo."
-            if lang != "en"
-            else "Hi! ⛽ I'm *GasRadar*.\n\n"
-            "I show the cheapest gas nearby and can alert you when it drops.\n\n"
-            "👉 Type your *ZIP* (e.g. 80903)\n"
-            "or tap a button below."
+        help_txt = HELP_EN if lang == "en" else HELP_ES
+        send_message(
+            chat_id,
+            _t("welcome", lang) + "\n\n" + help_txt,
+            lang=lang,
         )
-        # Telegram no parsea markdown a menos que parse_mode; enviamos sin *
-        welcome = welcome.replace("*", "")
-        send_message(chat_id, welcome + "\n\n" + (HELP_ES if lang != "en" else HELP_EN).replace("*", ""), lang=lang)
         return
 
     if cmd in ("/help", "/ayuda"):
         send_message(
             chat_id,
-            (HELP_ES if lang != "en" else HELP_EN).replace("*", ""),
+            HELP_EN if lang == "en" else HELP_ES,
             lang=lang,
         )
         return
 
     if cmd == "/pedir_zip":
-        send_message(
-            chat_id,
-            "📍 Escribe tu ZIP de 5 dígitos\nEjemplo: 80903"
-            if lang != "en"
-            else "📍 Type your 5-digit ZIP\nExample: 80903",
-            lang=lang,
-        )
+        send_message(chat_id, _t("ask_zip", lang), lang=lang)
         return
 
     if cmd == "/pedir_alerta":
         row = get_alert(chat_id)
         z = (row or {}).get("zip")
         if not z:
-            send_message(
-                chat_id,
-                "Primero pon tu ZIP (ej. 80903), luego el tope (ej. 3.50)"
-                if lang != "en"
-                else "First set your ZIP (e.g. 80903), then max price (e.g. 3.50)",
-                lang=lang,
-            )
+            send_message(chat_id, _t("need_zip_first", lang), lang=lang)
             return
-        send_message(
-            chat_id,
-            f"🔔 Zona {z}.\nEscribe el precio tope, ej: 3.50\n"
-            f"(Te aviso si baja de ese precio)"
-            if lang != "en"
-            else f"🔔 Zone {z}.\nType max price, e.g. 3.50\n"
-            f"(I'll alert if gas goes under that)",
-            lang=lang,
-        )
+        send_message(chat_id, _t("ask_max", lang, zip=z), lang=lang)
         return
 
-    if cmd in ("/en",):
+    if cmd in ("/en", "/english", "/lang_en"):
         upsert_alert(chat_id, lang="en")
-        send_message(chat_id, "Language: English ✅", lang="en")
+        send_message(chat_id, _t("lang_en", "en"), lang="en")
         return
-    if cmd in ("/es",):
+    if cmd in ("/es", "/espanol", "/español", "/lang_es"):
         upsert_alert(chat_id, lang="es")
-        send_message(chat_id, "Idioma: español ✅", lang="es")
+        send_message(chat_id, _t("lang_es", "es"), lang="es")
+        return
+    if cmd in ("/lang", "/idioma", "/language"):
+        arg_l = (arg or "").strip().lower()
+        if arg_l.startswith("en"):
+            upsert_alert(chat_id, lang="en")
+            send_message(chat_id, _t("lang_en", "en"), lang="en")
+        elif arg_l.startswith("es"):
+            upsert_alert(chat_id, lang="es")
+            send_message(chat_id, _t("lang_es", "es"), lang="es")
+        else:
+            send_message(
+                chat_id,
+                "Language / Idioma:\n/en · English\n/es · Español",
+                lang=lang,
+            )
         return
 
     if cmd in ("/zona", "/zip", "/city", "/ciudad"):
@@ -516,33 +709,17 @@ def handle_update(update: dict) -> None:
 
     if cmd in ("/pausa", "/pause", "/stop"):
         upsert_alert(chat_id, active=0)
-        send_message(
-            chat_id,
-            "⏸️ Alerta pausada. /activar para reanudar"
-            if lang != "en"
-            else "⏸️ Alert paused. /activar to resume",
-            lang=lang,
-        )
+        send_message(chat_id, _t("paused", lang), lang=lang)
         return
 
     if cmd in ("/activar", "/resume", "/on"):
         upsert_alert(chat_id, active=1)
-        send_message(
-            chat_id,
-            "▶️ Alerta activa." if lang != "en" else "▶️ Alert ON.",
-            lang=lang,
-        )
+        send_message(chat_id, _t("resumed", lang), lang=lang)
         return
 
     if cmd in ("/borrar", "/delete", "/remove"):
         delete_alert(chat_id)
-        send_message(
-            chat_id,
-            "🗑️ Alerta eliminada. Escribe un ZIP para empezar de nuevo."
-            if lang != "en"
-            else "🗑️ Alert removed. Type a ZIP to start again.",
-            lang=lang,
-        )
+        send_message(chat_id, _t("deleted", lang), lang=lang)
         return
 
     if cmd in ("/ahora", "/now", "/precios", "/prices"):
@@ -560,19 +737,7 @@ def handle_update(update: dict) -> None:
         _cmd_alerta(chat_id, m.group(1), lang)
         return
 
-    send_message(
-        chat_id,
-        "No entendí 😅\n\n"
-        "• ZIP: 80903\n"
-        "• Tope: 3.50\n"
-        "• O toca ⛽ Precios ahora"
-        if lang != "en"
-        else "Didn't get that 😅\n\n"
-        "• ZIP: 80903\n"
-        "• Max: 3.50\n"
-        "• Or tap ⛽ Prices now",
-        lang=lang,
-    )
+    send_message(chat_id, _t("unknown", lang), lang=lang)
 
 
 def _cmd_zona(
@@ -583,23 +748,11 @@ def _cmd_zona(
         raw = raw[4:]
     digits = re.sub(r"\D", "", raw)[:5]
     if len(digits) != 5:
-        send_message(
-            chat_id,
-            "ZIP de 5 dígitos, ej: 80903"
-            if lang != "en"
-            else "5-digit ZIP, e.g. 80903",
-            lang=lang,
-        )
+        send_message(chat_id, _t("bad_zip", lang), lang=lang)
         return
     g = geocode_zip(digits)
     if not g:
-        send_message(
-            chat_id,
-            f"ZIP {digits} no encontrado. Prueba otro."
-            if lang != "en"
-            else f"ZIP {digits} not found. Try another.",
-            lang=lang,
-        )
+        send_message(chat_id, _t("zip_not_found", lang, zip=digits), lang=lang)
         return
     label = g.get("label") or digits
     upsert_alert(chat_id, zip=digits, label=label, active=1)
@@ -631,18 +784,10 @@ def _cmd_alerta(chat_id: int, arg: str, lang: str) -> None:
     try:
         price = float(raw)
     except Exception:
-        send_message(
-            chat_id,
-            "Ejemplo de tope: 3.50" if lang != "en" else "Example max: 3.50",
-            lang=lang,
-        )
+        send_message(chat_id, _t("bad_price", lang), lang=lang)
         return
     if price < 1.0 or price > 12.0:
-        send_message(
-            chat_id,
-            "Precio entre $1 y $12." if lang != "en" else "Price between $1 and $12.",
-            lang=lang,
-        )
+        send_message(chat_id, _t("price_range", lang), lang=lang)
         return
     row = get_alert(chat_id)
     if not row or not row.get("zip"):
@@ -660,12 +805,12 @@ def _cmd_alerta(chat_id: int, arg: str, lang: str) -> None:
         chat_id,
         f"✅ Alerta activa en {row.get('zip')}\n"
         f"Te aviso si el más barato baja de {_money(price)}\n"
-        f"(Máx. 1 aviso al día · necesita cron en el servidor)\n\n"
+        f"(Máx. 1 aviso al día)\n\n"
         f"Toca ⛽ Precios ahora para ver el precio actual"
         if lang != "en"
         else f"✅ Alert ON for {row.get('zip')}\n"
         f"I'll notify if cheapest goes under {_money(price)}\n"
-        f"(Max 1 alert/day · server cron required)\n\n"
+        f"(Max 1 alert/day)\n\n"
         f"Tap ⛽ Prices now for current price",
         lang=lang,
     )
@@ -674,7 +819,13 @@ def _cmd_alerta(chat_id: int, arg: str, lang: str) -> None:
 def _cmd_fuel(chat_id: int, arg: str, lang: str) -> None:
     fuel = (arg or "regular").strip().lower()
     if fuel not in ("regular", "mid", "premium", "diesel"):
-        send_message(chat_id, "Usa: /fuel regular|mid|premium|diesel", lang=lang)
+        send_message(
+            chat_id,
+            "Usa: /fuel regular|mid|premium|diesel"
+            if lang != "en"
+            else "Use: /fuel regular|mid|premium|diesel",
+            lang=lang,
+        )
         return
     upsert_alert(chat_id, fuel=fuel)
     send_message(
@@ -688,7 +839,11 @@ def _cmd_radio(chat_id: int, arg: str, lang: str) -> None:
     try:
         r = float((arg or "5").strip())
     except Exception:
-        send_message(chat_id, "Ej: /radio 5", lang=lang)
+        send_message(
+            chat_id,
+            "Ej: /radio 5" if lang != "en" else "E.g. /radius 5",
+            lang=lang,
+        )
         return
     r = max(1.0, min(25.0, r))
     upsert_alert(chat_id, radius_mi=r)
@@ -702,23 +857,15 @@ def _cmd_radio(chat_id: int, arg: str, lang: str) -> None:
 def _cmd_ahora(chat_id: int, lang: str) -> None:
     row = get_alert(chat_id)
     if not row or not row.get("zip"):
-        send_message(
-            chat_id,
-            "📍 Primero tu ZIP.\nEscribe ej: 80903"
-            if lang != "en"
-            else "📍 First your ZIP.\nType e.g. 80903",
-            lang=lang,
-        )
+        send_message(chat_id, _t("need_zip_prices", lang), lang=lang)
         return
 
-    send_message(
-        chat_id,
-        f"🔎 Buscando en {row.get('label') or row.get('zip')}…"
-        if lang != "en"
-        else f"🔎 Searching {row.get('label') or row.get('zip')}…",
-        lang=lang,
-    )
+    label = row.get("label") or row.get("zip")
+    send_message(chat_id, _t("searching", lang, label=label), lang=lang)
     send_typing(chat_id)
+
+    zip_c = str(row.get("zip") or "")
+    app_url = f"{APP_URL}/?zip={zip_c}" if zip_c else APP_URL
 
     try:
         from concurrent.futures import ThreadPoolExecutor
@@ -727,10 +874,12 @@ def _cmd_ahora(chat_id: int, lang: str) -> None:
         from backend.search_core import run_search
 
         def _job():
+            # Radio un poco mayor si el usuario tiene 5: en bot ayuda a encontrar datos
+            radius = float(row.get("radius_mi") or 5)
             return run_search(
-                zip=str(row["zip"]),
+                zip=zip_c,
                 fuel=str(row.get("fuel") or "regular"),
-                radius_mi=float(row.get("radius_mi") or 5),
+                radius_mi=radius,
                 limit=12,
                 track=False,
                 quick=True,
@@ -739,18 +888,36 @@ def _cmd_ahora(chat_id: int, lang: str) -> None:
         with ThreadPoolExecutor(max_workers=1) as pool:
             fut = pool.submit(_job)
             try:
-                data = fut.result(timeout=18)
+                # VPS + OSM: hasta ~22s (antes 18 y a veces cortaba con datos en camino)
+                data = fut.result(timeout=22)
             except FuturesTimeout:
                 send_message(
                     chat_id,
-                    "⏱️ Tardó mucho. Prueba otra vez ⛽ o abre:\n"
-                    f"{APP_URL}/?zip={row.get('zip')}"
-                    if lang != "en"
-                    else "⏱️ Timed out. Try ⛽ again or open:\n"
-                    f"{APP_URL}/?zip={row.get('zip')}",
+                    _t("timeout", lang, url=app_url),
                     lang=lang,
                 )
                 return
+
+        # Si no hay precios con radio actual, un reintento silencioso con 10 mi
+        if (
+            isinstance(data, dict)
+            and not (data.get("cheapest") or {}).get("price")
+            and float(row.get("radius_mi") or 5) < 10
+        ):
+            send_typing(chat_id)
+            try:
+                data2 = run_search(
+                    zip=zip_c,
+                    fuel=str(row.get("fuel") or "regular"),
+                    radius_mi=10.0,
+                    limit=12,
+                    track=False,
+                    quick=True,
+                )
+                if (data2.get("cheapest") or {}).get("price") is not None:
+                    data = data2
+            except Exception as e:
+                print(f"[telegram /ahora retry10] {type(e).__name__}: {e}")
 
         send_message(chat_id, _format_now(data, lang), lang=lang, disable_preview=True)
     except ValueError as e:
@@ -759,11 +926,7 @@ def _cmd_ahora(chat_id: int, lang: str) -> None:
         print(f"[telegram /ahora] {type(e).__name__}: {e}")
         send_message(
             chat_id,
-            f"No pude buscar ahora ({type(e).__name__}).\n"
-            f"Abre la app: {APP_URL}/?zip={row.get('zip')}"
-            if lang != "en"
-            else f"Search failed ({type(e).__name__}).\n"
-            f"Open the app: {APP_URL}/?zip={row.get('zip')}",
+            _t("search_fail", lang, err=type(e).__name__, url=app_url),
             lang=lang,
         )
 

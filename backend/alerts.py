@@ -202,7 +202,7 @@ def format_alert_summary(row: dict | None, lang: str = "es") -> str:
             "No tienes alerta configurada.\n"
             "Usa /zona 80903 y luego /alerta 3.50"
             if lang != "en"
-            else "No alert set.\nUse /zona 80903 then /alerta 3.50"
+            else "No alert set.\nUse /zip 80903 then /alert 3.50"
         )
     zip_c = row.get("zip") or "—"
     fuel = row.get("fuel") or "regular"
@@ -210,6 +210,7 @@ def format_alert_summary(row: dict | None, lang: str = "es") -> str:
     mx = row.get("max_price")
     active = int(row.get("active") or 0) == 1
     label = row.get("label") or ""
+    lang_label = "English" if str(row.get("lang") or "es").startswith("en") else "Español"
     if lang == "en":
         lines = [
             "Your GasRadar alert:",
@@ -218,8 +219,9 @@ def format_alert_summary(row: dict | None, lang: str = "es") -> str:
             f"• Radius: {radius} mi",
             f"• Max price: ${float(mx):.3f}" if mx else "• Max price: (not set)",
             f"• Status: {'ON' if active else 'PAUSED'}",
+            f"• Language: {lang_label}",
             "",
-            "Commands: /zona /alerta /fuel /ahora /pausa /activar /borrar",
+            "Commands: /zip /alert /fuel /now /pause /resume /delete /en /es",
         ]
     else:
         lines = [
@@ -229,7 +231,8 @@ def format_alert_summary(row: dict | None, lang: str = "es") -> str:
             f"• Radio: {radius} mi",
             f"• Precio tope: ${float(mx):.3f}" if mx else "• Precio tope: (sin definir)",
             f"• Estado: {'ACTIVA' if active else 'PAUSADA'}",
+            f"• Idioma: {lang_label}",
             "",
-            "Comandos: /zona /alerta /fuel /ahora /pausa /activar /borrar",
+            "Comandos: /zona /alerta /fuel /ahora /pausa /activar /borrar /es /en",
         ]
     return "\n".join(lines)
