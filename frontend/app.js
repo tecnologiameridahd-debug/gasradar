@@ -60,7 +60,8 @@ const I18N = {
     eiaBadge: "prom. sem.",
     eiaChipLabel: "prom. sem.",
     reported: "reportado",
-    estimated: "estimado",
+    estimated: "referencia",
+    livePrice: "en vivo",
     reportedPrice: "precio reportado",
     saveVsAvg: (p) => `Ahorras ~${p}/gal vs promedio`,
     overAvg: (p) => `${p}/gal sobre el promedio`,
@@ -168,7 +169,8 @@ const I18N = {
     eiaBadge: "wk avg",
     eiaChipLabel: "wk avg",
     reported: "reported",
-    estimated: "estimated",
+    estimated: "reference",
+    livePrice: "live",
     reportedPrice: "reported price",
     saveVsAvg: (p) => `Save ~${p}/gal vs average`,
     overAvg: (p) => `${p}/gal above average`,
@@ -627,16 +629,42 @@ function hideStatus() {
   if (sk) sk.hidden = true;
 }
 
+function isLivePriceSource(src) {
+  const s = String(src || "").toLowerCase();
+  // Precios reales de bomba (VPS / GasBuddy / reportes de usuarios)
+  return (
+    s === "gasbuddy" ||
+    s === "vps" ||
+    s === "user" ||
+    s.includes("gasbuddy") ||
+    s.includes("live")
+  );
+}
+
 function sourceBadgeHtml(s) {
-  if (s.price_source === "user") {
+  const src = String(s.price_source || s.source || "").toLowerCase();
+  // Reportes de la comunidad
+  if (src === "user") {
     const n = s.reports_count ? ` · ${s.reports_count}` : "";
     const age = s.price_age_hours != null ? ` · ${s.price_age_hours}h` : "";
-    return `<span class="badge user">${t("reported")}${n}${age}</span>`;
+    return `<span class="badge user" title="${escapeHtml(
+      state.lang === "en" ? "Price reported by users" : "Precio reportado por usuarios"
+    )}">${t("reported")}${n}${age}</span>`;
   }
-  if (s.price_source === "gasbuddy") {
-    return `<span class="badge eia">${state.lang === "en" ? "live" : "en vivo"}</span>`;
+  // En vivo = datos reales (GasBuddy vía VPS), NO promedios AAA/EIA
+  if (isLivePriceSource(src)) {
+    return `<span class="badge eia" title="${escapeHtml(
+      state.lang === "en"
+        ? "Live station price from our feed"
+        : "Precio en vivo de la estación (fuente en tiempo real)"
+    )}">${t("livePrice")}</span>`;
   }
-  return `<span class="badge estimate">${t("estimated")}</span>`;
+  // AAA / EIA / ajustes: no son el precio de la bomba → "referencia", no "en vivo"
+  return `<span class="badge estimate" title="${escapeHtml(
+    state.lang === "en"
+      ? "Area reference average — not a live pump price"
+      : "Promedio de referencia de la zona — no es el precio de la bomba"
+  )}">${t("estimated")}</span>`;
 }
 
 /** Slug de logo local /static/brands/{slug}.svg — genérico si no hay marca */
@@ -1033,13 +1061,20 @@ function render(data) {
     $("#bestCard").hidden = false;
     $("#bestPrice").innerHTML = priceBoxHtml(b.price, { large: true });
     $("#bestName").textContent = b.name;
-    const conf = b.source === "user" ? t("reportedPrice") : t("estimated");
-    $("#bestMeta").textContent = `${b.distance_mi} mi · ${conf}`;
+    // cheapest del API usa "source"; la lista usa "price_source"
+    const src = b.price_source || b.source || "";
+    let confLabel = t("estimated");
+    if (String(src).toLowerCase() === "user") confLabel = t("reportedPrice");
+    else if (isLivePriceSource(src)) confLabel = t("livePrice");
+    $("#bestMeta").textContent = `${b.distance_mi} mi · ${confLabel}`;
     const badge = $("#bestSourceBadge");
     if (badge) {
-      if (b.source === "user") {
+      if (String(src).toLowerCase() === "user") {
         badge.textContent = t("reported");
         badge.className = "badge user";
+      } else if (isLivePriceSource(src)) {
+        badge.textContent = t("livePrice");
+        badge.className = "badge eia";
       } else {
         badge.textContent = t("estimated");
         badge.className = "badge estimate";
