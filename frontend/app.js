@@ -7,6 +7,7 @@ const I18N = {
   es: {
     subtitle: "Gasolina más barata cerca de ti",
     footerValue: "Gasolina más barata cerca de ti · compara por GPS o ZIP",
+    footerLegal: "© 2026 GasRadar LLC · gasradarapp.com",
     btnGps: "Usar mi ubicación",
     zipLabel: "Código ZIP",
     zipPlaceholder: "ZIP (ej. 80903)",
@@ -114,6 +115,7 @@ const I18N = {
   en: {
     subtitle: "Cheapest gas near you",
     footerValue: "Cheapest gas near you · search by GPS or ZIP",
+    footerLegal: "© 2026 GasRadar LLC · gasradarapp.com",
     btnGps: "Use my location",
     zipLabel: "ZIP code",
     zipPlaceholder: "ZIP (e.g. 80903)",

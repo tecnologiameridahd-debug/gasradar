@@ -1482,10 +1482,18 @@ button.btn-ghost:hover,
 }
 
 .footer-value {
-  margin: 4px 0 8px;
+  margin: 4px 0 4px;
   font-size: 0.74rem;
   color: var(--muted2);
   line-height: 1.35;
+}
+
+.footer-legal {
+  margin: 2px 0 10px;
+  font-size: 0.72rem;
+  color: var(--muted2);
+  letter-spacing: 0.01em;
+  opacity: 0.92;
 }
 
 .footer-links {
