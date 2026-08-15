@@ -168,12 +168,13 @@
       document.getElementById("kickerEn").textContent = (d.is_today ? "TODAY · " : "") + d.code + " · EN";
       document.getElementById("nameEs").textContent = d.city + ", " + d.state;
       document.getElementById("nameEn").textContent = d.city + ", " + d.state_en;
-      document.getElementById("priceEs").innerHTML = (d.price || "—") + "<span>Regular / galón</span>";
-      document.getElementById("priceEn").innerHTML = (d.price || "—") + "<span>Regular / gallon</span>";
-      document.getElementById("stationEs").textContent = d.station || "—";
-      document.getElementById("stationEn").textContent = d.station_en || d.station || "—";
-      document.getElementById("metaEs").textContent = [d.miles, d.address].filter(Boolean).join(" · ");
-      document.getElementById("metaEn").textContent = [d.miles, d.address].filter(Boolean).join(" · ");
+      const hasLive = d.live && d.price && d.price !== "—";
+      document.getElementById("priceEs").innerHTML = (hasLive ? d.price : "…") + "<span>Regular / galón</span>";
+      document.getElementById("priceEn").innerHTML = (hasLive ? d.price : "…") + "<span>Regular / gallon</span>";
+      document.getElementById("stationEs").textContent = hasLive ? (d.station || "—") : "Buscando precio…";
+      document.getElementById("stationEn").textContent = hasLive ? (d.station_en || d.station || "—") : "Finding price…";
+      document.getElementById("metaEs").textContent = hasLive ? [d.miles, d.address].filter(Boolean).join(" · ") : "";
+      document.getElementById("metaEn").textContent = hasLive ? [d.miles, d.address].filter(Boolean).join(" · ") : "";
       document.getElementById("captionEs").value = d.caption_es || d.caption || "";
       document.getElementById("captionEn").value = d.caption_en || "";
       document.getElementById("open").href = d.app_link;
@@ -186,7 +187,7 @@
       sel.onchange = () => {
         location.href = reelUrl(sel.value);
       };
-      if (d.live && d.price && d.price !== "—") return;
+      if (hasLive) return;
       const pq = new URLSearchParams({ key, city: d.slug });
       try {
         const pr = await fetch("/api/reel/precio?" + pq.toString());

@@ -131,26 +131,6 @@ def _from_search(data: dict | None) -> dict | None:
     }
 
 
-def _state_avg(code: str) -> dict | None:
-    try:
-        from backend.prices import price_meta
-
-        avg = (price_meta(code, fast=True) or {}).get("state_avg") or {}
-        price = _fmt_price(avg.get("regular"))
-        if price == "—":
-            return None
-        return {
-            "price": price,
-            "station": f"Promedio {code}",
-            "station_en": f"{code} average",
-            "miles": "",
-            "address": "",
-            "live": False,
-        }
-    except Exception:
-        return None
-
-
 def _pack_price(city: dict, st: dict, info: dict | None) -> dict:
     if not info:
         cap_es, cap_en = _captions(city, st, "—", "", "")
@@ -175,13 +155,13 @@ def _pack_price(city: dict, st: dict, info: dict | None) -> dict:
 
 
 def build_reel(slug: str | None = None) -> dict:
-    """Ciudad al instante. Usa cache o promedio del estado; el vivo se pide aparte."""
+    """Ciudad al instante. El precio de estación se pide en fill_price()."""
     from backend.search_core import peek_cached_search
 
     city = find_city(slug)
     st = STATE_BY_SLUG[city["state"]]
     prev_s, next_s = neighbors(city["slug"])
-    info = _cache_get(city["zip"]) or _from_search(peek_cached_search(city["zip"])) or _state_avg(st["code"])
+    info = _cache_get(city["zip"]) or _from_search(peek_cached_search(city["zip"]))
     packed = _pack_price(city, st, info)
     return {
         "today": date.today().isoformat(),
@@ -204,7 +184,7 @@ def build_reel(slug: str | None = None) -> dict:
 
 
 def fill_price(slug: str | None = None) -> dict:
-    """Precio: cache (instantáneo) o búsqueda viva con tope 8s."""
+    """Precio real de estación (GasBuddy). Espera hasta 20s."""
     import concurrent.futures
 
     from backend.search_core import peek_cached_search, run_search
@@ -224,18 +204,18 @@ def fill_price(slug: str | None = None) -> dict:
     def _search():
         return run_search(
             zip=city["zip"],
-            radius_mi=5.0,
+            radius_mi=8.0,
             fuel="regular",
-            limit=12,
+            limit=16,
             track=False,
-            quick=True,
+            quick=False,
         )
 
     error = None
     info = None
     try:
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            data = pool.submit(_search).result(timeout=8)
+            data = pool.submit(_search).result(timeout=20)
         info = _from_search(data)
     except Exception as e:
         error = str(e)[:180]
@@ -244,9 +224,8 @@ def fill_price(slug: str | None = None) -> dict:
         _cache_put(city["zip"], info)
         packed = _pack_price(city, st, info)
     else:
-        packed = _pack_price(city, st, _state_avg(st["code"]))
-        if packed["price"] == "—":
-            packed["station"] = "Abre la app para ver el precio"
-            packed["station_en"] = "Open the app to see the price"
+        packed = _pack_price(city, st, None)
+        packed["station"] = "Abre la app para ver el precio"
+        packed["station_en"] = "Open the app to see the price"
     packed["error"] = error
     return packed
