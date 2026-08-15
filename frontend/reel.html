@@ -4,7 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="robots" content="noindex,nofollow" />
-  <title>GasRadar — Reel del día</title>
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Reel GasRadar" />
+  <title>Reel diario · GasRadar</title>
   <link rel="icon" href="/static/favicon-32.png?v=0.2.9" type="image/png" />
   <style>
     :root { --bg:#070b14; --card:#10182a; --line:#243049; --text:#eef3ff; --muted:#9aabc7; --green:#22c55e; }
@@ -85,9 +88,14 @@
   </div>
   <script>
     const params = new URLSearchParams(location.search);
-    const key = params.get("key") || "";
+    const pathKey = (location.pathname.match(/^\/diario\/([^/]+)/) || [])[1] || "";
+    const key = decodeURIComponent(pathKey || params.get("key") || "");
+    function reelUrl(city) {
+      const base = key ? "/diario/" + encodeURIComponent(key) : "/reel";
+      return city ? base + "?city=" + encodeURIComponent(city) : base;
+    }
     if (!key) {
-      document.body.innerHTML = "<p style='padding:24px'>Falta ?key= tu STATS_KEY</p>";
+      document.body.innerHTML = "<p style='padding:24px'>Usa el link /diario/tu-clave</p>";
     } else {
       load();
     }
@@ -109,14 +117,14 @@
       document.getElementById("meta").textContent = [d.miles, d.address].filter(Boolean).join(" · ");
       document.getElementById("caption").value = d.caption;
       document.getElementById("open").href = d.app_link;
-      document.getElementById("prev").href = "/reel?key=" + encodeURIComponent(key) + "&city=" + d.prev;
-      document.getElementById("next").href = "/reel?key=" + encodeURIComponent(key) + "&city=" + d.next;
+      document.getElementById("prev").href = reelUrl(d.prev);
+      document.getElementById("next").href = reelUrl(d.next);
       const sel = document.getElementById("citySel");
       sel.innerHTML = d.cities.map(c =>
         `<option value="${c.slug}" ${c.slug===d.slug?"selected":""}>${c.name}</option>`
       ).join("");
       sel.onchange = () => {
-        location.href = "/reel?key=" + encodeURIComponent(key) + "&city=" + sel.value;
+        location.href = reelUrl(sel.value);
       };
       if (d.error) {
         document.getElementById("err").hidden = false;

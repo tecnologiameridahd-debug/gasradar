@@ -3,6 +3,7 @@ Allow: /
 Disallow: /api/
 Disallow: /stats
 Disallow: /reel
+Disallow: /diario/
 Disallow: /api/reel
 
 Sitemap: https://gasradarapp.com/sitemap.xml

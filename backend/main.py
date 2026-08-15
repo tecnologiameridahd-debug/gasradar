@@ -597,7 +597,9 @@ def api_reel(key: str | None = None, city: str | None = None):
 
 
 @app.get("/reel")
-def reel_page():
+@app.get("/diario/{key}")
+def reel_page(key: str | None = None):
+    """Página aparte para el Reel diario. Link fijo: /diario/STATS_KEY"""
     path = FRONTEND / "reel.html"
     if not path.exists():
         raise HTTPException(404, "Reel missing")
