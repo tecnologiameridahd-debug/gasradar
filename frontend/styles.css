@@ -1581,6 +1581,26 @@ button.btn-ghost:hover,
   margin: 20px 0 8px !important;
   text-align: center;
 }
+.place-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+  margin: 12px 0 18px;
+}
+.place-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line-soft);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  text-decoration: none;
+}
+.place-chip:hover { border-color: #22c55e; }
+.place-chip span { font-size: 0.75rem; color: var(--muted, #9aabc7); }
+.place-list { margin: 0 0 14px; padding-left: 1.2rem; }
 .btn-blog {
   display: inline-flex;
   align-items: center;

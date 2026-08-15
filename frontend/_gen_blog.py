@@ -818,6 +818,16 @@ def build_sitemap() -> None:
     ]
     for p in POSTS:
         urls.append((f"/blog/{p['slug']}", p["date"]))
+    gas = ROOT / "gas"
+    if (gas / "index.html").is_file():
+        urls.append(("/gas", "2026-08-15"))
+    if gas.is_dir():
+        for state_dir in sorted(p for p in gas.iterdir() if p.is_dir()):
+            urls.append((f"/gas/{state_dir.name}", "2026-08-15"))
+            for city in sorted(state_dir.glob("*.html")):
+                if city.name == "index.html":
+                    continue
+                urls.append((f"/gas/{state_dir.name}/{city.stem}", "2026-08-15"))
     # XML limpio UTF-8 sin BOM; URLs absolutas https sin www
     lines = [
         '<?xml version="1.0" encoding="UTF-8"?>',

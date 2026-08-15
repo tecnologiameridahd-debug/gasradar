@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b1220" />
+  <title>Gasolina en Maine (ME) | GasRadar</title>
+  <meta name="description" content="Precios de gasolina en Maine. Nueva Inglaterra + turismo costero. Portland es más caro que el interior (Lewiston, Augusta)." />
+  <meta name="robots" content="index, follow" />
+  <meta name="geo.region" content="US" />
+  <link rel="canonical" href="https://gasradarapp.com/gas/maine" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="GasRadar" />
+  <meta property="og:title" content="Gasolina en Maine (ME) | GasRadar" />
+  <meta property="og:description" content="Precios de gasolina en Maine. Nueva Inglaterra + turismo costero. Portland es más caro que el interior (Lewiston, Augusta)." />
+  <meta property="og:url" content="https://gasradarapp.com/gas/maine" />
+  <meta property="og:image" content="https://gasradarapp.com/static/logo-512.png?v=0.5.0" />
+  <meta property="og:locale" content="es_US" />
+  <meta property="og:locale:alternate" content="en_US" />
+  <link rel="icon" href="/static/favicon-32.png?v=0.2.9" type="image/png" />
+  <link rel="stylesheet" href="/static/styles.css?v=0.9.43" />
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebPage",
+  "name": "Gasolina en Maine (ME) | GasRadar",
+  "description": "Precios de gasolina en Maine. Nueva Inglaterra + turismo costero. Portland es más caro que el interior (Lewiston, Augusta).",
+  "url": "https://gasradarapp.com/gas/maine",
+  "inLanguage": [
+    "es-US",
+    "en-US"
+  ],
+  "isPartOf": {
+    "@type": "WebSite",
+    "name": "GasRadar",
+    "url": "https://gasradarapp.com/"
+  },
+  "about": {
+    "@type": "Thing",
+    "name": "US gasoline prices"
+  }
+}
+  </script>
+</head>
+<body>
+  <div class="app privacy-page blog-page">
+    <header class="top">
+      <div class="brand">
+        <a href="/" class="logo-link" title="GasRadar">
+          <img class="logo" src="/static/logo.svg?v=0.2.9" width="48" height="48" alt="GasRadar" />
+        </a>
+        <div class="brand-text">
+          <h1><span class="brand-gas">Gas</span><span class="brand-radar">Radar</span></h1>
+          <p class="subtitle" id="blogSub">Gasolina</p>
+        </div>
+      </div>
+      <div class="lang-switch" role="group" aria-label="Language">
+        <button type="button" class="lang-btn active" id="btnLangEs" data-lang="es">ES</button>
+        <button type="button" class="lang-btn" id="btnLangEn" data-lang="en">EN</button>
+      </div>
+    </header>
+
+    <nav class="blog-nav card" aria-label="Places">
+      <a href="/gas" id="navPlaces">Ciudades y estados</a>
+      <span class="footer-sep">·</span>
+      <a href="/">App</a>
+      <span class="footer-sep">·</span>
+      <a href="/blog">Blog</a>
+    </nav>
+
+    <section class="card privacy-card blog-card" id="contentEs">
+      
+        <p class="privacy-meta"><a href="/gas">Ciudades y estados</a> · ME</p>
+        <h2>Gasolina en Maine</h2>
+        <p>Maine suele estar <strong>por encima del promedio nacional</strong>. Nueva Inglaterra + turismo costero. Portland es más caro que el interior (Lewiston, Augusta).</p>
+        <p>Marcas que suelen competir aquí: Irving, Cumberland Farms, Costco. Abre GasRadar con un ZIP de la ciudad y compara Regular, Premium y diésel en el momento.</p>
+        <h3>Ciudades</h3><ul class='place-list'><li><a href="/gas/maine/portland-me">Portland</a> · ZIP 04101</li></ul>
+        <p class="blog-cta"><a class="btn-blog" href="/?zip=04101">Ver precios cerca en Maine</a></p>
+        <h3>Estados cerca</h3><ul class='place-list'><li><a href="/gas/new-hampshire">Nuevo Hampshire</a></li></ul>
+        
+    </section>
+    <section class="card privacy-card blog-card" id="contentEn" hidden>
+      
+        <p class="privacy-meta"><a href="/gas">Cities and states</a> · ME</p>
+        <h2>Gas prices in Maine</h2>
+        <p>Maine is usually <strong>above the national average</strong>. New England plus coastal tourism. Portland is pricier than inland (Lewiston, Augusta).</p>
+        <p>Brands that often compete here: Irving, Cumberland Farms, Costco. Open GasRadar with a city ZIP and compare Regular, Premium, and diesel right now.</p>
+        <h3>Cities</h3><ul class='place-list'><li><a href="/gas/maine/portland-me">Portland</a> · ZIP 04101</li></ul>
+        <p class="blog-cta"><a class="btn-blog" href="/?zip=04101">See prices near you in Maine</a></p>
+        <h3>Nearby states</h3><ul class='place-list'><li><a href="/gas/new-hampshire">New Hampshire</a></li></ul>
+        
+    </section>
+
+    <footer class="site-footer">
+      <div><strong>GasRadar</strong> · USA · 50 states + D.C.</div>
+      <p class="footer-legal">© 2026 GasRadar LLC · gasradarapp.com</p>
+      <div class="footer-links">
+        <a href="/gas">Ciudades</a>
+        <span class="footer-sep">·</span>
+        <a href="/blog">Blog</a>
+        <span class="footer-sep">·</span>
+        <a href="/privacy">Privacidad</a>
+      </div>
+    </footer>
+  </div>
+  <script>
+    const LANG_KEY = "gasradar_lang";
+    function loadLang() {
+      try {
+        const s = localStorage.getItem(LANG_KEY);
+        if (s === "en" || s === "es") return s;
+      } catch (_) {}
+      return (navigator.language || "es").toLowerCase().startsWith("en") ? "en" : "es";
+    }
+    function setLang(lang) {
+      try { localStorage.setItem(LANG_KEY, lang); } catch (_) {}
+      document.documentElement.lang = lang;
+      document.getElementById("contentEs").hidden = lang !== "es";
+      document.getElementById("contentEn").hidden = lang !== "en";
+      document.getElementById("btnLangEs").classList.toggle("active", lang === "es");
+      document.getElementById("btnLangEn").classList.toggle("active", lang === "en");
+      document.getElementById("blogSub").textContent = lang === "en" ? "Gas prices" : "Gasolina";
+      const nav = document.getElementById("navPlaces");
+      if (nav) nav.textContent = lang === "en" ? "Cities and states" : "Ciudades y estados";
+    }
+    document.getElementById("btnLangEs").onclick = () => setLang("es");
+    document.getElementById("btnLangEn").onclick = () => setLang("en");
+    setLang(loadLang());
+  </script>
+</body>
+</html>

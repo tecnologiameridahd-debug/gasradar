@@ -33,6 +33,7 @@ const I18N = {
     contact: "Contacto:",
     privacy: "Privacidad",
     blog: "Blog",
+    places: "Ciudades",
     waChannel: "Canal WhatsApp",
     pressTelemundo: "Salimos en Telemundo Denver",
     refPrices: "Precios de referencia",
@@ -142,6 +143,7 @@ const I18N = {
     contact: "Contact:",
     privacy: "Privacy",
     blog: "Blog",
+    places: "Cities",
     waChannel: "WhatsApp channel",
     pressTelemundo: "Featured on Telemundo Denver",
     refPrices: "Reference prices",
@@ -1457,6 +1459,15 @@ async function useGps() {
 
 function startApp() {
   applyStaticI18n();
+  const zipQ = new URLSearchParams(location.search).get("zip") || "";
+  const zipDigits = String(zipQ).replace(/\D/g, "").slice(0, 5);
+  if (zipDigits.length === 5) {
+    state.zip = zipDigits;
+    if ($("#zipInput")) $("#zipInput").value = zipDigits;
+    setStatus(t("searchingZip", zipDigits), "loading");
+    search({ zip: zipDigits });
+    return;
+  }
   const saved = loadSavedLocation();
   if (saved) {
     state.zip = saved.zip || null;

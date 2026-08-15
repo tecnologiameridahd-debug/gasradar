@@ -720,6 +720,61 @@ def blog_post(slug: str):
     )
 
 
+def _safe_place_slug(value: str) -> bool:
+    import re
+
+    return bool(re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", value or ""))
+
+
+@app.get("/gas")
+@app.get("/gas/")
+def gas_index():
+    """Índice SEO de ciudades y estados."""
+    path = FRONTEND / "gas" / "index.html"
+    if not path.is_file():
+        raise HTTPException(404, "Places missing")
+    return FileResponse(
+        path,
+        headers={
+            "Cache-Control": "public, max-age=0, s-maxage=600, stale-while-revalidate=86400",
+            "Content-Type": "text/html; charset=utf-8",
+        },
+    )
+
+
+@app.get("/gas/{state}")
+@app.get("/gas/{state}/")
+def gas_state(state: str):
+    if not _safe_place_slug(state):
+        raise HTTPException(404, "State not found")
+    path = FRONTEND / "gas" / state / "index.html"
+    if not path.is_file():
+        raise HTTPException(404, "State not found")
+    return FileResponse(
+        path,
+        headers={
+            "Cache-Control": "public, max-age=0, s-maxage=600, stale-while-revalidate=86400",
+            "Content-Type": "text/html; charset=utf-8",
+        },
+    )
+
+
+@app.get("/gas/{state}/{city}")
+def gas_city(state: str, city: str):
+    if not _safe_place_slug(state) or not _safe_place_slug(city):
+        raise HTTPException(404, "City not found")
+    path = FRONTEND / "gas" / state / f"{city}.html"
+    if not path.is_file():
+        raise HTTPException(404, "City not found")
+    return FileResponse(
+        path,
+        headers={
+            "Cache-Control": "public, max-age=0, s-maxage=600, stale-while-revalidate=86400",
+            "Content-Type": "text/html; charset=utf-8",
+        },
+    )
+
+
 @app.get("/stats")
 def stats_page():
     """Panel de visitas (protegido en el JS con la clave)."""
