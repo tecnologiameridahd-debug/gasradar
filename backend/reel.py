@@ -43,29 +43,82 @@ def _fmt_price(val) -> str:
         return "—"
 
 
+def _caption(city: dict, st: dict, price: str, station: str, miles_s: str) -> str:
+    tag = city["name"].replace(" ", "")
+    price_line = (
+        f"Hoy la Regular más barata: {price}\n{station}"
+        + (f" · {miles_s}" if miles_s else "")
+        if price and price != "—"
+        else f"ZIP {city['zip']} — abre y compara Regular cerca de ti."
+    )
+    return (
+        f"⛽ {city['name']}, {st['name_es']}\n\n"
+        f"{price_line}\n\n"
+        f"Compara en 10 segundos 👇\n"
+        f"gasradarapp.com/gas/{city['state']}/{city['slug']}\n\n"
+        f"#gasolina #{tag} #{st['code']} #GasRadar #gasprices "
+        f"#ahorrar #gasolinabarata #USA"
+    )
+
+
 def build_reel(slug: str | None = None) -> dict:
+    """Ciudad al instante. El precio se pide aparte en fill_price()."""
+    city = find_city(slug)
+    st = STATE_BY_SLUG[city["state"]]
+    prev_s, next_s = neighbors(city["slug"])
+    return {
+        "today": date.today().isoformat(),
+        "is_today": city["slug"] == city_of_day()["slug"],
+        "city": city["name"],
+        "slug": city["slug"],
+        "state": st["name_es"],
+        "state_en": st["name_en"],
+        "state_slug": city["state"],
+        "code": st["code"],
+        "zip": city["zip"],
+        "price": "—",
+        "station": "Buscando precio…",
+        "miles": "",
+        "address": "",
+        "caption": _caption(city, st, "—", "", ""),
+        "link": f"https://gasradarapp.com/gas/{city['state']}/{city['slug']}",
+        "app_link": f"https://gasradarapp.com/?zip={city['zip']}",
+        "prev": prev_s,
+        "next": next_s,
+        "error": None,
+        "cities": [{"slug": c["slug"], "name": c["name"]} for c in CITIES],
+    }
+
+
+def fill_price(slug: str | None = None) -> dict:
+    """Precio real con tope de 8s. Si falla, la ciudad igual ya se ve."""
+    import concurrent.futures
+
     from backend.search_core import run_search
 
     city = find_city(slug)
     st = STATE_BY_SLUG[city["state"]]
-    prev_s, next_s = neighbors(city["slug"])
-    cheapest = None
-    error = None
-    try:
-        data = run_search(
+
+    def _search():
+        return run_search(
             zip=city["zip"],
             radius_mi=8.0,
             fuel="regular",
-            limit=16,
+            limit=12,
             track=False,
             quick=True,
         )
+
+    cheapest = None
+    error = None
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            data = pool.submit(_search).result(timeout=8)
         cheapest = data.get("cheapest") or None
         if not cheapest:
-            stations = data.get("stations") or []
-            live = [s for s in stations if s.get("price") is not None]
+            live = [s for s in (data.get("stations") or []) if s.get("price") is not None]
+            live.sort(key=lambda s: float(s["price"]))
             if live:
-                live.sort(key=lambda s: float(s["price"]))
                 s0 = live[0]
                 cheapest = {
                     "name": s0.get("name"),
@@ -78,44 +131,19 @@ def build_reel(slug: str | None = None) -> dict:
         error = str(e)[:180]
 
     price = _fmt_price((cheapest or {}).get("price"))
-    station = (cheapest or {}).get("name") or (cheapest or {}).get("brand") or "GasRadar"
+    station = (cheapest or {}).get("name") or (cheapest or {}).get("brand") or ""
     miles = (cheapest or {}).get("distance_mi")
     try:
         miles_s = f"{float(miles):.1f} mi"
     except (TypeError, ValueError):
         miles_s = ""
-
-    tag = city["name"].replace(" ", "")
-    caption = (
-        f"⛽ {city['name']}, {st['name_es']}\n\n"
-        f"Hoy la Regular más barata: {price}\n"
-        f"{station}"
-        + (f" · {miles_s}" if miles_s else "")
-        + "\n\n"
-        f"Compara en 10 segundos 👇\n"
-        f"gasradarapp.com/gas/{city['state']}/{city['slug']}\n\n"
-        f"#gasolina #{tag} #{st['code']} #GasRadar #gasprices "
-        f"#ahorrar #gasolinabarata #USA"
-    )
+    if price == "—":
+        station = station or "Abre la app para ver el precio"
     return {
-        "today": date.today().isoformat(),
-        "is_today": city["slug"] == city_of_day()["slug"],
-        "city": city["name"],
-        "slug": city["slug"],
-        "state": st["name_es"],
-        "state_en": st["name_en"],
-        "state_slug": city["state"],
-        "code": st["code"],
-        "zip": city["zip"],
         "price": price,
         "station": station,
         "miles": miles_s,
         "address": (cheapest or {}).get("address") or "",
-        "caption": caption,
-        "link": f"https://gasradarapp.com/gas/{city['state']}/{city['slug']}",
-        "app_link": f"https://gasradarapp.com/?zip={city['zip']}",
-        "prev": prev_s,
-        "next": next_s,
+        "caption": _caption(city, st, price, station, miles_s),
         "error": error,
-        "cities": [{"slug": c["slug"], "name": c["name"]} for c in CITIES],
     }

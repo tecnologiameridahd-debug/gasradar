@@ -112,9 +112,8 @@
       const d = await r.json();
       document.getElementById("kicker").textContent = d.is_today ? "HOY · " + d.code : d.code;
       document.getElementById("name").textContent = d.city + ", " + d.state;
-      document.getElementById("price").innerHTML = d.price + "<span>Regular / galón</span>";
-      document.getElementById("station").textContent = d.station;
-      document.getElementById("meta").textContent = [d.miles, d.address].filter(Boolean).join(" · ");
+      document.getElementById("price").innerHTML = "…<span>Regular / galón</span>";
+      document.getElementById("station").textContent = "Buscando precio…";
       document.getElementById("caption").value = d.caption;
       document.getElementById("open").href = d.app_link;
       document.getElementById("prev").href = reelUrl(d.prev);
@@ -126,9 +125,18 @@
       sel.onchange = () => {
         location.href = reelUrl(sel.value);
       };
-      if (d.error) {
-        document.getElementById("err").hidden = false;
-        document.getElementById("err").textContent = d.error;
+      const pq = new URLSearchParams({ key, city: d.slug });
+      try {
+        const pr = await fetch("/api/reel/precio?" + pq.toString());
+        if (pr.ok) {
+          const p = await pr.json();
+          document.getElementById("price").innerHTML = p.price + "<span>Regular / galón</span>";
+          document.getElementById("station").textContent = p.station || "—";
+          document.getElementById("meta").textContent = [p.miles, p.address].filter(Boolean).join(" · ");
+          if (p.caption) document.getElementById("caption").value = p.caption;
+        }
+      } catch (_) {
+        document.getElementById("station").textContent = "Abre la app para ver el precio";
       }
     }
     document.getElementById("copy").onclick = async () => {

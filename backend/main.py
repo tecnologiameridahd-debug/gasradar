@@ -596,6 +596,17 @@ def api_reel(key: str | None = None, city: str | None = None):
     return build_reel(city)
 
 
+@app.get("/api/reel/precio")
+def api_reel_precio(key: str | None = None, city: str | None = None):
+    from backend.analytics import check_stats_key
+    from backend.reel import fill_price
+    from backend.telegram_bot import check_alerts_key
+
+    if not (check_stats_key(key) or check_alerts_key(key)):
+        raise HTTPException(401, "Clave incorrecta. Usa ?key= tu STATS_KEY")
+    return fill_price(city)
+
+
 @app.get("/reel")
 @app.get("/diario/{key}")
 def reel_page(key: str | None = None):
