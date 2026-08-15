@@ -43,22 +43,33 @@ def _fmt_price(val) -> str:
         return "—"
 
 
-def _caption(city: dict, st: dict, price: str, station: str, miles_s: str) -> str:
+def _captions(city: dict, st: dict, price: str, station: str, miles_s: str) -> tuple[str, str]:
     tag = city["name"].replace(" ", "")
-    price_line = (
-        f"Hoy la Regular más barata: {price}\n{station}"
-        + (f" · {miles_s}" if miles_s else "")
-        if price and price != "—"
-        else f"ZIP {city['zip']} — abre y compara Regular cerca de ti."
-    )
-    return (
+    extra = f" · {miles_s}" if miles_s else ""
+    if price and price != "—":
+        line_es = f"Hoy la Regular más barata: {price}\n{station}{extra}"
+        line_en = f"Cheapest Regular today: {price}\n{station}{extra}"
+    else:
+        line_es = f"ZIP {city['zip']} — abre y compara Regular cerca de ti."
+        line_en = f"ZIP {city['zip']} — open and compare Regular near you."
+    link = f"gasradarapp.com/gas/{city['state']}/{city['slug']}"
+    es = (
         f"⛽ {city['name']}, {st['name_es']}\n\n"
-        f"{price_line}\n\n"
+        f"{line_es}\n\n"
         f"Compara en 10 segundos 👇\n"
-        f"gasradarapp.com/gas/{city['state']}/{city['slug']}\n\n"
+        f"{link}\n\n"
         f"#gasolina #{tag} #{st['code']} #GasRadar #gasprices "
         f"#ahorrar #gasolinabarata #USA"
     )
+    en = (
+        f"⛽ {city['name']}, {st['name_en']}\n\n"
+        f"{line_en}\n\n"
+        f"Compare in 10 seconds 👇\n"
+        f"{link}\n\n"
+        f"#gas #{tag} #{st['code']} #GasRadar #gasprices "
+        f"#cheapgas #savemoney #USA"
+    )
+    return es, en
 
 
 def build_reel(slug: str | None = None) -> dict:
@@ -66,6 +77,7 @@ def build_reel(slug: str | None = None) -> dict:
     city = find_city(slug)
     st = STATE_BY_SLUG[city["state"]]
     prev_s, next_s = neighbors(city["slug"])
+    cap_es, cap_en = _captions(city, st, "—", "", "")
     return {
         "today": date.today().isoformat(),
         "is_today": city["slug"] == city_of_day()["slug"],
@@ -78,9 +90,12 @@ def build_reel(slug: str | None = None) -> dict:
         "zip": city["zip"],
         "price": "—",
         "station": "Buscando precio…",
+        "station_en": "Finding price…",
         "miles": "",
         "address": "",
-        "caption": _caption(city, st, "—", "", ""),
+        "caption": cap_es,
+        "caption_es": cap_es,
+        "caption_en": cap_en,
         "link": f"https://gasradarapp.com/gas/{city['state']}/{city['slug']}",
         "app_link": f"https://gasradarapp.com/?zip={city['zip']}",
         "prev": prev_s,
@@ -139,11 +154,15 @@ def fill_price(slug: str | None = None) -> dict:
         miles_s = ""
     if price == "—":
         station = station or "Abre la app para ver el precio"
+    cap_es, cap_en = _captions(city, st, price, station, miles_s)
     return {
         "price": price,
         "station": station,
+        "station_en": station if price != "—" else "Open the app to see the price",
         "miles": miles_s,
         "address": (cheapest or {}).get("address") or "",
-        "caption": _caption(city, st, price, station, miles_s),
+        "caption": cap_es,
+        "caption_es": cap_es,
+        "caption_en": cap_en,
         "error": error,
     }

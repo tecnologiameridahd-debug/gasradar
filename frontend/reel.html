@@ -13,8 +13,9 @@
     :root { --bg:#070b14; --card:#10182a; --line:#243049; --text:#eef3ff; --muted:#9aabc7; --green:#22c55e; }
     * { box-sizing: border-box; }
     body { margin:0; font-family: system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--text); }
-    .wrap { max-width: 980px; margin:0 auto; padding:18px 16px 48px; display:grid; gap:18px; }
-    @media (min-width: 800px) { .wrap { grid-template-columns: 280px 1fr; align-items:start; } }
+    .wrap { max-width: 1100px; margin:0 auto; padding:18px 16px 48px; display:grid; gap:18px; }
+    .cards { display:flex; flex-wrap:wrap; gap:14px; }
+    @media (min-width: 900px) { .wrap { grid-template-columns: auto 1fr; align-items:start; } }
     h1 { font-size:1.15rem; margin:0 0 8px; }
     .muted { color:var(--muted); font-size:.88rem; }
     .phone { width:260px; aspect-ratio:9/16; border-radius:22px; overflow:hidden; position:relative;
@@ -32,8 +33,11 @@
     .station b { display:block; margin-bottom:3px; }
     .hint { font-size:.72rem; color:var(--muted); margin-top:10px; }
     .panel { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; }
-    textarea { width:100%; min-height:220px; background:#0b1220; color:var(--text); border:1px solid var(--line);
+    textarea { width:100%; min-height:180px; background:#0b1220; color:var(--text); border:1px solid var(--line);
       border-radius:12px; padding:12px; font:inherit; resize:vertical; }
+    .caps { display:grid; gap:14px; }
+    @media (min-width: 700px) { .caps { grid-template-columns: 1fr 1fr; } }
+    .cap-box label { display:block; font-weight:800; margin-bottom:6px; }
     .row { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0; }
     button, select, a.btn { border:0; border-radius:999px; padding:10px 14px; font-weight:800; cursor:pointer; text-decoration:none; }
     .go { background:var(--green); color:#04210f; }
@@ -45,44 +49,56 @@
 </head>
 <body>
   <div class="wrap">
-    <div>
-      <div class="phone" id="card">
+    <div class="cards">
+      <div class="phone" id="cardEs">
         <div class="phone-inner">
-          <div class="brand">
-            <img src="/static/logo-192.png" alt="" />
-            GasRadar
-          </div>
-          <div class="city" id="kicker">CIUDAD DEL DÍA</div>
-          <div class="name" id="name">—</div>
-          <div class="price" id="price">—<span>Regular / galón</span></div>
-          <div class="station">
-            <b id="station">—</b>
-            <span class="muted" id="meta"></span>
-          </div>
-          <div class="hint">gasradarapp.com</div>
+          <div class="brand"><img src="/static/logo-192.png" alt="" /> GasRadar</div>
+          <div class="city" id="kickerEs">HOY · ES</div>
+          <div class="name" id="nameEs">—</div>
+          <div class="price" id="priceEs">—<span>Regular / galón</span></div>
+          <div class="station"><b id="stationEs">—</b><span class="muted" id="metaEs"></span></div>
+          <div class="hint">gasradarapp.com · Español</div>
+        </div>
+      </div>
+      <div class="phone" id="cardEn">
+        <div class="phone-inner">
+          <div class="brand"><img src="/static/logo-192.png" alt="" /> GasRadar</div>
+          <div class="city" id="kickerEn">TODAY · EN</div>
+          <div class="name" id="nameEn">—</div>
+          <div class="price" id="priceEn">—<span>Regular / gallon</span></div>
+          <div class="station"><b id="stationEn">—</b><span class="muted" id="metaEn"></span></div>
+          <div class="hint">gasradarapp.com · English</div>
         </div>
       </div>
     </div>
     <div class="panel">
-      <h1>Reel diario</h1>
-      <p class="muted" id="sub">Una ciudad al día. Precio real de la app. Copias el texto y publicas.</p>
+      <h1>Reel diario · ES + EN</h1>
+      <p class="muted">Dos capturas al día: una en español y otra en inglés. Misma ciudad, mismo precio.</p>
       <div class="row">
         <select id="citySel"></select>
         <a class="btn ghost" id="prev" href="#">← Ayer</a>
         <a class="btn ghost" id="next" href="#">Mañana →</a>
       </div>
       <p class="err" id="err" hidden></p>
-      <label class="muted">Texto para Instagram</label>
-      <textarea id="caption" readonly></textarea>
+      <div class="caps">
+        <div class="cap-box">
+          <label>Texto ES</label>
+          <textarea id="captionEs" readonly></textarea>
+          <div class="row"><button class="go" type="button" id="copyEs">Copiar ES</button></div>
+        </div>
+        <div class="cap-box">
+          <label>Caption EN</label>
+          <textarea id="captionEn" readonly></textarea>
+          <div class="row"><button class="go" type="button" id="copyEn">Copy EN</button></div>
+        </div>
+      </div>
       <div class="row">
-        <button class="go" type="button" id="copy">Copiar texto</button>
         <a class="btn ghost" id="open" href="/" target="_blank">Abrir en la app</a>
       </div>
       <ol>
-        <li>Abre esta página cada mañana (o deja el link en el celular).</li>
-        <li>Captura el recuadro de la izquierda (pantalla del teléfono).</li>
-        <li>En Instagram: Reel → sube la foto → pega el texto → publica.</li>
-        <li>El link del bio debe ser <code>gasradarapp.com</code>.</li>
+        <li>Captura la tarjeta <strong>ES</strong> → pega el texto ES → publica.</li>
+        <li>Captura la tarjeta <strong>EN</strong> → pega el texto EN → publica.</li>
+        <li>Dos Reels al día, misma ciudad. Bio: <code>gasradarapp.com</code></li>
       </ol>
     </div>
   </div>
@@ -98,6 +114,8 @@
       document.body.innerHTML = "<p style='padding:24px'>Usa el link /diario/tu-clave</p>";
     } else {
       load();
+      bindCopy("copyEs", "captionEs", "Copiado");
+      bindCopy("copyEn", "captionEn", "Copied");
     }
     async function load() {
       const city = params.get("city") || "";
@@ -110,11 +128,16 @@
         return;
       }
       const d = await r.json();
-      document.getElementById("kicker").textContent = d.is_today ? "HOY · " + d.code : d.code;
-      document.getElementById("name").textContent = d.city + ", " + d.state;
-      document.getElementById("price").innerHTML = "…<span>Regular / galón</span>";
-      document.getElementById("station").textContent = "Buscando precio…";
-      document.getElementById("caption").value = d.caption;
+      document.getElementById("kickerEs").textContent = (d.is_today ? "HOY · " : "") + d.code + " · ES";
+      document.getElementById("kickerEn").textContent = (d.is_today ? "TODAY · " : "") + d.code + " · EN";
+      document.getElementById("nameEs").textContent = d.city + ", " + d.state;
+      document.getElementById("nameEn").textContent = d.city + ", " + d.state_en;
+      document.getElementById("priceEs").innerHTML = "…<span>Regular / galón</span>";
+      document.getElementById("priceEn").innerHTML = "…<span>Regular / gallon</span>";
+      document.getElementById("stationEs").textContent = "Buscando precio…";
+      document.getElementById("stationEn").textContent = "Finding price…";
+      document.getElementById("captionEs").value = d.caption_es || d.caption || "";
+      document.getElementById("captionEn").value = d.caption_en || "";
       document.getElementById("open").href = d.app_link;
       document.getElementById("prev").href = reelUrl(d.prev);
       document.getElementById("next").href = reelUrl(d.next);
@@ -130,22 +153,32 @@
         const pr = await fetch("/api/reel/precio?" + pq.toString());
         if (pr.ok) {
           const p = await pr.json();
-          document.getElementById("price").innerHTML = p.price + "<span>Regular / galón</span>";
-          document.getElementById("station").textContent = p.station || "—";
-          document.getElementById("meta").textContent = [p.miles, p.address].filter(Boolean).join(" · ");
-          if (p.caption) document.getElementById("caption").value = p.caption;
+          document.getElementById("priceEs").innerHTML = p.price + "<span>Regular / galón</span>";
+          document.getElementById("priceEn").innerHTML = p.price + "<span>Regular / gallon</span>";
+          document.getElementById("stationEs").textContent = p.station || "—";
+          document.getElementById("stationEn").textContent = p.station_en || p.station || "—";
+          const meta = [p.miles, p.address].filter(Boolean).join(" · ");
+          document.getElementById("metaEs").textContent = meta;
+          document.getElementById("metaEn").textContent = meta;
+          if (p.caption_es) document.getElementById("captionEs").value = p.caption_es;
+          if (p.caption_en) document.getElementById("captionEn").value = p.caption_en;
         }
       } catch (_) {
-        document.getElementById("station").textContent = "Abre la app para ver el precio";
+        document.getElementById("stationEs").textContent = "Abre la app para ver el precio";
+        document.getElementById("stationEn").textContent = "Open the app to see the price";
       }
     }
-    document.getElementById("copy").onclick = async () => {
-      const t = document.getElementById("caption");
-      t.select();
-      try { await navigator.clipboard.writeText(t.value); } catch (_) { document.execCommand("copy"); }
-      document.getElementById("copy").textContent = "Copiado";
-      setTimeout(() => document.getElementById("copy").textContent = "Copiar texto", 1200);
-    };
+    function bindCopy(btnId, areaId, ok) {
+      document.getElementById(btnId).onclick = async () => {
+        const t = document.getElementById(areaId);
+        t.select();
+        try { await navigator.clipboard.writeText(t.value); } catch (_) { document.execCommand("copy"); }
+        const b = document.getElementById(btnId);
+        const old = b.textContent;
+        b.textContent = ok;
+        setTimeout(() => { b.textContent = old; }, 1200);
+      };
+    }
   </script>
 </body>
 </html>
