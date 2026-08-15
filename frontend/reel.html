@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow" />
+  <title>GasRadar — Reel del día</title>
+  <link rel="icon" href="/static/favicon-32.png?v=0.2.9" type="image/png" />
+  <style>
+    :root { --bg:#070b14; --card:#10182a; --line:#243049; --text:#eef3ff; --muted:#9aabc7; --green:#22c55e; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--text); }
+    .wrap { max-width: 980px; margin:0 auto; padding:18px 16px 48px; display:grid; gap:18px; }
+    @media (min-width: 800px) { .wrap { grid-template-columns: 280px 1fr; align-items:start; } }
+    h1 { font-size:1.15rem; margin:0 0 8px; }
+    .muted { color:var(--muted); font-size:.88rem; }
+    .phone { width:260px; aspect-ratio:9/16; border-radius:22px; overflow:hidden; position:relative;
+      background: radial-gradient(120% 80% at 50% 0%, #163024, #0b1220 55%, #070b14);
+      border:1px solid var(--line); box-shadow:0 20px 50px rgba(0,0,0,.45); }
+    .phone-inner { position:absolute; inset:0; padding:22px 16px 18px; display:flex; flex-direction:column; }
+    .brand { display:flex; align-items:center; gap:8px; font-weight:800; }
+    .brand img { width:36px; height:36px; border-radius:10px; }
+    .city { margin-top:28px; font-size:.78rem; letter-spacing:.14em; text-transform:uppercase; color:#7dffa8; }
+    .name { font-size:1.55rem; font-weight:850; line-height:1.1; margin:6px 0 18px; }
+    .price { font-size:3.1rem; font-weight:900; letter-spacing:-.04em; color:#fff; }
+    .price span { font-size:1rem; color:var(--muted); font-weight:700; display:block; margin-top:4px; }
+    .station { margin-top:auto; background:rgba(255,255,255,.06); border:1px solid var(--line);
+      border-radius:14px; padding:12px; font-size:.88rem; }
+    .station b { display:block; margin-bottom:3px; }
+    .hint { font-size:.72rem; color:var(--muted); margin-top:10px; }
+    .panel { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; }
+    textarea { width:100%; min-height:220px; background:#0b1220; color:var(--text); border:1px solid var(--line);
+      border-radius:12px; padding:12px; font:inherit; resize:vertical; }
+    .row { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0; }
+    button, select, a.btn { border:0; border-radius:999px; padding:10px 14px; font-weight:800; cursor:pointer; text-decoration:none; }
+    .go { background:var(--green); color:#04210f; }
+    .ghost { background:transparent; color:var(--text); border:1px solid var(--line); }
+    select { background:#0b1220; color:var(--text); border:1px solid var(--line); }
+    .err { color:#ffb4b4; font-size:.85rem; }
+    ol { color:var(--muted); padding-left:1.2rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div>
+      <div class="phone" id="card">
+        <div class="phone-inner">
+          <div class="brand">
+            <img src="/static/logo-192.png" alt="" />
+            GasRadar
+          </div>
+          <div class="city" id="kicker">CIUDAD DEL DÍA</div>
+          <div class="name" id="name">—</div>
+          <div class="price" id="price">—<span>Regular / galón</span></div>
+          <div class="station">
+            <b id="station">—</b>
+            <span class="muted" id="meta"></span>
+          </div>
+          <div class="hint">gasradarapp.com</div>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <h1>Reel diario</h1>
+      <p class="muted" id="sub">Una ciudad al día. Precio real de la app. Copias el texto y publicas.</p>
+      <div class="row">
+        <select id="citySel"></select>
+        <a class="btn ghost" id="prev" href="#">← Ayer</a>
+        <a class="btn ghost" id="next" href="#">Mañana →</a>
+      </div>
+      <p class="err" id="err" hidden></p>
+      <label class="muted">Texto para Instagram</label>
+      <textarea id="caption" readonly></textarea>
+      <div class="row">
+        <button class="go" type="button" id="copy">Copiar texto</button>
+        <a class="btn ghost" id="open" href="/" target="_blank">Abrir en la app</a>
+      </div>
+      <ol>
+        <li>Abre esta página cada mañana (o deja el link en el celular).</li>
+        <li>Captura el recuadro de la izquierda (pantalla del teléfono).</li>
+        <li>En Instagram: Reel → sube la foto → pega el texto → publica.</li>
+        <li>El link del bio debe ser <code>gasradarapp.com</code>.</li>
+      </ol>
+    </div>
+  </div>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const key = params.get("key") || "";
+    if (!key) {
+      document.body.innerHTML = "<p style='padding:24px'>Falta ?key= tu STATS_KEY</p>";
+    } else {
+      load();
+    }
+    async function load() {
+      const city = params.get("city") || "";
+      const q = new URLSearchParams({ key });
+      if (city) q.set("city", city);
+      const r = await fetch("/api/reel?" + q.toString());
+      if (!r.ok) {
+        document.getElementById("err").hidden = false;
+        document.getElementById("err").textContent = "Clave incorrecta o error de búsqueda.";
+        return;
+      }
+      const d = await r.json();
+      document.getElementById("kicker").textContent = d.is_today ? "HOY · " + d.code : d.code;
+      document.getElementById("name").textContent = d.city + ", " + d.state;
+      document.getElementById("price").innerHTML = d.price + "<span>Regular / galón</span>";
+      document.getElementById("station").textContent = d.station;
+      document.getElementById("meta").textContent = [d.miles, d.address].filter(Boolean).join(" · ");
+      document.getElementById("caption").value = d.caption;
+      document.getElementById("open").href = d.app_link;
+      document.getElementById("prev").href = "/reel?key=" + encodeURIComponent(key) + "&city=" + d.prev;
+      document.getElementById("next").href = "/reel?key=" + encodeURIComponent(key) + "&city=" + d.next;
+      const sel = document.getElementById("citySel");
+      sel.innerHTML = d.cities.map(c =>
+        `<option value="${c.slug}" ${c.slug===d.slug?"selected":""}>${c.name}</option>`
+      ).join("");
+      sel.onchange = () => {
+        location.href = "/reel?key=" + encodeURIComponent(key) + "&city=" + sel.value;
+      };
+      if (d.error) {
+        document.getElementById("err").hidden = false;
+        document.getElementById("err").textContent = d.error;
+      }
+    }
+    document.getElementById("copy").onclick = async () => {
+      const t = document.getElementById("caption");
+      t.select();
+      try { await navigator.clipboard.writeText(t.value); } catch (_) { document.execCommand("copy"); }
+      document.getElementById("copy").textContent = "Copiado";
+      setTimeout(() => document.getElementById("copy").textContent = "Copiar texto", 1200);
+    };
+  </script>
+</body>
+</html>

@@ -584,6 +584,26 @@ def api_stats(key: str | None = None, days: int = Query(14, ge=1, le=90)):
     return data
 
 
+@app.get("/api/reel")
+def api_reel(key: str | None = None, city: str | None = None):
+    """Ciudad del día + precio real + caption de Instagram."""
+    from backend.analytics import check_stats_key
+    from backend.reel import build_reel
+    from backend.telegram_bot import check_alerts_key
+
+    if not (check_stats_key(key) or check_alerts_key(key)):
+        raise HTTPException(401, "Clave incorrecta. Usa ?key= tu STATS_KEY")
+    return build_reel(city)
+
+
+@app.get("/reel")
+def reel_page():
+    path = FRONTEND / "reel.html"
+    if not path.exists():
+        raise HTTPException(404, "Reel missing")
+    return FileResponse(path, headers={"Cache-Control": "no-store"})
+
+
 @app.get("/api/telegram/alerts-stats")
 def api_telegram_alerts_stats(key: str | None = None):
     """Solo conteo de alertas del bot @GasRadar_bot. ?key=ALERTS_SECRET o STATS_KEY."""
