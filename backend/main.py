@@ -17,7 +17,7 @@ from backend.prices import report_price
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.9.57"
+APP_VERSION = "0.9.60"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -166,10 +166,20 @@ def health():
             info = get_webhook_info()
             res = (info or {}).get("result") or {}
             wh_url = res.get("url") or ""
-            tg["webhook_url"] = wh_url[:80] + ("…" if len(wh_url) > 80 else "")
+            try:
+                from urllib.parse import urlsplit
+
+                parts = urlsplit(wh_url)
+                tg["webhook_set"] = bool(wh_url)
+                tg["webhook_host"] = parts.netloc or None
+            except Exception:
+                tg["webhook_set"] = bool(wh_url)
             tg["webhook_ok"] = bool(wh_url) and not res.get("last_error_message")
             tg["pending_updates"] = res.get("pending_update_count")
-            tg["last_error"] = res.get("last_error_message")
+            err = res.get("last_error_message") or None
+            if err and ("key=" in err.lower() or "token" in err.lower()):
+                err = "Telegram webhook error (detalle oculto)"
+            tg["last_error"] = err
         except Exception as e:
             tg["last_error"] = f"{type(e).__name__}: {e}"
 
@@ -406,7 +416,8 @@ async def api_telegram_webhook(
 ):
     """
     Recibe updates de Telegram.
-    Procesa EN ESTA petición (más fiable en Render free que BackgroundTasks).
+    Responde 200 al instante y procesa en un hilo: la búsqueda de precios
+    tarda ~20s y Telegram corta el webhook si no hay respuesta a tiempo.
     """
     from backend.telegram_bot import (
         alerts_secret,
@@ -433,8 +444,11 @@ async def api_telegram_webhook(
     except Exception as e:
         raise HTTPException(400, f"JSON inválido: {e}") from e
 
-    # Síncrono: en Render free el background a veces se corta
-    handle_update_safe(update if isinstance(update, dict) else {})
+    # Responder YA a Telegram (si buscamos precios aquí, el webhook hace timeout).
+    import threading
+
+    payload = update if isinstance(update, dict) else {}
+    threading.Thread(target=handle_update_safe, args=(payload,), daemon=True).start()
     return {"ok": True}
 
 
@@ -715,6 +729,24 @@ def privacy():
     path = FRONTEND / "privacy.html"
     if not path.exists():
         raise HTTPException(404, "Privacy page missing")
+    return FileResponse(path)
+
+
+@app.get("/terminos")
+@app.get("/terms")
+def terms_page():
+    path = FRONTEND / "terms.html"
+    if not path.exists():
+        raise HTTPException(404, "Terms missing")
+    return FileResponse(path)
+
+
+@app.get("/reglas")
+@app.get("/rules")
+def rules_page():
+    path = FRONTEND / "rules.html"
+    if not path.exists():
+        raise HTTPException(404, "Rules missing")
     return FileResponse(path)
 
 

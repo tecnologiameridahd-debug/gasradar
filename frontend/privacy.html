@@ -286,6 +286,10 @@
           <span class="footer-sep" aria-hidden="true">·</span>
           <a href="/privacy" id="footerPrivacy">Privacidad</a>
           <span class="footer-sep" aria-hidden="true">·</span>
+          <a href="/terminos" id="footerTerms">Términos</a>
+          <span class="footer-sep" aria-hidden="true">·</span>
+          <a href="/reglas" id="footerRules">Reglas</a>
+          <span class="footer-sep" aria-hidden="true">·</span>
           <a
             class="footer-wa-channel"
             id="footerWa"
@@ -324,6 +328,10 @@
           lang === "en" ? "GasRadar — Privacy Policy" : "GasRadar — Política de privacidad";
         const fp = document.getElementById("footerPrivacy");
         if (fp) fp.textContent = lang === "en" ? "Privacy" : "Privacidad";
+        const ft = document.getElementById("footerTerms");
+        if (ft) ft.textContent = lang === "en" ? "Terms" : "Términos";
+        const fr = document.getElementById("footerRules");
+        if (fr) fr.textContent = lang === "en" ? "Rules" : "Reglas";
         const fw = document.getElementById("footerWa");
         if (fw) fw.textContent = lang === "en" ? "WhatsApp channel" : "Canal WhatsApp";
       }

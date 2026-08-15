@@ -35,13 +35,17 @@ Lee **[PUBLICAR.md](PUBLICAR.md)** — pasos con Render.com (gratis) y URL `http
 
 ## Notas de datos
 
-- **Estaciones**: OpenStreetMap (reales).
-- **Precios**: estimados por marca + promedio estatal, **sobrescritos** si un usuario reporta.
-- No scrapea GasBuddy (ToS). Más adelante se puede enganchar una API de precios de pago.
+- **Estaciones**: OpenStreetMap + resultados del scraper VPS.
+- **Precios en vivo**: GasBuddy vía VPS (`VPS_SCRAPER_URL`) cuando está activo.
+- **Referencia**: promedios AAA / EIA por estado.
+- **Reportes** de la comunidad sobrescriben el precio de esa estación.
 
-## Próximos pasos
+## Sitio
 
-1. API de precios en vivo (CollectAPI / partner)
-2. Mapa embebido (Leaflet)
-3. Alertas Telegram cuando baje el precio en tu ZIP
-4. Historial de precios por estación
+- App: https://gasradarapp.com
+- Ciudades: https://gasradarapp.com/gas
+- Términos: https://gasradarapp.com/terminos
+- Reglas: https://gasradarapp.com/reglas
+- Reel diario (interno): `/diario/STATS_KEY`
+- Bot: https://t.me/GasRadar_bot
+- Instagram: https://www.instagram.com/gasradar_app

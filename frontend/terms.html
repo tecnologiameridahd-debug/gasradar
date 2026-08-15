@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="index, follow" />
+  <title>GasRadar — Terms / Términos</title>
+  <link rel="stylesheet" href="/static/styles.css?v=0.9.60" />
+  <link rel="icon" href="/static/favicon-32.png?v=0.2.9" type="image/png" />
+</head>
+<body>
+  <div class="app privacy-page">
+    <header class="top">
+      <div class="brand">
+        <a href="/" class="logo-link"><img class="logo" src="/static/logo.svg?v=0.2.9" width="48" height="48" alt="" /></a>
+        <div class="brand-text">
+          <h1><span class="brand-gas">Gas</span><span class="brand-radar">Radar</span></h1>
+          <p class="subtitle" id="sub">Términos</p>
+        </div>
+      </div>
+      <div class="lang-switch">
+        <button type="button" class="lang-btn active" id="btnLangEs">ES</button>
+        <button type="button" class="lang-btn" id="btnLangEn">EN</button>
+      </div>
+    </header>
+    <section class="card privacy-card" id="contentEs">
+      <h2>Términos de servicio</h2>
+      <p class="privacy-meta">Última actualización: 15 de agosto de 2026</p>
+      <p>Al usar GasRadar (gasradarapp.com) aceptas estos términos. Si no estás de acuerdo, no uses el servicio.</p>
+      <h3>El servicio</h3>
+      <p>GasRadar muestra precios de referencia de gasolina en EE.UU. (GPS o ZIP). Los precios pueden venir de reportes de usuarios, promedios oficiales y fuentes de terceros. No garantizamos que el precio de la bomba sea exacto al segundo.</p>
+      <h3>Uso</h3>
+      <p>No abuses de la API, no hagas scraping masivo y no publiques precios falsos a propósito. Podemos limitar o bloquear IPs que saturen el servicio.</p>
+      <h3>Alertas y bot</h3>
+      <p>El bot de Telegram y las alertas son una ayuda. Pueden fallar o llegar tarde. No somos responsables si te perdiste un precio.</p>
+      <h3>Contacto</h3>
+      <p><a href="mailto:contact@gasradarapp.com">contact@gasradarapp.com</a></p>
+    </section>
+    <section class="card privacy-card" id="contentEn" hidden>
+      <h2>Terms of service</h2>
+      <p class="privacy-meta">Last updated: August 15, 2026</p>
+      <p>By using GasRadar (gasradarapp.com) you accept these terms. If you don’t agree, don’t use the service.</p>
+      <h3>The service</h3>
+      <p>GasRadar shows US gas price references (GPS or ZIP). Prices may come from user reports, official averages, and third-party sources. We don’t guarantee the pump price is exact to the second.</p>
+      <h3>Use</h3>
+      <p>Don’t abuse the API, don’t mass-scrape, and don’t post fake prices on purpose. We may rate-limit or block IPs that overload the service.</p>
+      <h3>Alerts and bot</h3>
+      <p>The Telegram bot and alerts are a helper. They can fail or arrive late. We’re not responsible if you missed a price.</p>
+      <h3>Contact</h3>
+      <p><a href="mailto:contact@gasradarapp.com">contact@gasradarapp.com</a></p>
+    </section>
+    <footer class="site-footer">
+      <div class="footer-links">
+        <a href="/">GasRadar</a> · <a href="/privacy">Privacidad</a> · <a href="/reglas">Reglas</a>
+      </div>
+    </footer>
+  </div>
+  <script>
+    const KEY = "gasradar_lang";
+    function setLang(lang) {
+      try { localStorage.setItem(KEY, lang); } catch (_) {}
+      document.documentElement.lang = lang;
+      document.getElementById("contentEs").hidden = lang !== "es";
+      document.getElementById("contentEn").hidden = lang !== "en";
+      document.getElementById("btnLangEs").classList.toggle("active", lang === "es");
+      document.getElementById("btnLangEn").classList.toggle("active", lang === "en");
+      document.getElementById("sub").textContent = lang === "en" ? "Terms" : "Términos";
+    }
+    document.getElementById("btnLangEs").onclick = () => setLang("es");
+    document.getElementById("btnLangEn").onclick = () => setLang("en");
+    const s = (localStorage.getItem(KEY) || navigator.language || "es").toLowerCase();
+    setLang(s.startsWith("en") ? "en" : "es");
+  </script>
+</body>
+</html>

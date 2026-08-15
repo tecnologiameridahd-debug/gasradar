@@ -704,6 +704,10 @@ def page_shell(
         <span class="footer-sep">·</span>
         <a href="/privacy">Privacidad</a>
         <span class="footer-sep">·</span>
+        <a href="/terminos">Términos</a>
+        <span class="footer-sep">·</span>
+        <a href="/reglas">Reglas</a>
+        <span class="footer-sep">·</span>
         <a class="footer-wa-channel" href="https://www.whatsapp.com/channel/0029VbDQSOH42DcdzMZQb241" target="_blank" rel="noopener">Canal WhatsApp</a>
       </div>
     </footer>
@@ -814,6 +818,8 @@ def build_sitemap() -> None:
     urls: list[tuple[str, str]] = [
         ("/", "2026-08-03"),
         ("/privacy", "2026-08-01"),
+        ("/terminos", "2026-08-15"),
+        ("/reglas", "2026-08-15"),
         ("/blog", "2026-08-03"),
     ]
     for p in POSTS:

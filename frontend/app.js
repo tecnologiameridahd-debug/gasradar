@@ -44,8 +44,11 @@ const I18N = {
     save: "Guardar",
     report: "Reportar",
     searching: "Buscando estaciones…",
+    searchingStill: "Aún buscando precios en vivo…",
     searchingZip: (z) => `Buscando ZIP ${z}…`,
     searchingZipChange: (z) => `Cambiando a ZIP ${z}… (mantenemos la lista anterior un momento)`,
+    terms: "Términos",
+    rules: "Reglas",
     emptyTitle: "Sin resultados aún",
     emptyStart: "Escribe tu ZIP o toca Usar mi ubicación.",
     loadLast: "Cargando tu última zona…",
@@ -154,8 +157,11 @@ const I18N = {
     save: "Save",
     report: "Report",
     searching: "Searching stations…",
+    searchingStill: "Still fetching live prices…",
     searchingZip: (z) => `Searching ZIP ${z}…`,
     searchingZipChange: (z) => `Switching to ZIP ${z}… (keeping previous list a moment)`,
+    terms: "Terms",
+    rules: "Rules",
     emptyTitle: "No results yet",
     emptyStart: "Enter your ZIP or tap Use my location.",
     loadLast: "Loading your last area…",
@@ -918,6 +924,11 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
       /* ignore */
     }
   }, 22000);
+  const stillTimer = setTimeout(() => {
+    if (myToken === state.searchToken && state.searching && !background) {
+      setStatus(t("searchingStill"), "loading");
+    }
+  }, 4500);
 
   // Solo soltar UI visual; no abortar el fetch (abortFetch mataba la búsqueda)
   const safety = setTimeout(() => {
@@ -949,6 +960,7 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
       throw new Error(detail || `Error ${res.status}`);
     }
     const data = await res.json();
+    clearTimeout(stillTimer);
     if (myToken !== state.searchToken) return;
     try {
       // Solo cachear si hay estaciones (vacío no se guarda)
@@ -967,6 +979,7 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
     applySearchData(data, { zip });
   } catch (e) {
     clearTimeout(timer);
+    clearTimeout(stillTimer);
     // Reemplazada por otra búsqueda (otro ZIP): no mostrar error ni bloquear
     if (myToken !== state.searchToken) return;
 
@@ -991,6 +1004,7 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
     }
   } finally {
     clearTimeout(timer);
+    clearTimeout(stillTimer);
     clearTimeout(safety);
     try {
       const bz = $("#btnZip");

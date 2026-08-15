@@ -18,7 +18,7 @@
   <meta property="og:locale" content="es_US" />
   <meta property="og:locale:alternate" content="en_US" />
   <link rel="icon" href="/static/favicon-32.png?v=0.2.9" type="image/png" />
-  <link rel="stylesheet" href="/static/styles.css?v=0.9.43" />
+  <link rel="stylesheet" href="/static/styles.css?v=0.9.60" />
   <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -67,6 +67,7 @@
       <span class="footer-sep">·</span>
       <a href="/blog">Blog</a>
     </nav>
+    <p class="live-box card" id="livePrice" data-zip="83702" style="padding:12px 16px;margin:0 0 12px"></p>
 
     <section class="card privacy-card blog-card" id="contentEs">
       
@@ -102,6 +103,10 @@
         <a href="/blog">Blog</a>
         <span class="footer-sep">·</span>
         <a href="/privacy">Privacidad</a>
+        <span class="footer-sep">·</span>
+        <a href="/terminos">Términos</a>
+        <span class="footer-sep">·</span>
+        <a href="/reglas">Reglas</a>
       </div>
     </footer>
   </div>
@@ -128,6 +133,30 @@
     document.getElementById("btnLangEs").onclick = () => setLang("es");
     document.getElementById("btnLangEn").onclick = () => setLang("en");
     setLang(loadLang());
+    var box = document.getElementById("livePrice");
+    if (box && box.dataset.zip) {
+      var zip = box.dataset.zip;
+      var lang = document.documentElement.lang || "es";
+      box.hidden = false;
+      box.textContent = lang === "en" ? "Checking live price…" : "Buscando precio en vivo…";
+      fetch("/api/search?zip=" + encodeURIComponent(zip) + "&radius_mi=8&limit=12")
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          var c = d && d.cheapest;
+          if (c && c.price != null) {
+            var p = "$" + Number(c.price).toFixed(2);
+            var name = c.name || c.brand || "";
+            box.innerHTML = lang === "en"
+              ? ("Cheapest Regular now: <strong>" + p + "</strong> " + name)
+              : ("Regular más barata ahora: <strong>" + p + "</strong> " + name);
+          } else {
+            box.textContent = lang === "en" ? "Open the app to compare." : "Abre la app para comparar.";
+          }
+        })
+        .catch(function () {
+          box.textContent = lang === "en" ? "Open the app to compare." : "Abre la app para comparar.";
+        });
+    }
   </script>
 </body>
 </html>

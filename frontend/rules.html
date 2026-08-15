@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="index, follow" />
+  <title>GasRadar — Rules / Reglas</title>
+  <link rel="stylesheet" href="/static/styles.css?v=0.9.60" />
+  <link rel="icon" href="/static/favicon-32.png?v=0.2.9" type="image/png" />
+</head>
+<body>
+  <div class="app privacy-page">
+    <header class="top">
+      <div class="brand">
+        <a href="/" class="logo-link"><img class="logo" src="/static/logo.svg?v=0.2.9" width="48" height="48" alt="" /></a>
+        <div class="brand-text">
+          <h1><span class="brand-gas">Gas</span><span class="brand-radar">Radar</span></h1>
+          <p class="subtitle" id="sub">Reglas</p>
+        </div>
+      </div>
+      <div class="lang-switch">
+        <button type="button" class="lang-btn active" id="btnLangEs">ES</button>
+        <button type="button" class="lang-btn" id="btnLangEn">EN</button>
+      </div>
+    </header>
+    <section class="card privacy-card" id="contentEs">
+      <h2>Reglas de la comunidad</h2>
+      <p class="privacy-meta">Última actualización: 15 de agosto de 2026</p>
+      <ul>
+        <li>Reporta el precio que viste en la bomba. No inventes números.</li>
+        <li>No uses el bot ni la web para spam o ataques.</li>
+        <li>GasRadar es una guía. Confirma el precio en la estación.</li>
+        <li>No publiques datos de otras personas.</li>
+      </ul>
+      <p>Reportes: <a href="mailto:contact@gasradarapp.com">contact@gasradarapp.com</a></p>
+    </section>
+    <section class="card privacy-card" id="contentEn" hidden>
+      <h2>Community rules</h2>
+      <p class="privacy-meta">Last updated: August 15, 2026</p>
+      <ul>
+        <li>Report the pump price you actually saw. Don’t invent numbers.</li>
+        <li>Don’t use the bot or the site for spam or attacks.</li>
+        <li>GasRadar is a guide. Confirm the price at the station.</li>
+        <li>Don’t post other people’s personal data.</li>
+      </ul>
+      <p>Reports: <a href="mailto:contact@gasradarapp.com">contact@gasradarapp.com</a></p>
+    </section>
+    <footer class="site-footer">
+      <div class="footer-links">
+        <a href="/">GasRadar</a> · <a href="/privacy">Privacy</a> · <a href="/terminos">Terms</a>
+      </div>
+    </footer>
+  </div>
+  <script>
+    const KEY = "gasradar_lang";
+    function setLang(lang) {
+      try { localStorage.setItem(KEY, lang); } catch (_) {}
+      document.documentElement.lang = lang;
+      document.getElementById("contentEs").hidden = lang !== "es";
+      document.getElementById("contentEn").hidden = lang !== "en";
+      document.getElementById("btnLangEs").classList.toggle("active", lang === "es");
+      document.getElementById("btnLangEn").classList.toggle("active", lang === "en");
+      document.getElementById("sub").textContent = lang === "en" ? "Rules" : "Reglas";
+    }
+    document.getElementById("btnLangEs").onclick = () => setLang("es");
+    document.getElementById("btnLangEn").onclick = () => setLang("en");
+    const s = (localStorage.getItem(KEY) || navigator.language || "es").toLowerCase();
+    setLang(s.startsWith("en") ? "en" : "es");
+  </script>
+</body>
+</html>
