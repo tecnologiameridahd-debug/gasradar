@@ -60,6 +60,32 @@ def _cache_get(key: str) -> dict | None:
     return None
 
 
+def peek_cached_search(zip_code: str | None, fuel: str = "regular") -> dict | None:
+    """Devuelve un resultado cacheado de ese ZIP si hay precio real."""
+    z = (str(zip_code or "").strip())[:5]
+    if len(z) != 5:
+        return None
+    for radius in (5.0, 8.0):
+        for limit in (12, 16, 22, 30):
+            for quick in (True, False):
+                key = _search_cache_key(
+                    zip_code=z,
+                    lat=None,
+                    lon=None,
+                    radius_mi=radius,
+                    fuel=fuel,
+                    limit=limit,
+                    quick=quick,
+                )
+                hit = _cache_get(key)
+                if not hit:
+                    continue
+                stations = hit.get("stations") or []
+                if any(s.get("price") is not None for s in stations) or hit.get("cheapest"):
+                    return hit
+    return None
+
+
 def _cache_put(key: str, data: dict) -> None:
     if len(_SEARCH_CACHE) >= _SEARCH_CACHE_MAX:
         # borrar entradas más viejas

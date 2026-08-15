@@ -168,10 +168,12 @@
       document.getElementById("kickerEn").textContent = (d.is_today ? "TODAY · " : "") + d.code + " · EN";
       document.getElementById("nameEs").textContent = d.city + ", " + d.state;
       document.getElementById("nameEn").textContent = d.city + ", " + d.state_en;
-      document.getElementById("priceEs").innerHTML = "…<span>Regular / galón</span>";
-      document.getElementById("priceEn").innerHTML = "…<span>Regular / gallon</span>";
-      document.getElementById("stationEs").textContent = "Buscando precio…";
-      document.getElementById("stationEn").textContent = "Finding price…";
+      document.getElementById("priceEs").innerHTML = (d.price || "—") + "<span>Regular / galón</span>";
+      document.getElementById("priceEn").innerHTML = (d.price || "—") + "<span>Regular / gallon</span>";
+      document.getElementById("stationEs").textContent = d.station || "—";
+      document.getElementById("stationEn").textContent = d.station_en || d.station || "—";
+      document.getElementById("metaEs").textContent = [d.miles, d.address].filter(Boolean).join(" · ");
+      document.getElementById("metaEn").textContent = [d.miles, d.address].filter(Boolean).join(" · ");
       document.getElementById("captionEs").value = d.caption_es || d.caption || "";
       document.getElementById("captionEn").value = d.caption_en || "";
       document.getElementById("open").href = d.app_link;
@@ -184,6 +186,7 @@
       sel.onchange = () => {
         location.href = reelUrl(sel.value);
       };
+      if (d.live && d.price && d.price !== "—") return;
       const pq = new URLSearchParams({ key, city: d.slug });
       try {
         const pr = await fetch("/api/reel/precio?" + pq.toString());

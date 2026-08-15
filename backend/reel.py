@@ -72,12 +72,117 @@ def _captions(city: dict, st: dict, price: str, station: str, miles_s: str) -> t
     return es, en
 
 
+_REEL_CACHE: dict[str, tuple[float, dict]] = {}
+_REEL_TTL = 20 * 60
+
+
+def _cache_get(zip_code: str) -> dict | None:
+    import time
+
+    hit = _REEL_CACHE.get(zip_code)
+    if not hit:
+        return None
+    ts, data = hit
+    if time.time() - ts > _REEL_TTL:
+        _REEL_CACHE.pop(zip_code, None)
+        return None
+    return data
+
+
+def _cache_put(zip_code: str, data: dict) -> None:
+    import time
+
+    _REEL_CACHE[zip_code] = (time.time(), data)
+
+
+def _from_search(data: dict | None) -> dict | None:
+    if not data:
+        return None
+    cheapest = data.get("cheapest")
+    if not cheapest:
+        live = [s for s in (data.get("stations") or []) if s.get("price") is not None]
+        live.sort(key=lambda s: float(s["price"]))
+        if not live:
+            return None
+        s0 = live[0]
+        cheapest = {
+            "name": s0.get("name"),
+            "brand": s0.get("brand"),
+            "price": s0.get("price"),
+            "distance_mi": s0.get("distance_mi"),
+            "address": s0.get("address"),
+        }
+    price = _fmt_price(cheapest.get("price"))
+    if price == "—":
+        return None
+    station = cheapest.get("name") or cheapest.get("brand") or ""
+    miles = cheapest.get("distance_mi")
+    try:
+        miles_s = f"{float(miles):.1f} mi"
+    except (TypeError, ValueError):
+        miles_s = ""
+    return {
+        "price": price,
+        "station": station,
+        "station_en": station,
+        "miles": miles_s,
+        "address": cheapest.get("address") or "",
+        "live": True,
+    }
+
+
+def _state_avg(code: str) -> dict | None:
+    try:
+        from backend.prices import price_meta
+
+        avg = (price_meta(code, fast=True) or {}).get("state_avg") or {}
+        price = _fmt_price(avg.get("regular"))
+        if price == "—":
+            return None
+        return {
+            "price": price,
+            "station": f"Promedio {code}",
+            "station_en": f"{code} average",
+            "miles": "",
+            "address": "",
+            "live": False,
+        }
+    except Exception:
+        return None
+
+
+def _pack_price(city: dict, st: dict, info: dict | None) -> dict:
+    if not info:
+        cap_es, cap_en = _captions(city, st, "—", "", "")
+        return {
+            "price": "—",
+            "station": "Buscando precio…",
+            "station_en": "Finding price…",
+            "miles": "",
+            "address": "",
+            "live": False,
+            "caption": cap_es,
+            "caption_es": cap_es,
+            "caption_en": cap_en,
+        }
+    cap_es, cap_en = _captions(city, st, info["price"], info["station"], info.get("miles") or "")
+    return {
+        **info,
+        "caption": cap_es,
+        "caption_es": cap_es,
+        "caption_en": cap_en,
+    }
+
+
 def build_reel(slug: str | None = None) -> dict:
-    """Ciudad al instante. El precio se pide aparte en fill_price()."""
+    """Ciudad al instante. Usa cache o promedio del estado; el vivo se pide aparte."""
+    from backend.search_core import peek_cached_search
+
     city = find_city(slug)
     st = STATE_BY_SLUG[city["state"]]
     prev_s, next_s = neighbors(city["slug"])
-    cap_es, cap_en = _captions(city, st, "—", "", "")
+    info = _cache_get(city["zip"]) or _from_search(peek_cached_search(city["zip"])) or _state_avg(st["code"])
+    packed = _pack_price(city, st, info)
     return {
         "today": date.today().isoformat(),
         "is_today": city["slug"] == city_of_day()["slug"],
@@ -88,14 +193,7 @@ def build_reel(slug: str | None = None) -> dict:
         "state_slug": city["state"],
         "code": st["code"],
         "zip": city["zip"],
-        "price": "—",
-        "station": "Buscando precio…",
-        "station_en": "Finding price…",
-        "miles": "",
-        "address": "",
-        "caption": cap_es,
-        "caption_es": cap_es,
-        "caption_en": cap_en,
+        **packed,
         "link": f"https://gasradarapp.com/gas/{city['state']}/{city['slug']}",
         "app_link": f"https://gasradarapp.com/?zip={city['zip']}",
         "prev": prev_s,
@@ -106,63 +204,49 @@ def build_reel(slug: str | None = None) -> dict:
 
 
 def fill_price(slug: str | None = None) -> dict:
-    """Precio real con tope de 8s. Si falla, la ciudad igual ya se ve."""
+    """Precio: cache (instantáneo) o búsqueda viva con tope 8s."""
     import concurrent.futures
 
-    from backend.search_core import run_search
+    from backend.search_core import peek_cached_search, run_search
 
     city = find_city(slug)
     st = STATE_BY_SLUG[city["state"]]
 
+    cached = _cache_get(city["zip"])
+    if cached and cached.get("live"):
+        return _pack_price(city, st, cached)
+
+    peeked = _from_search(peek_cached_search(city["zip"]))
+    if peeked:
+        _cache_put(city["zip"], peeked)
+        return _pack_price(city, st, peeked)
+
     def _search():
         return run_search(
             zip=city["zip"],
-            radius_mi=8.0,
+            radius_mi=5.0,
             fuel="regular",
             limit=12,
             track=False,
             quick=True,
         )
 
-    cheapest = None
     error = None
+    info = None
     try:
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
             data = pool.submit(_search).result(timeout=8)
-        cheapest = data.get("cheapest") or None
-        if not cheapest:
-            live = [s for s in (data.get("stations") or []) if s.get("price") is not None]
-            live.sort(key=lambda s: float(s["price"]))
-            if live:
-                s0 = live[0]
-                cheapest = {
-                    "name": s0.get("name"),
-                    "brand": s0.get("brand"),
-                    "price": s0.get("price"),
-                    "distance_mi": s0.get("distance_mi"),
-                    "address": s0.get("address"),
-                }
+        info = _from_search(data)
     except Exception as e:
         error = str(e)[:180]
 
-    price = _fmt_price((cheapest or {}).get("price"))
-    station = (cheapest or {}).get("name") or (cheapest or {}).get("brand") or ""
-    miles = (cheapest or {}).get("distance_mi")
-    try:
-        miles_s = f"{float(miles):.1f} mi"
-    except (TypeError, ValueError):
-        miles_s = ""
-    if price == "—":
-        station = station or "Abre la app para ver el precio"
-    cap_es, cap_en = _captions(city, st, price, station, miles_s)
-    return {
-        "price": price,
-        "station": station,
-        "station_en": station if price != "—" else "Open the app to see the price",
-        "miles": miles_s,
-        "address": (cheapest or {}).get("address") or "",
-        "caption": cap_es,
-        "caption_es": cap_es,
-        "caption_en": cap_en,
-        "error": error,
-    }
+    if info:
+        _cache_put(city["zip"], info)
+        packed = _pack_price(city, st, info)
+    else:
+        packed = _pack_price(city, st, _state_avg(st["code"]))
+        if packed["price"] == "—":
+            packed["station"] = "Abre la app para ver el precio"
+            packed["station_en"] = "Open the app to see the price"
+    packed["error"] = error
+    return packed
