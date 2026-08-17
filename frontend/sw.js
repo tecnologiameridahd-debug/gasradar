@@ -1,11 +1,11 @@
-/* GasRadar service worker — v0.9.61
+/* GasRadar service worker — v0.9.62
  * JS/CSS: red primero (evita app.js viejo que “no busca”).
  * HTML: red primero + fallback caché (sin flash blanco en cold start).
  */
-const CACHE = "gasradar-v0.9.61";
+const CACHE = "gasradar-v0.9.62";
 const PRECACHE = [
   "/",
-  "/static/styles.css?v=0.9.61",
+  "/static/styles.css?v=0.9.62",
   "/static/brand-logos.js?v=0.9.1",
   "/static/app.js?v=0.9.60",
   "/static/logo.svg?v=0.2.9",
