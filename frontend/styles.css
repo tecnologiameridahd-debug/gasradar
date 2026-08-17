@@ -609,11 +609,9 @@ button.btn-ghost,
   line-height: 1;
 }
 
-/* FABs sociales un poco más abajo en PWA */
-@media (display-mode: standalone) {
-  .social-fabs {
-    bottom: max(16px, env(safe-area-inset-bottom));
-  }
+@media (max-width: 640px) {
+  .bmc-mini span[data-i18n="buyMeCoffee"] { display: none; }
+  .bmc-mini { width: 34px; padding: 0; justify-content: center; }
 }
 
 button.btn-ghost:hover,
@@ -1472,6 +1470,26 @@ button.btn-ghost:hover,
 }
 
 /* ——— Footer ——— */
+.footer-socials {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 0 0 14px;
+}
+.footer-fab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  color: #fff;
+  text-decoration: none;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.footer-fab:hover { filter: brightness(1.08); }
+
 .site-footer {
   text-align: center;
   color: var(--muted);
