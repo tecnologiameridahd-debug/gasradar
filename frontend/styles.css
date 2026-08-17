@@ -610,8 +610,12 @@ button.btn-ghost,
 }
 
 @media (max-width: 640px) {
-  .bmc-mini span[data-i18n="buyMeCoffee"] { display: none; }
-  .bmc-mini { width: 34px; padding: 0; justify-content: center; }
+  .bmc-mini {
+    max-width: none;
+    height: 26px;
+    padding: 0 10px 0 8px;
+    font-size: 0.72rem;
+  }
 }
 
 button.btn-ghost:hover,
@@ -1502,6 +1506,16 @@ button.btn-ghost:hover,
   letter-spacing: 0.01em;
   opacity: 0.92;
 }
+
+.footer-support {
+  margin: 10px 0 4px;
+  font-weight: 700;
+}
+.footer-support a {
+  color: #fde68a;
+  text-decoration: none;
+}
+.footer-support a:hover { text-decoration: underline; }
 
 .footer-links {
   margin-top: 6px;
