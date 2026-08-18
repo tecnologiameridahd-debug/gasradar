@@ -120,6 +120,8 @@ const I18N = {
     telegramAlerts: "Alertas",
     trustpilotReview: "Deja una reseña",
     buyMeCoffee: "Apóyame",
+    donate: "Donar",
+    donateTitle: "Donar un café — ayuda a mantener GasRadar",
     pullHint: "Desliza para actualizar",
     pullRelease: "Suelta para actualizar",
     pullRefreshing: "Actualizando precios…",
@@ -240,6 +242,8 @@ const I18N = {
     telegramAlerts: "Alerts",
     trustpilotReview: "Leave a review",
     buyMeCoffee: "Support",
+    donate: "Donate",
+    donateTitle: "Buy me a coffee — help keep GasRadar running",
     pullHint: "Pull to refresh",
     pullRelease: "Release to refresh",
     pullRefreshing: "Updating prices…",
@@ -306,6 +310,11 @@ function applyStaticI18n() {
   if (en) en.classList.toggle("active", state.lang === "en");
   const galIn = $("#wageGallons");
   if (galIn) galIn.setAttribute("aria-label", t("wageGallons"));
+  const bmc = $("#btnBuyMeCoffee");
+  if (bmc) {
+    bmc.setAttribute("title", t("donateTitle"));
+    bmc.setAttribute("aria-label", t("donate"));
+  }
   // Título fijo (no cambiar): GasRadar — Gas prices USA
   document.title = "GasRadar — Gas prices USA";
   const metaDesc = document.getElementById("metaDesc");
