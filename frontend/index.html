@@ -158,7 +158,7 @@
     <link rel="icon" href="/static/favicon-64.png?v=0.2.9" type="image/png" sizes="64x64" />
     <link rel="apple-touch-icon" href="/static/logo-192.png?v=0.5.0" sizes="192x192" />
     <link rel="apple-touch-icon" href="/static/logo-512.png?v=0.5.0" sizes="512x512" />
-    <link rel="stylesheet" href="/static/styles.css?v=0.9.63" />
+    <link rel="stylesheet" href="/static/styles.css?v=0.9.64" />
   </head>
   <body style="background:#0b1220;margin:0">
     <div class="boot-splash" id="bootSplash" aria-hidden="true">
@@ -353,6 +353,21 @@
         </div>
       </section>
 
+      <section class="card wage-card" id="wageCard" hidden>
+        <div class="wage-top">
+          <strong id="wageTitle" data-i18n="wageTitle">Horas para llenar el tanque</strong>
+          <span class="badge muted" id="wageState"></span>
+        </div>
+        <p class="wage-line" id="wageLine"></p>
+        <label class="field wage-gal">
+          <span class="field-label" data-i18n="wageGallons">Galones del tanque</span>
+          <input id="wageGallons" type="number" min="5" max="40" step="0.5" value="15" />
+        </label>
+        <p class="wage-note" id="wageNote" data-i18n="wageNote">
+          Sueldo mínimo estatal × el precio más barato cerca. Ciudades grandes pueden pagar más.
+        </p>
+      </section>
+
       <section class="card results-card">
         <div class="results-head" id="resultsHead" hidden>
           <h2 class="results-title" data-i18n="nearYou">Cerca de ti</h2>
@@ -466,7 +481,7 @@
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script src="/static/brand-logos.js?v=0.9.1"></script>
-    <script src="/static/app.js?v=0.9.60"></script>
+    <script src="/static/app.js?v=0.9.64"></script>
     <script>
       /* Quita splash cuando la UI ya pintó */
       (function () {

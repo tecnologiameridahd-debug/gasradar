@@ -17,7 +17,7 @@ from backend.prices import report_price
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.9.63"
+APP_VERSION = "0.9.64"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -359,6 +359,19 @@ def api_geocode(zip_code: str):
     if not g:
         raise HTTPException(404, "ZIP no encontrado")
     return g
+
+
+@app.get("/api/min-wage")
+def api_min_wage(state: str = Query(""), gallons: float = 15, price: float | None = None):
+    from backend.min_wage import tank_work, wage_for_state
+
+    w = wage_for_state(state)
+    if not w:
+        raise HTTPException(400, "Estado inválido (usa CO, TX, CA…)")
+    out = dict(w)
+    if price is not None:
+        out["tank"] = tank_work(price=price, gallons=gallons, hourly=w["hourly"])
+    return out
 
 
 @app.get("/api/zyla/test")

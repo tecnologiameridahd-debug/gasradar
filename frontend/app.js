@@ -21,6 +21,12 @@ const I18N = {
     noLocation: "Sin ubicación",
     locHint: "Escribe un ZIP o usa el GPS",
     cheapestBadge: "★ Más barata",
+    wageTitle: "Horas para llenar el tanque",
+    wageGallons: "Galones del tanque",
+    wageNote: "Sueldo mínimo estatal × el precio más barato cerca. En algunas ciudades pagan más.",
+    wageLine: (st, wage, gal, cost, hours) =>
+      `En ${st} el mínimo es $${wage}/h. Llenar ${gal} gal cuesta ~$${cost} = ${hours} h de trabajo.`,
+    wageHours: (h) => (h < 1 ? `${Math.round(h * 60)} min` : `${h.toFixed(1)} h`),
     directions: "Cómo llegar",
     navOpenTitle: "Cómo llegar",
     navOpenHint: "Se abrirá Apple Maps o Google Maps. GasRadar se queda aquí.",
@@ -134,6 +140,12 @@ const I18N = {
     noLocation: "No location",
     locHint: "Enter a ZIP or use GPS",
     cheapestBadge: "★ Cheapest",
+    wageTitle: "Hours to fill the tank",
+    wageGallons: "Tank size (gallons)",
+    wageNote: "State minimum wage × cheapest nearby price. Some cities pay more.",
+    wageLine: (st, wage, gal, cost, hours) =>
+      `In ${st} the minimum is $${wage}/hr. Filling ${gal} gal costs ~$${cost} = ${hours} of work.`,
+    wageHours: (h) => (h < 1 ? `${Math.round(h * 60)} min` : `${h.toFixed(1)} h`),
     directions: "Directions",
     navOpenTitle: "Directions",
     navOpenHint: "Apple Maps or Google Maps will open. GasRadar stays here.",
@@ -1054,6 +1066,47 @@ function renderEiaBanner(data) {
   );
 }
 
+const TANK_KEY = "gasradar_tank_gal";
+
+function tankGallons() {
+  const el = $("#wageGallons");
+  let g = el ? Number(el.value) : Number(localStorage.getItem(TANK_KEY) || 15);
+  if (!Number.isFinite(g) || g < 5) g = 15;
+  if (g > 40) g = 40;
+  return g;
+}
+
+function renderWageCard(data) {
+  const card = $("#wageCard");
+  if (!card) return;
+  const w = data && data.min_wage;
+  const price =
+    (data && data.cheapest && Number(data.cheapest.price)) ||
+    (data && data.state_avg && Number(data.state_avg.regular));
+  if (!w || !price || Number.isNaN(price)) {
+    card.hidden = true;
+    return;
+  }
+  const gal = tankGallons();
+  const cost = price * gal;
+  const hours = cost / Number(w.hourly);
+  const hoursTxt = t("wageHours", hours);
+  const stEl = $("#wageState");
+  const line = $("#wageLine");
+  if (stEl) stEl.textContent = `${w.state} · $${Number(w.hourly).toFixed(2)}/h`;
+  if (line) {
+    line.textContent = t(
+      "wageLine",
+      w.state,
+      Number(w.hourly).toFixed(2),
+      gal,
+      cost.toFixed(2),
+      hoursTxt
+    );
+  }
+  card.hidden = false;
+}
+
 function render(data) {
   $("#locationLabel").textContent = data.center.label || "—";
   setLocDot("on");
@@ -1122,6 +1175,8 @@ function render(data) {
       state.stations.find((x) => x.id === b.station_id) ||
       state.stations.find((x) => x.name === b.name) ||
       b;
+    renderWageCard(data);
+
     const bestMaps = $("#bestMaps");
     if (bestMaps) {
       bestMaps.textContent = t("directions");
@@ -1134,6 +1189,7 @@ function render(data) {
   } else {
     state.cheapest = null;
     $("#bestCard").hidden = true;
+    renderWageCard(data);
   }
 
   if (!state.stations.length) {
@@ -1473,6 +1529,19 @@ async function useGps() {
 
 function startApp() {
   applyStaticI18n();
+  const galEl = $("#wageGallons");
+  if (galEl) {
+    const saved = Number(localStorage.getItem(TANK_KEY) || 15);
+    if (saved >= 5 && saved <= 40) galEl.value = String(saved);
+    galEl.addEventListener("change", () => {
+      const g = tankGallons();
+      galEl.value = String(g);
+      try {
+        localStorage.setItem(TANK_KEY, String(g));
+      } catch (_) {}
+      if (state.lastData) renderWageCard(state.lastData);
+    });
+  }
   const zipQ = new URLSearchParams(location.search).get("zip") || "";
   const zipDigits = String(zipQ).replace(/\D/g, "").slice(0, 5);
   if (zipDigits.length === 5) {

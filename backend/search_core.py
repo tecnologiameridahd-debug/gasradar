@@ -460,6 +460,8 @@ def run_search(
     elapsed = round(time.time() - t_start, 2)
     print(f"[search] done total={elapsed}s stations={len(priced)} partial={partial}")
 
+    from backend.min_wage import wage_for_state
+
     out = {
         "center": {
             "lat": lat,
@@ -468,6 +470,7 @@ def run_search(
             "state": state,
             "zip": zip_code,
         },
+        "min_wage": wage_for_state(state),
         "fuel": fuel,
         "radius_mi": radius_mi,
         "partial": partial,

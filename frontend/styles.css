@@ -784,6 +784,27 @@ button.btn-ghost:hover,
   margin-top: 2px;
 }
 
+.wage-card { margin-top: 10px; }
+.wage-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.wage-line { margin: 0 0 10px; font-size: 0.95rem; line-height: 1.4; }
+.wage-gal { margin: 0 0 8px; }
+.wage-gal input {
+  width: 100%;
+  max-width: 120px;
+  background: var(--elev, #151d2e);
+  color: inherit;
+  border: 1px solid var(--line, #2a3548);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font: inherit;
+}
+.wage-note { margin: 0; font-size: 0.78rem; color: var(--muted, #8b9bb3); }
 .best-actions {
   display: flex;
   gap: 8px;
