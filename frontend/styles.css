@@ -784,15 +784,12 @@ button.btn-ghost:hover,
   margin-top: 2px;
 }
 
-.wage-card { margin-top: 10px; }
-.wage-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 8px;
+.wage-in-best {
+  margin: 10px 0 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line, #2a3548);
 }
-.wage-line { margin: 0 0 10px; font-size: 0.95rem; line-height: 1.4; }
+.wage-line { margin: 0 0 8px; font-size: 0.9rem; line-height: 1.4; }
 .wage-gal { margin: 0 0 8px; }
 .wage-gal input {
   width: 100%;
