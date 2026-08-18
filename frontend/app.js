@@ -23,6 +23,8 @@ const I18N = {
     cheapestBadge: "★ Más barata",
     wageTitle: "Horas para llenar el tanque",
     wageGallons: "Galones del tanque",
+    wageGalShort: "gal",
+    wageWork: "de trabajo",
     wageNote: "Sueldo mínimo estatal × el precio más barato cerca. En algunas ciudades pagan más.",
     wageLine: (st, wage, gal, cost, hours) =>
       `En ${st} el mínimo es $${wage}/h. Llenar ${gal} gal cuesta ~$${cost} = ${hours} h de trabajo.`,
@@ -142,6 +144,8 @@ const I18N = {
     cheapestBadge: "★ Cheapest",
     wageTitle: "Hours to fill the tank",
     wageGallons: "Tank size (gallons)",
+    wageGalShort: "gal",
+    wageWork: "of work",
     wageNote: "State minimum wage × cheapest nearby price. Some cities pay more.",
     wageLine: (st, wage, gal, cost, hours) =>
       `In ${st} the minimum is $${wage}/hr. Filling ${gal} gal costs ~$${cost} = ${hours} of work.`,
@@ -300,6 +304,8 @@ function applyStaticI18n() {
   const en = $("#btnLangEn");
   if (es) es.classList.toggle("active", state.lang === "es");
   if (en) en.classList.toggle("active", state.lang === "en");
+  const galIn = $("#wageGallons");
+  if (galIn) galIn.setAttribute("aria-label", t("wageGallons"));
   // Título fijo (no cambiar): GasRadar — Gas prices USA
   document.title = "GasRadar — Gas prices USA";
   const metaDesc = document.getElementById("metaDesc");
@@ -1091,19 +1097,20 @@ function renderWageCard(data) {
   const cost = price * gal;
   const hours = cost / Number(w.hourly);
   const hoursTxt = t("wageHours", hours);
+  const hoursEl = $("#wageHoursBig");
+  const cap = $("#wageCaption");
   const stEl = $("#wageState");
-  const line = $("#wageLine");
+  if (hoursEl) hoursEl.textContent = hoursTxt;
+  if (cap) cap.textContent = t("wageWork");
   if (stEl) stEl.textContent = `${w.state} · $${Number(w.hourly).toFixed(2)}/h`;
-  if (line) {
-    line.textContent = t(
-      "wageLine",
-      w.state,
-      Number(w.hourly).toFixed(2),
-      gal,
-      cost.toFixed(2),
-      hoursTxt
-    );
-  }
+  card.title = t(
+    "wageLine",
+    w.state,
+    Number(w.hourly).toFixed(2),
+    gal,
+    cost.toFixed(2),
+    hoursTxt
+  );
   card.hidden = false;
 }
 

@@ -158,7 +158,7 @@
     <link rel="icon" href="/static/favicon-64.png?v=0.2.9" type="image/png" sizes="64x64" />
     <link rel="apple-touch-icon" href="/static/logo-192.png?v=0.5.0" sizes="192x192" />
     <link rel="apple-touch-icon" href="/static/logo-512.png?v=0.5.0" sizes="512x512" />
-    <link rel="stylesheet" href="/static/styles.css?v=0.9.66" />
+    <link rel="stylesheet" href="/static/styles.css?v=0.9.67" />
   </head>
   <body style="background:#0b1220;margin:0">
     <div class="boot-splash" id="bootSplash" aria-hidden="true">
@@ -325,19 +325,22 @@
           <span class="badge gold" data-i18n="cheapestBadge">★ Más barata</span>
           <span class="badge muted" id="bestSourceBadge"></span>
         </div>
-        <div class="price" id="bestPrice"><div class="price-box large"><span class="price-whole">—</span></div></div>
+        <div class="best-row">
+          <div class="price" id="bestPrice"><div class="price-box large"><span class="price-whole">—</span></div></div>
+          <div class="wage-beside" id="wageCard" hidden>
+            <div class="wage-hours" id="wageHoursBig">—</div>
+            <div class="wage-caption" id="wageCaption" data-i18n="wageWork">de trabajo</div>
+            <label class="wage-mini-gal">
+              <input id="wageGallons" type="number" min="5" max="40" step="0.5" value="15" aria-label="Galones del tanque" />
+              <span data-i18n="wageGalShort">gal</span>
+            </label>
+            <span class="wage-state" id="wageState"></span>
+          </div>
+        </div>
         <div class="best-save" id="bestSave" hidden></div>
         <div class="best-info">
           <strong id="bestName">—</strong>
           <div class="meta" id="bestMeta"></div>
-        </div>
-        <div class="wage-in-best" id="wageCard" hidden>
-          <p class="wage-line" id="wageLine"></p>
-          <label class="field wage-gal">
-            <span class="field-label" data-i18n="wageGallons">Galones del tanque</span>
-            <input id="wageGallons" type="number" min="5" max="40" step="0.5" value="15" />
-          </label>
-          <span class="badge muted" id="wageState"></span>
         </div>
         <div class="best-actions">
           <button class="btn-secondary grow" id="bestMaps" type="button" data-i18n="directions">
@@ -462,7 +465,7 @@
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script src="/static/brand-logos.js?v=0.9.1"></script>
-    <script src="/static/app.js?v=0.9.66"></script>
+    <script src="/static/app.js?v=0.9.67"></script>
     <script>
       /* Quita splash cuando la UI ya pintó */
       (function () {
