@@ -1098,11 +1098,9 @@ function renderWageCard(data) {
   const hours = cost / Number(w.hourly);
   const hoursTxt = t("wageHours", hours);
   const hoursEl = $("#wageHoursBig");
-  const cap = $("#wageCaption");
   const stEl = $("#wageState");
   if (hoursEl) hoursEl.textContent = hoursTxt;
-  if (cap) cap.textContent = t("wageWork");
-  if (stEl) stEl.textContent = `${w.state} · $${Number(w.hourly).toFixed(2)}/h`;
+  if (stEl) stEl.textContent = `${w.state} $${Number(w.hourly).toFixed(2)}/h`;
   card.title = t(
     "wageLine",
     w.state,

@@ -751,9 +751,9 @@ button.btn-ghost:hover,
 
 .best-row {
   display: flex;
-  align-items: stretch;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   margin: 4px 0 2px;
 }
 
@@ -771,11 +771,10 @@ button.btn-ghost:hover,
   align-items: flex-end;
   justify-content: center;
   text-align: right;
-  gap: 2px;
-  padding: 8px 12px 8px 10px;
-  border: 1px solid rgba(34, 197, 94, 0.28);
-  border-radius: 12px;
-  background: rgba(10, 22, 16, 0.55);
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  background: none;
 }
 
 .wage-beside[hidden] {
@@ -783,7 +782,7 @@ button.btn-ghost:hover,
 }
 
 .wage-hours {
-  font-size: 1.7rem;
+  font-size: 1.55rem;
   font-weight: 800;
   letter-spacing: -0.04em;
   line-height: 1;
@@ -791,40 +790,50 @@ button.btn-ghost:hover,
   font-variant-numeric: tabular-nums;
 }
 
-.wage-caption {
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--muted);
-  line-height: 1.2;
-}
-
-.wage-mini-gal {
+.wage-meta {
   display: inline-flex;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
   gap: 4px;
-  margin-top: 4px;
-  font-size: 0.75rem;
+  max-width: 100%;
+  font-size: 0.72rem;
   font-weight: 600;
   color: var(--muted);
+  line-height: 1;
+  white-space: nowrap;
 }
 
-.wage-mini-gal input {
-  width: 46px;
-  background: var(--elev, #151d2e);
+.wage-meta input {
+  width: 2.4rem;
+  background: transparent;
   color: inherit;
-  border: 1px solid var(--line, #2a3548);
-  border-radius: 8px;
-  padding: 3px 6px;
+  border: 0;
+  border-bottom: 1px dashed var(--line, #2a3548);
+  border-radius: 0;
+  padding: 0 1px;
   font: inherit;
-  font-size: 0.8rem;
   font-weight: 700;
-  text-align: center;
+  text-align: right;
+  -moz-appearance: textfield;
+}
+
+.wage-meta input::-webkit-outer-spin-button,
+.wage-meta input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.wage-dot {
+  opacity: 0.55;
 }
 
 .wage-state {
-  font-size: 0.7rem;
+  font-size: inherit;
   font-weight: 600;
   color: var(--muted2, #6b7c99);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .best-save {
