@@ -97,6 +97,16 @@ def fetch_vps_stations(
     hit = _cache.get(cache_key)
     if hit and now - hit["ts"] < _CACHE_TTL:
         return list(hit["data"])
+    try:
+        from backend.price_cache import get as db_get
+
+        disk = db_get(f"vps:{cache_key}", ttl=_CACHE_TTL)
+        stations = (disk or {}).get("stations") if isinstance(disk, dict) else None
+        if stations:
+            _cache[cache_key] = {"ts": now, "data": list(stations)}
+            return list(stations)
+    except Exception:
+        pass
 
     params: dict[str, Any] = {"fuel": fuel, "limit": min(max(int(limit), 25), 40)}
     # GPS del centro del ZIP da muchas más estaciones con dirección que solo zip=
@@ -137,6 +147,12 @@ def fetch_vps_stations(
                 last_err = f"{base} empty"
                 continue
             _cache[cache_key] = {"ts": now, "data": out}
+            try:
+                from backend.price_cache import put as db_put
+
+                db_put(f"vps:{cache_key}", {"stations": out})
+            except Exception:
+                pass
             print(f"[vps_scraper] OK n={len(out)} method={data.get('method')} via={base}")
             return out
         except Exception as e:

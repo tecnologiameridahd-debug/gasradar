@@ -135,6 +135,15 @@ def init_schema() -> None:
                 cur.execute(
                     "CREATE INDEX IF NOT EXISTS idx_events_ip ON site_events (ip)"
                 )
+                cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS price_cache (
+                        cache_key TEXT PRIMARY KEY,
+                        payload TEXT NOT NULL,
+                        ts DOUBLE PRECISION NOT NULL
+                    )
+                    """
+                )
         else:
             # Crear tablas base SIN índice sobre ip (la tabla vieja puede no tener ip aún)
             conn.executescript(
@@ -174,6 +183,15 @@ def init_schema() -> None:
                 conn.execute("ALTER TABLE site_events ADD COLUMN ip_country TEXT")
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_events_ip ON site_events (ip)"
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS price_cache (
+                    cache_key TEXT PRIMARY KEY,
+                    payload TEXT NOT NULL,
+                    ts REAL NOT NULL
+                )
+                """
             )
 
     _schema_ready = True

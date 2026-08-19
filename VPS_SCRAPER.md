@@ -60,6 +60,16 @@ Redeploy GasRadar.
 - VPS ~$4–6/mes  
 - Sin Apify ni Zyla  
 
+## Caché aparte (Postgres)
+
+Los precios ya no viven solo en el disco del VPS.
+
+1. **VPS** — caché local 3 h (si esa máquina se cae, se pierde).
+2. **Render / Postgres** — tabla `price_cache`. Sobrevive a redeploys y a que un VPS muera.
+   Varios VPS y la web leen/escriben el mismo sitio.
+
+Si el scraper está caído, GasRadar sigue mostrando el último precio (hasta 3 h).
+
 ## Legal
 
 No es API oficial de GasBuddy. Usa caché y no spamees.

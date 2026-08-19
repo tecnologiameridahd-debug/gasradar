@@ -47,16 +47,26 @@ def _search_cache_key(
 
 def _cache_get(key: str) -> dict | None:
     hit = _SEARCH_CACHE.get(key)
-    if not hit:
-        return None
-    if time.time() - float(hit.get("ts") or 0) > _SEARCH_CACHE_TTL:
+    if hit and time.time() - float(hit.get("ts") or 0) <= _SEARCH_CACHE_TTL:
+        data = hit.get("data")
+        if isinstance(data, dict):
+            out = dict(data)
+            out["cached"] = True
+            return out
+    elif hit:
         _SEARCH_CACHE.pop(key, None)
-        return None
-    data = hit.get("data")
-    if isinstance(data, dict):
-        out = dict(data)
-        out["cached"] = True
-        return out
+    # Caché aparte (Postgres): sobrevive al redeploy y a que un VPS se caiga
+    try:
+        from backend.price_cache import get as db_get
+
+        disk = db_get(f"search:{key}", ttl=_SEARCH_CACHE_TTL)
+        if isinstance(disk, dict) and (disk.get("stations") or disk.get("cheapest")):
+            _SEARCH_CACHE[key] = {"ts": time.time(), "data": disk}
+            out = dict(disk)
+            out["cached"] = True
+            return out
+    except Exception:
+        pass
     return None
 
 
@@ -93,6 +103,12 @@ def _cache_put(key: str, data: dict) -> None:
         for k, _ in oldest[: max(1, _SEARCH_CACHE_MAX // 4)]:
             _SEARCH_CACHE.pop(k, None)
     _SEARCH_CACHE[key] = {"ts": time.time(), "data": data}
+    try:
+        from backend.price_cache import put as db_put
+
+        db_put(f"search:{key}", data)
+    except Exception:
+        pass
 
 
 # Techo para precios REALES (VPS). Prioridad: GasBuddy en vivo, no estimados AAA/EIA.
