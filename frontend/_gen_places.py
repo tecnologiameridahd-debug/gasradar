@@ -350,6 +350,7 @@ def collect_urls() -> list[tuple[str, str]]:
     urls = [
         ("/", "2026-08-18"),
         ("/download", "2026-08-18"),
+        ("/dmca", "2026-08-18"),
         ("/privacy", "2026-08-01"),
         ("/blog", "2026-08-03"),
         ("/terminos", TODAY),

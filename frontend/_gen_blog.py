@@ -818,6 +818,7 @@ def build_sitemap() -> None:
     urls: list[tuple[str, str]] = [
         ("/", "2026-08-18"),
         ("/download", "2026-08-18"),
+        ("/dmca", "2026-08-18"),
         ("/privacy", "2026-08-01"),
         ("/terminos", "2026-08-15"),
         ("/reglas", "2026-08-15"),

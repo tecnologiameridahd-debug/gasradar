@@ -763,6 +763,14 @@ def rules_page():
     return FileResponse(path)
 
 
+@app.get("/dmca")
+def dmca_page():
+    path = FRONTEND / "dmca.html"
+    if not path.exists():
+        raise HTTPException(404, "DMCA page missing")
+    return FileResponse(path)
+
+
 @app.get("/blog")
 @app.get("/blog/")
 def blog_index():

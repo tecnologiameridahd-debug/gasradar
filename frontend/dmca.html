@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b1220" />
+  <meta name="robots" content="index, follow" />
+  <meta name="description" content="GasRadar LLC DMCA designated agent. How to send a copyright takedown notice." />
+  <title>GasRadar — DMCA Designated Agent</title>
+  <link rel="canonical" href="https://gasradarapp.com/dmca" />
+  <link rel="stylesheet" href="/static/styles.css?v=0.9.74" />
+  <link rel="icon" href="/static/favicon-32.png?v=0.2.9" type="image/png" />
+</head>
+<body>
+  <div class="app privacy-page">
+    <header class="top">
+      <div class="brand">
+        <a href="/" class="logo-link"><img class="logo" src="/static/logo.svg?v=0.2.9" width="48" height="48" alt="" /></a>
+        <div class="brand-text">
+          <h1><span class="brand-gas">Gas</span><span class="brand-radar">Radar</span></h1>
+          <p class="subtitle" id="sub">DMCA</p>
+        </div>
+      </div>
+      <div class="lang-switch">
+        <button type="button" class="lang-btn active" id="btnLangEs">ES</button>
+        <button type="button" class="lang-btn" id="btnLangEn">EN</button>
+      </div>
+    </header>
+
+    <section class="card privacy-card" id="contentEs">
+      <h2>Agente designado DMCA</h2>
+      <p class="privacy-meta">Última actualización: 18 de agosto de 2026 · GasRadar LLC</p>
+
+      <p>
+        GasRadar LLC respeta la propiedad intelectual. Si crees que material en
+        gasradarapp.com o en la app GasRadar infringe tu copyright, envía un aviso
+        según la Digital Millennium Copyright Act (17 U.S.C. § 512) al agente designado:
+      </p>
+
+      <h3>Agente designado</h3>
+      <p>
+        <strong>Alberto Roa</strong><br />
+        GasRadar LLC<br />
+        1025 Garner St<br />
+        Colorado Springs, CO 80907<br />
+        United States<br />
+        Email: <a href="mailto:profejavierroa@gmail.com">profejavierroa@gmail.com</a><br />
+        Teléfono: 719-642-0849
+      </p>
+
+      <h3>Qué debe incluir el aviso</h3>
+      <ul>
+        <li>Firma física o electrónica del titular del derecho o de su representante.</li>
+        <li>Descripción de la obra protegida.</li>
+        <li>URL o ubicación del material que consideras infractor.</li>
+        <li>Tu nombre, dirección, teléfono y email.</li>
+        <li>Declaración de buena fe de que el uso no está autorizado.</li>
+        <li>Declaración, bajo pena de perjurio, de que la información es exacta y que actúas en nombre del titular.</li>
+      </ul>
+
+      <p>
+        Podemos retirar el material y, si aplica, notificar al usuario que lo publicó.
+        Un contra-aviso debe enviarse al mismo agente.
+      </p>
+      <p>Contacto general (no DMCA): <a href="mailto:contact@gasradarapp.com">contact@gasradarapp.com</a></p>
+    </section>
+
+    <section class="card privacy-card" id="contentEn" hidden>
+      <h2>DMCA designated agent</h2>
+      <p class="privacy-meta">Last updated: August 18, 2026 · GasRadar LLC</p>
+
+      <p>
+        GasRadar LLC respects intellectual property. If you believe material on
+        gasradarapp.com or in the GasRadar app infringes your copyright, send a notice
+        under the Digital Millennium Copyright Act (17 U.S.C. § 512) to our designated agent:
+      </p>
+
+      <h3>Designated agent</h3>
+      <p>
+        <strong>Alberto Roa</strong><br />
+        GasRadar LLC<br />
+        1025 Garner St<br />
+        Colorado Springs, CO 80907<br />
+        United States<br />
+        Email: <a href="mailto:profejavierroa@gmail.com">profejavierroa@gmail.com</a><br />
+        Phone: 719-642-0849
+      </p>
+
+      <h3>What the notice must include</h3>
+      <ul>
+        <li>A physical or electronic signature of the copyright owner or authorized agent.</li>
+        <li>Identification of the copyrighted work.</li>
+        <li>The URL or location of the material you claim is infringing.</li>
+        <li>Your name, address, phone number, and email.</li>
+        <li>A good-faith statement that the use is not authorized.</li>
+        <li>A statement under penalty of perjury that the information is accurate and that you are authorized to act.</li>
+      </ul>
+
+      <p>
+        We may remove the material and, if applicable, notify the user who posted it.
+        A counter-notice should be sent to the same agent.
+      </p>
+      <p>General contact (not DMCA): <a href="mailto:contact@gasradarapp.com">contact@gasradarapp.com</a></p>
+    </section>
+
+    <footer class="site-footer">
+      <div class="footer-links">
+        <a href="/">GasRadar</a> · <a href="/privacy">Privacidad</a> · <a href="/terminos">Términos</a> · <a href="/reglas">Reglas</a>
+      </div>
+    </footer>
+  </div>
+  <script>
+    const KEY = "gasradar_lang";
+    function setLang(lang) {
+      try { localStorage.setItem(KEY, lang); } catch (_) {}
+      document.documentElement.lang = lang;
+      document.getElementById("contentEs").hidden = lang !== "es";
+      document.getElementById("contentEn").hidden = lang !== "en";
+      document.getElementById("btnLangEs").classList.toggle("active", lang === "es");
+      document.getElementById("btnLangEn").classList.toggle("active", lang === "en");
+      document.getElementById("sub").textContent = "DMCA";
+    }
+    document.getElementById("btnLangEs").onclick = () => setLang("es");
+    document.getElementById("btnLangEn").onclick = () => setLang("en");
+    const s = (localStorage.getItem(KEY) || navigator.language || "es").toLowerCase();
+    setLang(s.startsWith("en") ? "en" : "es");
+  </script>
+</body>
+</html>
