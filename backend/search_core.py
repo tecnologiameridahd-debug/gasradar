@@ -111,6 +111,52 @@ def _cache_put(key: str, data: dict) -> None:
         pass
 
 
+def _overlay_reports(result: dict, fuel: str) -> dict:
+    """Sobre un resultado cacheado: el reporte fresco gana al precio de 3 h."""
+    try:
+        from backend.prices import apply_user_reports, cheapest_summary
+
+        stations = apply_user_reports(list(result.get("stations") or []), fuel)
+        stations.sort(
+            key=lambda x: (
+                round(float(x.get("price") or 99), 3),
+                float(x.get("distance_mi") or 99),
+            )
+        )
+        out = dict(result)
+        out["stations"] = stations
+        out["count"] = len(stations)
+        out["user_reports_count"] = sum(
+            1 for s in stations if s.get("price_source") == "user"
+        )
+        out["cheapest"] = cheapest_summary(stations) if stations else out.get("cheapest")
+        avg_fuel = None
+        try:
+            avg = out.get("state_avg") or {}
+            avg_fuel = avg.get(fuel) or avg.get("regular")
+        except Exception:
+            avg_fuel = None
+        if avg_fuel is not None:
+            for s in stations:
+                try:
+                    s["vs_avg"] = round(float(s["price"]) - float(avg_fuel), 3)
+                except Exception:
+                    pass
+            if out.get("cheapest"):
+                out["cheapest"]["vs_avg"] = out["cheapest"].get("vs_avg")
+                try:
+                    out["cheapest"]["savings_vs_avg"] = round(
+                        float(avg_fuel) - float(out["cheapest"]["price"]), 3
+                    )
+                    out["cheapest"]["source"] = out["cheapest"].get("source")
+                except Exception:
+                    pass
+        return out
+    except Exception as e:
+        print(f"[search] overlay reports: {e}")
+        return result
+
+
 # Techo para precios REALES (VPS). Prioridad: GasBuddy en vivo, no estimados AAA/EIA.
 _SEARCH_HARD_DEADLINE_S = 16.0
 
@@ -211,7 +257,7 @@ def run_search(
                     )
                 except Exception:
                     pass
-            return cached
+            return _overlay_reports(cached, fuel)
 
     from concurrent.futures import ThreadPoolExecutor, wait
 
@@ -407,6 +453,14 @@ def run_search(
             for p in priced
             if p.get("price_source") in ("gasbuddy", "user")
         ]
+
+    # Reportes de usuarios pisan el precio de esa estación (aunque el caché tenga 3 h)
+    try:
+        from backend.prices import apply_user_reports
+
+        priced = apply_user_reports(priced, fuel)
+    except Exception as e:
+        print(f"[search] apply_user_reports: {e}")
 
     priced.sort(
         key=lambda x: (

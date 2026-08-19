@@ -232,6 +232,74 @@ def report_price(station_id: str, fuel: str, price: float, note: str | None = No
     }
 
 
+def apply_user_reports(stations: list[dict], fuel: str) -> list[dict]:
+    """El reporte de un usuario pisa el precio cacheado (GasBuddy 3 h) de esa estación."""
+    fuel = (fuel or "regular").lower().strip()
+    if fuel not in ("regular", "mid", "premium", "diesel") or not stations:
+        return stations
+    ids = [str(s.get("id") or "") for s in stations if s.get("id")]
+    ids = [i for i in ids if i]
+    if not ids:
+        return stations
+    by_id: dict[str, list] = {i: [] for i in ids}
+    cutoff = time.time() - REPORT_MAX_AGE_SEC
+    placeholders = ",".join("?" * len(ids))
+    try:
+        rows = db_fetchall(
+            f"""
+            SELECT station_id, price, reported_at FROM price_reports
+            WHERE fuel=? AND reported_at>=? AND station_id IN ({placeholders})
+            ORDER BY reported_at DESC
+            """,
+            (fuel, cutoff, *ids),
+        )
+    except Exception as e:
+        print(f"[prices] apply_user_reports: {e}")
+        return stations
+    for r in rows or []:
+        sid = str(r.get("station_id") or "")
+        if sid in by_id and len(by_id[sid]) < 8:
+            try:
+                by_id[sid].append((float(r["price"]), float(r["reported_at"])))
+            except (TypeError, ValueError, KeyError):
+                pass
+    out: list[dict] = []
+    now = time.time()
+    for s in stations:
+        row = dict(s)
+        sid = str(row.get("id") or "")
+        recs = by_id.get(sid) or []
+        if not recs:
+            out.append(row)
+            continue
+        prices = [p for p, _ in recs]
+        med = round(float(statistics.median(prices)), 3)
+        newest = recs[0][1]
+        n = len(recs)
+        row["price"] = med
+        row["price_source"] = "user"
+        row["price_confidence"] = "high" if n >= 3 else "medium"
+        row["price_age_hours"] = round((now - newest) / 3600, 1)
+        row["reports_count"] = n
+        fuels = dict(row.get("prices") or {})
+        fuels[fuel] = {
+            "price": med,
+            "source": "user",
+            "confidence": row["price_confidence"],
+            "reports_count": n,
+            "age_hours": row["price_age_hours"],
+        }
+        row["prices"] = fuels
+        if row.get("vs_avg") is not None:
+            try:
+                # vs_avg se recalcula abajo si hay promedio
+                pass
+            except Exception:
+                pass
+        out.append(row)
+    return out
+
+
 def latest_reports(station_id: str) -> dict[str, dict]:
     """
     Consenso de reportes recientes:
