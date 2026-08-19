@@ -87,7 +87,13 @@ def fetch_vps_stations(
     if not _enabled():
         return []
     z = "".join(c for c in str(zip_code or "") if c.isdigit())[:5] if zip_code else ""
-    cache_key = f"{z}|{lat}|{lon}|{fuel}|{limit}"
+    # Misma zona = misma clave: 2ª persona reutiliza 3 h y no vuelve a scrapear
+    if z and len(z) == 5:
+        cache_key = f"z:{z}|{fuel}|{limit}"
+    elif lat is not None and lon is not None:
+        cache_key = f"g:{round(float(lat), 2)},{round(float(lon), 2)}|{fuel}|{limit}"
+    else:
+        cache_key = f"{z}|{lat}|{lon}|{fuel}|{limit}"
     urls = _pick_urls(cache_key)
     if not urls:
         print("[vps_scraper] USE_VPS_SCRAPER=1 pero falta VPS_SCRAPER_URL o VPS_SCRAPER_URLS")

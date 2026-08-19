@@ -39,7 +39,7 @@ def _search_cache_key(
     if zip_code:
         loc = f"z:{zip_code}"
     elif lat is not None and lon is not None:
-        loc = f"g:{round(float(lat), 3)},{round(float(lon), 3)}"
+        loc = f"g:{round(float(lat), 2)},{round(float(lon), 2)}"
     else:
         loc = "default"
     return f"{loc}|{fuel}|{round(float(radius_mi), 1)}|{int(limit)}|{'q' if quick else 'f'}"
