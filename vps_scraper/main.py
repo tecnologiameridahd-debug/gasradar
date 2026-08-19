@@ -49,6 +49,7 @@ def health():
         "app": "gasradar-vps-scraper",
         "version": APP_VERSION,
         "utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "node": (os.environ.get("SCRAPER_NODE") or "").strip() or "vps",
         "flaresolverr": bool((os.environ.get("FLARESOLVERR_URL") or "").strip()),
         "cache_ttl_sec": cache.DEFAULT_TTL,
     }

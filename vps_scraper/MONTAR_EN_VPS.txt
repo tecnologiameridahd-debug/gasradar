@@ -1,0 +1,107 @@
+========================================
+  GASRADAR SCRAPER — MONTAR EN VARIOS VPS
+========================================
+
+Esta carpeta es el scraper COMPLETO.
+Cópiala igual a cada VPS (vps1, vps2, vps3...).
+Cada máquina = una IP distinta.
+
+No lo corras en Render. Solo en VPS Ubuntu.
+
+----------------------------------------
+QUÉ NECESITA CADA VPS
+----------------------------------------
+- Ubuntu 22.04+
+- 1–2 GB RAM
+- Puerto 8788 abierto
+- ~5 USD/mes (Hetzner, DigitalOcean, Contabo...)
+
+----------------------------------------
+DESDE TU PC (Windows) — subir la carpeta
+----------------------------------------
+1. Abre PowerShell.
+
+2. Sube esta carpeta al VPS (cambia IP y usuario):
+
+   scp -r "C:\Users\Alberto\Desktop\gasradar-scraper-vps" root@IP_DEL_VPS:/root/gasradar-scraper-vps
+
+   O si ya está en el repo:
+
+   scp -r "C:\Users\Alberto\gasolina_app\vps_scraper" root@IP_DEL_VPS:/root/gasradar-scraper-vps
+
+3. Entra al VPS:
+
+   ssh root@IP_DEL_VPS
+
+----------------------------------------
+EN EL VPS — instalar (2 minutos)
+----------------------------------------
+  cd /root/gasradar-scraper-vps
+  bash INSTALAR.sh
+
+La primera vez instala Docker y te pide cerrar SSH.
+Vuelve a entrar y corre otra vez:
+
+  cd /root/gasradar-scraper-vps
+  bash INSTALAR.sh
+
+Te crea .env. Edítalo:
+
+  nano .env
+
+Pon:
+  SCRAPER_API_KEY=la-misma-clave-en-todos
+  SCRAPER_NODE=vps1
+
+En el segundo VPS: SCRAPER_NODE=vps2
+En el tercero:      SCRAPER_NODE=vps3
+
+Corre INSTALAR.sh otra vez. Debe responder {"ok":true...}
+
+----------------------------------------
+FIREWALL
+----------------------------------------
+  ufw allow 8788/tcp
+  ufw allow OpenSSH
+  ufw enable
+
+----------------------------------------
+PROBAR
+----------------------------------------
+  curl "http://127.0.0.1:8788/health"
+  curl "http://127.0.0.1:8788/prices?zip=80903&key=TU_CLAVE"
+
+Desde tu PC:
+
+  curl "http://IP_DEL_VPS:8788/health"
+
+----------------------------------------
+CONECTAR A RENDER (GasRadar)
+----------------------------------------
+Un VPS:
+  USE_VPS_SCRAPER=1
+  VPS_SCRAPER_KEY=la-misma-clave-en-todos
+  VPS_SCRAPER_URL=http://IP1:8788
+
+Varios VPS (recomendado cuando tengas 2+):
+  USE_VPS_SCRAPER=1
+  VPS_SCRAPER_KEY=la-misma-clave-en-todos
+  VPS_SCRAPER_URLS=http://IP1:8788,http://IP2:8788,http://IP3:8788
+
+Misma ciudad va al mismo VPS (mejor caché).
+Si uno falla, Render prueba el siguiente.
+
+----------------------------------------
+COMANDOS ÚTILES EN EL VPS
+----------------------------------------
+  docker compose ps
+  docker compose logs -f scraper
+  docker compose restart
+  docker compose down
+
+----------------------------------------
+NO HAGAS
+----------------------------------------
+- No pongas claves distintas en cada VPS (Render usa una).
+- No abras el scraper sin clave a internet.
+- No pegues 10 VPS si aún no hay tráfico. Empieza con 1, luego 2.

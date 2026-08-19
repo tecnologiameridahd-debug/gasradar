@@ -31,15 +31,37 @@ def _enabled() -> bool:
 
 
 def _base_url() -> str:
-    u = (os.environ.get("VPS_SCRAPER_URL") or "").strip().rstrip("/")
-    if u:
-        return u
-    try:
-        import config_local as cfg  # type: ignore
+    urls = _base_urls()
+    return urls[0] if urls else ""
 
-        return (getattr(cfg, "VPS_SCRAPER_URL", None) or "").strip().rstrip("/")
-    except ImportError:
-        return ""
+
+def _base_urls() -> list[str]:
+    """Una o varias URLs: VPS_SCRAPER_URL y/o VPS_SCRAPER_URLS (coma)."""
+    raw_multi = (os.environ.get("VPS_SCRAPER_URLS") or "").strip()
+    raw_one = (os.environ.get("VPS_SCRAPER_URL") or "").strip()
+    if not raw_multi and not raw_one:
+        try:
+            import config_local as cfg  # type: ignore
+
+            raw_multi = (getattr(cfg, "VPS_SCRAPER_URLS", None) or "").strip()
+            raw_one = (getattr(cfg, "VPS_SCRAPER_URL", None) or "").strip()
+        except ImportError:
+            pass
+    urls: list[str] = []
+    for chunk in (raw_multi.replace(";", ",") + "," + raw_one).split(","):
+        u = chunk.strip().rstrip("/")
+        if u and u not in urls:
+            urls.append(u)
+    return urls
+
+
+def _pick_urls(cache_key: str) -> list[str]:
+    """Misma zona → mismo VPS (caché). Si falla, rota al siguiente."""
+    urls = _base_urls()
+    if len(urls) <= 1:
+        return urls
+    idx = sum(ord(c) for c in cache_key) % len(urls)
+    return urls[idx:] + urls[:idx]
 
 
 def _api_key() -> str:
@@ -64,13 +86,13 @@ def fetch_vps_stations(
     """Llama al VPS y devuelve lista normalizada de estaciones con precio."""
     if not _enabled():
         return []
-    base = _base_url()
-    if not base:
-        print("[vps_scraper] USE_VPS_SCRAPER=1 pero falta VPS_SCRAPER_URL")
-        return []
-
     z = "".join(c for c in str(zip_code or "") if c.isdigit())[:5] if zip_code else ""
     cache_key = f"{z}|{lat}|{lon}|{fuel}|{limit}"
+    urls = _pick_urls(cache_key)
+    if not urls:
+        print("[vps_scraper] USE_VPS_SCRAPER=1 pero falta VPS_SCRAPER_URL o VPS_SCRAPER_URLS")
+        return []
+
     now = time.time()
     hit = _cache.get(cache_key)
     if hit and now - hit["ts"] < _CACHE_TTL:
@@ -92,25 +114,34 @@ def fetch_vps_stations(
     if key:
         params["key"] = key
 
-    try:
-        # Más tiempo: el usuario quiere precios REALES, no estimados
-        r = httpx.get(
-            f"{base}/prices",
-            params=params,
-            timeout=httpx.Timeout(14.0, connect=3.0),
-        )
-        if r.status_code != 200:
-            print(f"[vps_scraper] HTTP {r.status_code}: {r.text[:200]}")
-            return []
-        data = r.json() or {}
-        if not data.get("ok"):
-            print(f"[vps_scraper] fail: {data.get('error')}")
-            return []
-        stations = data.get("stations") or []
-        out = [s for s in stations if isinstance(s, dict) and s.get("price") is not None]
-        _cache[cache_key] = {"ts": now, "data": out}
-        print(f"[vps_scraper] OK n={len(out)} method={data.get('method')}")
-        return out
-    except Exception as e:
-        print(f"[vps_scraper] error: {type(e).__name__}: {e}")
-        return []
+    last_err = ""
+    for base in urls:
+        try:
+            r = httpx.get(
+                f"{base}/prices",
+                params=params,
+                timeout=httpx.Timeout(14.0, connect=3.0),
+            )
+            if r.status_code != 200:
+                last_err = f"{base} HTTP {r.status_code}"
+                print(f"[vps_scraper] {last_err}: {r.text[:160]}")
+                continue
+            data = r.json() or {}
+            if not data.get("ok"):
+                last_err = f"{base} fail: {data.get('error')}"
+                print(f"[vps_scraper] {last_err}")
+                continue
+            stations = data.get("stations") or []
+            out = [s for s in stations if isinstance(s, dict) and s.get("price") is not None]
+            if not out:
+                last_err = f"{base} empty"
+                continue
+            _cache[cache_key] = {"ts": now, "data": out}
+            print(f"[vps_scraper] OK n={len(out)} method={data.get('method')} via={base}")
+            return out
+        except Exception as e:
+            last_err = f"{base} {type(e).__name__}: {e}"
+            print(f"[vps_scraper] error: {last_err}")
+    if last_err:
+        print(f"[vps_scraper] todos fallaron: {last_err}")
+    return []

@@ -33,6 +33,17 @@ VPS_SCRAPER_URL=http://IP_DEL_VPS:8788
 VPS_SCRAPER_KEY=mi-clave-secreta
 ```
 
+Varios VPS (misma clave):
+
+```
+USE_VPS_SCRAPER=1
+VPS_SCRAPER_KEY=mi-clave-secreta
+VPS_SCRAPER_URLS=http://IP1:8788,http://IP2:8788
+```
+
+Paquete para copiar a cada máquina: `vps_scraper/` o el Escritorio `gasradar-scraper-vps`.
+Guía: `vps_scraper/MONTAR_EN_VPS.txt`.
+
 (mejor con HTTPS: `https://scraper.tudominio.com`)
 
 Redeploy GasRadar.

@@ -30,6 +30,7 @@ services:
       - PORT=8788
       - FLARESOLVERR_URL=http://flaresolverr:8191/v1
       - SCRAPER_API_KEY=${SCRAPER_API_KEY:-changeme}
+      - SCRAPER_NODE=${SCRAPER_NODE:-vps1}
       - CACHE_DIR=/data/cache
       - CACHE_TTL_SEC=${CACHE_TTL_SEC:-10800}
     ports:
