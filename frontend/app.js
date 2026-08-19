@@ -1268,11 +1268,14 @@ function render(data) {
           ${brandLogoHtml(s)}
           <div class="station-info">
             <p class="station-name"><span class="${rankClass(i)}">${i + 1}</span>${escapeHtml(s.name)}</p>
-            <p class="station-sub">${brandBit}${s.distance_mi} mi ${src}</p>
+            <p class="station-sub">${brandBit}${s.distance_mi} mi</p>
             ${addr}
           </div>
           <div class="station-price-col">
-            ${priceBoxHtml(s.price)}
+            <div class="station-price-row">
+              ${src}
+              ${priceBoxHtml(s.price)}
+            </div>
             ${vsAvgHtml(s.vs_avg)}
           </div>
         </div>
