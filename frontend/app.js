@@ -111,7 +111,7 @@ const I18N = {
     reportOf: (name) => `Reportar · ${name}`,
     disclaimerFallback:
       "Estaciones reales. Precios: reportes o estimación. No es precio de bomba en vivo.",
-    playGet: "Google Play",
+    playGet: "Disponible en Google Play",
     footerPlay: "App Android",
     installApp: "Instalar app",
     installOk: "GasRadar listo para instalar",
@@ -236,7 +236,7 @@ const I18N = {
     reportOf: (name) => `Report · ${name}`,
     disclaimerFallback:
       "Real stations. Prices: user reports or estimates. Not live pump prices.",
-    playGet: "Google Play",
+    playGet: "Get it on Google Play",
     footerPlay: "Android app",
     installApp: "Install app",
     installOk: "GasRadar is ready to install",
@@ -312,6 +312,20 @@ function applyStaticI18n() {
   const en = $("#btnLangEn");
   if (es) es.classList.toggle("active", state.lang === "es");
   if (en) en.classList.toggle("active", state.lang === "en");
+  const playSrc =
+    state.lang === "es"
+      ? "/static/google-play-badge-es.png"
+      : "/static/google-play-badge-en.png";
+  const playAlt = t("playGet");
+  document.querySelectorAll("[data-play-badge]").forEach((img) => {
+    img.src = playSrc;
+    img.alt = playAlt;
+    const wrap = img.closest("a");
+    if (wrap) {
+      wrap.title = playAlt;
+      wrap.setAttribute("aria-label", playAlt);
+    }
+  });
   const galIn = $("#wageGallons");
   if (galIn) galIn.setAttribute("aria-label", t("wageGallons"));
   const bmc = $("#btnBuyMeCoffee");

@@ -577,32 +577,31 @@ button.btn-ghost,
   border-radius: 14px !important;
 }
 
-/* Google Play — siempre visible */
-.btn-play {
-  display: inline-flex;
-  align-items: center;
+/* Badge oficial GET IT ON Google Play */
+.play-badge {
+  display: flex;
   justify-content: center;
-  gap: 8px;
-  width: 100%;
-  margin-top: 10px;
-  padding: 11px 16px;
-  border-radius: 999px;
-  border: 1px solid rgba(34, 197, 94, 0.45);
-  background: rgba(34, 197, 94, 0.14);
-  color: #86efac;
-  font-weight: 700;
-  font-size: 0.92rem;
+  margin-top: 6px;
   text-decoration: none;
-  box-sizing: border-box;
+  line-height: 0;
 }
-.btn-play:hover {
-  background: rgba(34, 197, 94, 0.22);
-  color: #bbf7d0;
-  text-decoration: none;
-}
-.btn-play .play-ico {
-  flex-shrink: 0;
+.play-badge img {
   display: block;
+  height: 64px;
+  width: auto;
+  max-width: 180px;
+}
+.play-badge:hover img {
+  filter: brightness(1.08);
+}
+.footer-stores {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 10px 0 4px;
+}
+.play-badge-footer {
+  margin-top: 0;
 }
 
 /* PWA: Instalar app */
