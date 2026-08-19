@@ -111,6 +111,8 @@ const I18N = {
     reportOf: (name) => `Reportar · ${name}`,
     disclaimerFallback:
       "Estaciones reales. Precios: reportes o estimación. No es precio de bomba en vivo.",
+    playGet: "Google Play",
+    footerPlay: "App Android",
     installApp: "Instalar app",
     installOk: "GasRadar listo para instalar",
     installDone: "App instalada — búscala en tu pantalla de inicio",
@@ -234,6 +236,8 @@ const I18N = {
     reportOf: (name) => `Report · ${name}`,
     disclaimerFallback:
       "Real stations. Prices: user reports or estimates. Not live pump prices.",
+    playGet: "Google Play",
+    footerPlay: "Android app",
     installApp: "Install app",
     installOk: "GasRadar is ready to install",
     installDone: "App installed — find it on your home screen",

@@ -816,7 +816,8 @@ def build_posts() -> None:
 def build_sitemap() -> None:
     """Sitemap mínimo compatible GSC: solo loc + lastmod (sin priority/changefreq)."""
     urls: list[tuple[str, str]] = [
-        ("/", "2026-08-03"),
+        ("/", "2026-08-18"),
+        ("/download", "2026-08-18"),
         ("/privacy", "2026-08-01"),
         ("/terminos", "2026-08-15"),
         ("/reglas", "2026-08-15"),
