@@ -112,6 +112,8 @@ const I18N = {
     disclaimerFallback:
       "Estaciones reales. Precios: reportes o estimación. No es precio de bomba en vivo.",
     playGet: "Disponible en Google Play",
+    playBanner: "Ya estamos en Google Play",
+    playBannerCta: "Descargar",
     footerPlay: "App Android",
     installApp: "Instalar app",
     installOk: "GasRadar listo para instalar",
@@ -237,6 +239,8 @@ const I18N = {
     disclaimerFallback:
       "Real stations. Prices: user reports or estimates. Not live pump prices.",
     playGet: "Get it on Google Play",
+    playBanner: "Now on Google Play",
+    playBannerCta: "Install",
     footerPlay: "Android app",
     installApp: "Install app",
     installOk: "GasRadar is ready to install",
@@ -1559,8 +1563,33 @@ async function useGps() {
   }
 }
 
+const PLAY_BANNER_KEY = "gr_play_announce_v1";
+
+function initPlayBanner() {
+  const bar = $("#playAnnounce");
+  const close = $("#playAnnounceClose");
+  if (!bar) return;
+  try {
+    if (localStorage.getItem(PLAY_BANNER_KEY) === "1") {
+      bar.hidden = true;
+      return;
+    }
+  } catch (_) {}
+  if (close) {
+    close.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      bar.hidden = true;
+      try {
+        localStorage.setItem(PLAY_BANNER_KEY, "1");
+      } catch (_) {}
+    });
+  }
+}
+
 function startApp() {
   applyStaticI18n();
+  initPlayBanner();
   const galEl = $("#wageGallons");
   if (galEl) {
     const saved = Number(localStorage.getItem(TANK_KEY) || 15);

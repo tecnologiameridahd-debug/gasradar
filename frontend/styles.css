@@ -577,7 +577,68 @@ button.btn-ghost,
   border-radius: 14px !important;
 }
 
-/* Badge oficial GET IT ON Google Play */
+/* Anuncio: ya estamos en Google Play */
+.play-announce {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 12px;
+  padding: 7px 6px 7px 12px;
+  border-radius: 12px;
+  background: linear-gradient(90deg, rgba(34, 197, 94, 0.18), rgba(34, 197, 94, 0.07));
+  border: 1px solid rgba(34, 197, 94, 0.32);
+}
+.play-announce[hidden] {
+  display: none !important;
+}
+.play-announce-link {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #bbf7d0;
+  text-decoration: none;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+.play-announce-link:hover {
+  color: #dcfce7;
+  text-decoration: none;
+}
+.play-announce-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.18);
+  flex-shrink: 0;
+}
+.play-announce-cta {
+  margin-left: auto;
+  background: #22c55e;
+  color: #04210f;
+  font-weight: 800;
+  font-size: 0.7rem;
+  letter-spacing: 0.02em;
+  padding: 5px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.play-announce-close {
+  border: 0;
+  background: transparent;
+  color: #7f8aa3;
+  font-size: 1.25rem;
+  line-height: 1;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.play-announce-close:hover {
+  color: #eef3ff;
+}
+
+/* Badge oficial GET IT ON Google Play (solo pie) */
 .play-badge {
   display: flex;
   justify-content: center;
