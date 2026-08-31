@@ -1394,6 +1394,7 @@ function openReport(stationId, name) {
   $("#reportTitle").textContent = t("reportOf", name || "");
   $("#reportPrice").value = "";
   $("#modal").classList.add("open");
+  syncBodyModal();
   setTimeout(() => {
     try {
       $("#reportPrice").focus();
@@ -1405,6 +1406,7 @@ function closeReport() {
   $("#modal").classList.remove("open");
   state.reportStationId = null;
   state.reportName = "";
+  syncBodyModal();
 }
 
 async function submitReport() {
@@ -1636,15 +1638,24 @@ function donateKey(k) {
   setDonateDigits(next);
 }
 
+function syncBodyModal() {
+  const open =
+    $("#donateModal")?.classList.contains("open") ||
+    $("#modal")?.classList.contains("open");
+  document.body.classList.toggle("modal-open", !!open);
+}
+
 function openDonate(preset) {
   const modal = $("#donateModal");
   if (!modal) return;
   setDonateDigits(preset != null ? String(preset) : donateDigits || "5");
   modal.classList.add("open");
+  syncBodyModal();
 }
 
 function closeDonate() {
   $("#donateModal")?.classList.remove("open");
+  syncBodyModal();
 }
 
 function syncDonateChips() {

@@ -144,20 +144,38 @@ def _keyboard(lang: str = "es") -> dict:
     """Botones siempre visibles (más fácil que memorizar comandos)."""
     if lang == "en":
         rows = [
-            [{"text": "⛽ Prices now"}, {"text": "📍 Set ZIP"}],
-            [{"text": "🔔 My alert"}, {"text": "⚙️ Status"}],
+            [{"text": "⛽ Prices now"}, {"text": "💛 Donate"}],
+            [{"text": "📍 Set ZIP"}, {"text": "🔔 My alert"}],
             [{"text": "❓ Help"}, {"text": "🌐 Español"}],
         ]
     else:
         rows = [
-            [{"text": "⛽ Precios ahora"}, {"text": "📍 Poner ZIP"}],
-            [{"text": "🔔 Mi alerta"}, {"text": "⚙️ Estado"}],
+            [{"text": "⛽ Precios ahora"}, {"text": "💛 Dóname"}],
+            [{"text": "📍 Poner ZIP"}, {"text": "🔔 Mi alerta"}],
             [{"text": "❓ Ayuda"}, {"text": "🌐 English"}],
         ]
     return {
         "keyboard": rows,
         "resize_keyboard": True,
         "is_persistent": True,
+    }
+
+
+def _donate_inline(lang: str = "es") -> dict:
+    web = f"{APP_URL}/?donate=1"
+    other = "Otro monto" if lang != "en" else "Other amount"
+    return {
+        "inline_keyboard": [
+            [
+                {"text": "$3", "callback_data": "don:3"},
+                {"text": "$5", "callback_data": "don:5"},
+            ],
+            [
+                {"text": "$10", "callback_data": "don:10"},
+                {"text": "$20", "callback_data": "don:20"},
+            ],
+            [{"text": other, "url": web}],
+        ]
     }
 
 
@@ -168,13 +186,16 @@ def send_message(
     disable_preview: bool = True,
     lang: str | None = None,
     with_keyboard: bool = True,
+    inline: dict | None = None,
 ) -> dict:
     payload: dict[str, Any] = {
         "chat_id": chat_id,
         "text": (text or "")[:4000],
         "disable_web_page_preview": disable_preview,
     }
-    if with_keyboard:
+    if inline:
+        payload["reply_markup"] = inline
+    elif with_keyboard:
         lg = lang or _lang(chat_id)
         payload["reply_markup"] = _keyboard(lg)
     return _api("sendMessage", **payload)
@@ -195,7 +216,10 @@ def handle_update_safe(update: dict) -> None:
         print(f"[telegram] handle_update: {type(e).__name__}: {e}")
         try:
             msg = (update or {}).get("message") or (update or {}).get("edited_message") or {}
-            chat_id = (msg.get("chat") or {}).get("id")
+            cq = (update or {}).get("callback_query") or {}
+            chat_id = (msg.get("chat") or {}).get("id") or (
+                ((cq.get("message") or {}).get("chat") or {}).get("id")
+            )
             if chat_id is not None:
                 lg = _lang(chat_id)
                 send_message(
@@ -225,7 +249,7 @@ def set_webhook(
         "setWebhook",
         url=wh,
         drop_pending_updates=bool(drop_pending),
-        allowed_updates=["message"],
+        allowed_updates=["message", "callback_query"],
         secret_token=webhook_secret_token(),
     )
 
@@ -249,6 +273,7 @@ Usa los botones de abajo o escribe:
 1️⃣ ZIP de 5 dígitos → 80903
 2️⃣ Tope de precio → 3.50 o /alerta 3.50
 3️⃣ ⛽ Precios ahora → ver las más baratas
+4️⃣ 💛 Dóname → $3 $5 $10 $20
 
 Comandos:
 /zona 80903 · /alerta 3.50 · /ahora
@@ -265,6 +290,7 @@ Use the buttons below or type:
 1️⃣ 5-digit ZIP → 80903
 2️⃣ Max price → 3.50 or /alert 3.50
 3️⃣ ⛽ Prices now → cheapest stations
+4️⃣ 💛 Donate → $3 $5 $10 $20
 
 Commands:
 /zip 80903 · /alert 3.50 · /now
@@ -355,7 +381,7 @@ _MSG: dict[str, dict[str, str]] = {
             "• ZIP: 80903\n"
             "• Tope: 3.50\n"
             "• O toca ⛽ Precios ahora\n"
-            "• Donar: /donar 5\n"
+            "• Donar: 💛 Dóname\n"
             "• Idioma: /en o /es"
         ),
         "en": (
@@ -363,7 +389,7 @@ _MSG: dict[str, dict[str, str]] = {
             "• ZIP: 80903\n"
             "• Max: 3.50\n"
             "• Or tap ⛽ Prices now\n"
-            "• Donate: /donate 5\n"
+            "• Donate: 💛 Donate\n"
             "• Language: /en or /es"
         ),
     },
@@ -468,7 +494,18 @@ def _map_button(text: str, lang: str) -> tuple[str, str] | None:
         return "/mis", ""
     if t in ("❓ ayuda", "ayuda"):
         return "/help", ""
-    if t in ("dóname", "doname", "donar", "donate", "donación", "donacion"):
+    if t in (
+        "dóname",
+        "doname",
+        "donar",
+        "donate",
+        "donación",
+        "donacion",
+        "💛 dóname",
+        "💛 doname",
+        "💛 donate",
+        "💛 donar",
+    ):
         return "/donar", ""
     # EN
     if t in ("⛽ prices now", "prices now", "prices", "now"):
@@ -597,6 +634,10 @@ def _format_now(data: dict, lang: str) -> str:
 
 def handle_update(update: dict) -> None:
     """Procesa un update de Telegram (webhook)."""
+    cq = update.get("callback_query")
+    if cq:
+        _handle_callback(cq)
+        return
     msg = update.get("message") or update.get("edited_message")
     if not msg:
         return
@@ -748,28 +789,30 @@ def handle_update(update: dict) -> None:
     send_message(chat_id, _t("unknown", lang), lang=lang)
 
 
+def _handle_callback(cq: dict) -> None:
+    data = str(cq.get("data") or "")
+    cq_id = cq.get("id")
+    if cq_id:
+        _api("answerCallbackQuery", callback_query_id=cq_id)
+    msg = cq.get("message") or {}
+    chat_id = (msg.get("chat") or {}).get("id")
+    if chat_id is None:
+        return
+    lang = _lang(chat_id)
+    if data.startswith("don:"):
+        _cmd_donar(chat_id, data.split(":", 1)[1], lang)
+
+
 def _cmd_donar(chat_id: int, arg: str, lang: str) -> None:
     raw = (arg or "").strip().replace(",", ".").replace("$", "")
     web = f"{APP_URL}/?donate=1"
     if not raw:
-        if lang == "en":
-            send_message(
-                chat_id,
-                "💛 Donate any amount.\n\n"
-                "• /donate 5\n"
-                "• /donate 10\n"
-                f"• Or open: {web}",
-                lang=lang,
-            )
-        else:
-            send_message(
-                chat_id,
-                "💛 Dóname lo que quieras.\n\n"
-                "• /donar 5\n"
-                "• /donar 10\n"
-                f"• O abre: {web}",
-                lang=lang,
-            )
+        txt = (
+            "💛 Donate what you want. Tap an amount:"
+            if lang == "en"
+            else "💛 Dóname lo que quieras. Toca un monto:"
+        )
+        send_message(chat_id, txt, lang=lang, inline=_donate_inline(lang))
         return
     try:
         amount = float(raw)
@@ -788,18 +831,13 @@ def _cmd_donar(chat_id: int, arg: str, lang: str) -> None:
             return
         sess = create_checkout(amount)
         url = sess.get("url") or web
-        if lang == "en":
-            send_message(
-                chat_id,
-                f"💛 Donate ${amount:.2f}\nTap to pay with Stripe:\n{url}",
-                lang=lang,
-            )
-        else:
-            send_message(
-                chat_id,
-                f"💛 Donar ${amount:.2f}\nToca para pagar con Stripe:\n{url}",
-                lang=lang,
-            )
+        pay = f"Pagar ${amount:.2f}" if lang != "en" else f"Pay ${amount:.2f}"
+        send_message(
+            chat_id,
+            f"💛 {pay}\nStripe:" if lang != "en" else f"💛 {pay}\nStripe:",
+            lang=lang,
+            inline={"inline_keyboard": [[{"text": pay, "url": url}]]},
+        )
     except ValueError as e:
         send_message(chat_id, str(e), lang=lang)
     except Exception:

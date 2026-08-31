@@ -1627,9 +1627,13 @@ button.btn-ghost:hover,
   display: none;
   align-items: flex-end;
   justify-content: center;
-  z-index: 50;
+  z-index: 90;
   padding: 12px;
   padding-bottom: calc(12px + var(--safe-b));
+}
+
+body.modal-open .social-rail {
+  display: none;
 }
 
 .modal-bg.open {

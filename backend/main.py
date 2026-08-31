@@ -80,7 +80,13 @@ def _startup_jobs():
         info0 = get_webhook_info()
         cur = ((info0 or {}).get("result") or {}).get("url") or ""
         want_host = "gasradarapp.com/api/telegram/webhook"
-        if want_host in cur and not ((info0 or {}).get("result") or {}).get("last_error_message"):
+        allowed = ((info0 or {}).get("result") or {}).get("allowed_updates") or []
+        need_cb = "callback_query" not in (allowed or [])
+        if (
+            want_host in cur
+            and not ((info0 or {}).get("result") or {}).get("last_error_message")
+            and not need_cb
+        ):
             print(f"[telegram] webhook ya OK url={cur!r}")
         else:
             res = set_webhook(drop_pending=False)
