@@ -7,5 +7,6 @@ psycopg[binary]>=3.2.0
 curl_cffi>=0.7.0
 beautifulsoup4>=4.12.0
 lxml>=5.0.0
+stripe>=11.0.0
 # GasBuddy opcional: NO instalar en Render (rompe el build; PyPI max 0.4.x y Cloudflare)
 # pip install "py-gasbuddy>=0.4.2" aiohttp  # solo local si USE_GASBUDDY=1

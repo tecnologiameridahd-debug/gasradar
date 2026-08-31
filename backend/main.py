@@ -17,7 +17,7 @@ from backend.prices import report_price
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.9.71"
+APP_VERSION = "0.9.72"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -124,6 +124,16 @@ class ReportBody(BaseModel):
     note: str | None = None
 
 
+class DonateBody(BaseModel):
+    amount: float = Field(..., ge=1.0, le=500.0)
+
+
+def _donate_status() -> dict:
+    from backend.donate import stripe_configured, stripe_mode
+
+    return {"configured": stripe_configured(), "mode": stripe_mode()}
+
+
 @app.get("/api/health")
 def health():
     """Healthcheck para Render y keep-alive (cron / script)."""
@@ -212,6 +222,9 @@ def health():
                 in ("1", "true", "yes", "on")
             ),
             "url_set": bool((os.environ.get("VPS_SCRAPER_URL") or "").strip()),
+        },
+        "donate": {
+            "stripe": _donate_status(),
         },
     }
 
@@ -420,6 +433,26 @@ def api_report(body: ReportBody):
         return report_price(body.station_id, body.fuel, body.price, body.note)
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
+
+
+@app.get("/api/donate/status")
+def api_donate_status():
+    return {"ok": True, **_donate_status()}
+
+
+@app.post("/api/donate/checkout")
+def api_donate_checkout(body: DonateBody):
+    from backend.donate import create_checkout, stripe_configured
+
+    if not stripe_configured():
+        raise HTTPException(503, "Donaciones no configuradas (falta STRIPE_SECRET_KEY)")
+    try:
+        sess = create_checkout(body.amount)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    except Exception as e:
+        raise HTTPException(502, f"Stripe: {type(e).__name__}") from e
+    return {"ok": True, "url": sess["url"]}
 
 
 @app.post("/api/telegram/webhook")

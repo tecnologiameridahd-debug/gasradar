@@ -123,9 +123,16 @@ const I18N = {
     installAlready: "Ya está instalada o ábrela desde el icono del teléfono",
     telegramAlerts: "Alertas",
     trustpilotReview: "Deja una reseña",
-    buyMeCoffee: "Apóyame",
-    donate: "Donar",
-    donateTitle: "Donar un café — ayuda a mantener GasRadar",
+    buyMeCoffee: "Dóname",
+    donate: "Dóname",
+    donateTitle: "Dóname lo que quieras",
+    donateSub: "Elige un monto o escribe el tuyo. Pago seguro con Stripe.",
+    donateHint: "Mínimo $1 · tú eliges cuánto",
+    donatePay: "Donar con Stripe",
+    donateThanks: "¡Gracias por tu donación! 💛",
+    donateCancel: "Donación cancelada",
+    donateErr: "No se pudo abrir Stripe. Intenta de nuevo.",
+    donateBusy: "Abriendo Stripe…",
     pullHint: "Desliza para actualizar",
     pullRelease: "Suelta para actualizar",
     pullRefreshing: "Actualizando precios…",
@@ -249,9 +256,16 @@ const I18N = {
     installAlready: "Already installed, or open it from the home screen icon",
     telegramAlerts: "Alerts",
     trustpilotReview: "Leave a review",
-    buyMeCoffee: "Support",
+    buyMeCoffee: "Donate",
     donate: "Donate",
-    donateTitle: "Buy me a coffee — help keep GasRadar running",
+    donateTitle: "Donate what you want",
+    donateSub: "Pick an amount or type your own. Secure Stripe checkout.",
+    donateHint: "Minimum $1 · you choose how much",
+    donatePay: "Donate with Stripe",
+    donateThanks: "Thanks for your donation! 💛",
+    donateCancel: "Donation canceled",
+    donateErr: "Couldn't open Stripe. Try again.",
+    donateBusy: "Opening Stripe…",
     pullHint: "Pull to refresh",
     pullRelease: "Release to refresh",
     pullRefreshing: "Updating prices…",
@@ -1590,9 +1604,68 @@ function initPlayBanner() {
   }
 }
 
+function openDonate(preset) {
+  const modal = $("#donateModal");
+  if (!modal) return;
+  const input = $("#donateAmount");
+  if (input && preset != null) input.value = String(preset);
+  syncDonateChips();
+  modal.classList.add("open");
+  input?.focus();
+}
+
+function closeDonate() {
+  $("#donateModal")?.classList.remove("open");
+}
+
+function syncDonateChips() {
+  const input = $("#donateAmount");
+  const val = Number(input && input.value);
+  document.querySelectorAll(".donate-chip").forEach((btn) => {
+    const amt = Number(btn.getAttribute("data-amt"));
+    btn.classList.toggle("is-on", amt === val);
+  });
+}
+
+async function payDonate() {
+  const input = $("#donateAmount");
+  const raw = Number(input && input.value);
+  if (!raw || raw < 1 || raw > 500) {
+    showToast(t("donateHint"));
+    input?.focus();
+    return;
+  }
+  const btn = $("#btnDonatePay");
+  if (btn) btn.disabled = true;
+  showToast(t("donateBusy"));
+  try {
+    const r = await fetch("/api/donate/checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amount: Math.round(raw * 100) / 100 }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.url) {
+      showToast(j.detail || t("donateErr"));
+      return;
+    }
+    window.location.href = j.url;
+  } catch (_) {
+    showToast(t("donateErr"));
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 function startApp() {
   applyStaticI18n();
   initPlayBanner();
+  try {
+    const q = new URLSearchParams(location.search);
+    if (q.get("donated") === "1") showToast(t("donateThanks"));
+    if (q.get("donated") === "0") showToast(t("donateCancel"));
+    if (q.get("donate") === "1") setTimeout(() => openDonate(5), 250);
+  } catch (_) {}
   const galEl = $("#wageGallons");
   if (galEl) {
     const saved = Number(localStorage.getItem(TANK_KEY) || 15);
@@ -1655,6 +1728,25 @@ function startApp() {
 function bind() {
   $("#btnLangEs")?.addEventListener("click", () => setLang("es"));
   $("#btnLangEn")?.addEventListener("click", () => setLang("en"));
+  $("#btnBuyMeCoffee")?.addEventListener("click", () => openDonate(5));
+  $("#linkDonateFooter")?.addEventListener("click", () => openDonate(5));
+  $("#btnCloseDonate")?.addEventListener("click", closeDonate);
+  $("#btnDonatePay")?.addEventListener("click", payDonate);
+  $("#donateAmount")?.addEventListener("input", syncDonateChips);
+  $("#donateAmount")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") payDonate();
+  });
+  $("#donatePresets")?.addEventListener("click", (e) => {
+    const chip = e.target.closest(".donate-chip");
+    if (!chip) return;
+    const amt = chip.getAttribute("data-amt");
+    const input = $("#donateAmount");
+    if (input && amt) input.value = amt;
+    syncDonateChips();
+  });
+  $("#donateModal")?.addEventListener("click", (e) => {
+    if (e.target.id === "donateModal") closeDonate();
+  });
   const bestShare = $("#bestShare");
   if (bestShare) {
     bestShare.addEventListener("click", () => {
@@ -1794,6 +1886,10 @@ function bind() {
     if (e.target.id === "modal") closeReport();
   });
   document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && $("#donateModal")?.classList.contains("open")) {
+      closeDonate();
+      return;
+    }
     if (e.key === "Escape" && $("#modal").classList.contains("open")) {
       closeReport();
     }

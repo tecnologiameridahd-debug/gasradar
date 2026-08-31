@@ -252,7 +252,7 @@ Usa los botones de abajo o escribe:
 
 Comandos:
 /zona 80903 · /alerta 3.50 · /ahora
-/mis · /pausa · /activar · /borrar
+/donar 5 · /mis · /pausa · /activar · /borrar
 /es · /en  (idioma)
 
 App: gasradarapp.com
@@ -268,7 +268,7 @@ Use the buttons below or type:
 
 Commands:
 /zip 80903 · /alert 3.50 · /now
-/status · /pause · /resume · /delete
+/donate 5 · /status · /pause · /resume · /delete
 /es · /en  (language)
 
 App: gasradarapp.com
@@ -355,6 +355,7 @@ _MSG: dict[str, dict[str, str]] = {
             "• ZIP: 80903\n"
             "• Tope: 3.50\n"
             "• O toca ⛽ Precios ahora\n"
+            "• Donar: /donar 5\n"
             "• Idioma: /en o /es"
         ),
         "en": (
@@ -362,6 +363,7 @@ _MSG: dict[str, dict[str, str]] = {
             "• ZIP: 80903\n"
             "• Max: 3.50\n"
             "• Or tap ⛽ Prices now\n"
+            "• Donate: /donate 5\n"
             "• Language: /en or /es"
         ),
     },
@@ -466,6 +468,8 @@ def _map_button(text: str, lang: str) -> tuple[str, str] | None:
         return "/mis", ""
     if t in ("❓ ayuda", "ayuda"):
         return "/help", ""
+    if t in ("dóname", "doname", "donar", "donate", "donación", "donacion"):
+        return "/donar", ""
     # EN
     if t in ("⛽ prices now", "prices now", "prices", "now"):
         return "/ahora", ""
@@ -726,6 +730,10 @@ def handle_update(update: dict) -> None:
         _cmd_ahora(chat_id, lang)
         return
 
+    if cmd in ("/donar", "/donate", "/doname", "/dóname", "/donation"):
+        _cmd_donar(chat_id, arg, lang)
+        return
+
     # texto libre: ZIP
     if re.fullmatch(r"\d{5}", text):
         _cmd_zona(chat_id, text, lang, auto_prices=True)
@@ -738,6 +746,64 @@ def handle_update(update: dict) -> None:
         return
 
     send_message(chat_id, _t("unknown", lang), lang=lang)
+
+
+def _cmd_donar(chat_id: int, arg: str, lang: str) -> None:
+    raw = (arg or "").strip().replace(",", ".").replace("$", "")
+    web = f"{APP_URL}/?donate=1"
+    if not raw:
+        if lang == "en":
+            send_message(
+                chat_id,
+                "💛 Donate any amount.\n\n"
+                "• /donate 5\n"
+                "• /donate 10\n"
+                f"• Or open: {web}",
+                lang=lang,
+            )
+        else:
+            send_message(
+                chat_id,
+                "💛 Dóname lo que quieras.\n\n"
+                "• /donar 5\n"
+                "• /donar 10\n"
+                f"• O abre: {web}",
+                lang=lang,
+            )
+        return
+    try:
+        amount = float(raw)
+    except Exception:
+        send_message(
+            chat_id,
+            "Ej: /donar 5" if lang != "en" else "E.g. /donate 5",
+            lang=lang,
+        )
+        return
+    try:
+        from backend.donate import create_checkout, stripe_configured
+
+        if not stripe_configured():
+            send_message(chat_id, f"💛 {web}", lang=lang)
+            return
+        sess = create_checkout(amount)
+        url = sess.get("url") or web
+        if lang == "en":
+            send_message(
+                chat_id,
+                f"💛 Donate ${amount:.2f}\nTap to pay with Stripe:\n{url}",
+                lang=lang,
+            )
+        else:
+            send_message(
+                chat_id,
+                f"💛 Donar ${amount:.2f}\nToca para pagar con Stripe:\n{url}",
+                lang=lang,
+            )
+    except ValueError as e:
+        send_message(chat_id, str(e), lang=lang)
+    except Exception:
+        send_message(chat_id, f"💛 {web}", lang=lang)
 
 
 def _cmd_zona(

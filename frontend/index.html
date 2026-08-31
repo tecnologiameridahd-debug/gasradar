@@ -296,18 +296,16 @@
               <button type="button" class="lang-btn" id="btnLangEs" data-lang="es">ES</button>
               <button type="button" class="lang-btn active" id="btnLangEn" data-lang="en">EN</button>
             </div>
-            <a
+            <button
+              type="button"
               class="bmc-mini"
               id="btnBuyMeCoffee"
-              href="https://buymeacoffee.com/gasradar"
-              target="_blank"
-              rel="noopener noreferrer"
-              title="Donar un café — ayuda a mantener GasRadar"
-              aria-label="Donar"
+              title="Dóname lo que quieras — ayuda a mantener GasRadar"
+              aria-label="Dóname"
             >
-              <span class="bmc-ico" aria-hidden="true">☕</span>
-              <span data-i18n="donate">Donar</span>
-            </a>
+              <span class="bmc-ico" aria-hidden="true">💛</span>
+              <span data-i18n="donate">Dóname</span>
+            </button>
           </div>
         </div>
       </header>
@@ -432,14 +430,10 @@
           <a href="mailto:contact@gasradarapp.com">contact@gasradarapp.com</a>
         </div>
         <p class="footer-support">
-          ☕
-          <a
-            href="https://buymeacoffee.com/gasradar"
-            target="_blank"
-            rel="noopener noreferrer"
-            data-i18n="buyMeCoffee"
-            >Apóyame</a
-          >
+          💛
+          <button type="button" class="footer-donate" id="linkDonateFooter" data-i18n="buyMeCoffee">
+            Dóname
+          </button>
         </p>
         <div class="footer-stores">
           <a
@@ -511,6 +505,39 @@
       </footer>
     </div>
 
+    <div class="modal-bg" id="donateModal" role="dialog" aria-modal="true" aria-labelledby="donateTitle">
+      <div class="modal">
+        <h3 id="donateTitle" data-i18n="donateTitle">Dóname lo que quieras</h3>
+        <p class="subtitle modal-sub" data-i18n="donateSub">
+          Elige un monto o escribe el tuyo. Pago seguro con Stripe.
+        </p>
+        <div class="donate-presets" id="donatePresets">
+          <button type="button" class="donate-chip" data-amt="3">$3</button>
+          <button type="button" class="donate-chip" data-amt="5">$5</button>
+          <button type="button" class="donate-chip" data-amt="10">$10</button>
+          <button type="button" class="donate-chip" data-amt="20">$20</button>
+        </div>
+        <div class="price-input-wrap">
+          <span class="price-prefix">$</span>
+          <input
+            id="donateAmount"
+            type="number"
+            step="0.01"
+            min="1"
+            max="500"
+            inputmode="decimal"
+            placeholder="5.00"
+            value="5"
+          />
+        </div>
+        <p class="hint" data-i18n="donateHint">Mínimo $1 · tú eliges cuánto</p>
+        <div class="row modal-actions">
+          <button class="btn-secondary grow" id="btnCloseDonate" type="button" data-i18n="cancel">Cancelar</button>
+          <button class="btn-primary grow" id="btnDonatePay" type="button" data-i18n="donatePay">Donar con Stripe</button>
+        </div>
+      </div>
+    </div>
+
     <div class="modal-bg" id="modal" role="dialog" aria-modal="true" aria-labelledby="reportTitle">
       <div class="modal">
         <h3 id="reportTitle" data-i18n="reportTitle">Reportar precio</h3>
@@ -538,7 +565,7 @@
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script src="/static/brand-logos.js?v=0.9.1"></script>
-    <script src="/static/app.js?v=0.9.75"></script>
+    <script src="/static/app.js?v=0.9.76"></script>
     <script>
       /* Quita splash cuando la UI ya pintó */
       (function () {

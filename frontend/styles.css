@@ -290,6 +290,52 @@ body.ptr-busy {
   line-height: 1;
 }
 
+button.bmc-mini {
+  cursor: pointer;
+  font-family: inherit;
+  appearance: none;
+}
+
+.footer-donate {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--gold);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.donate-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.donate-chip {
+  flex: 1 1 22%;
+  min-width: 64px;
+  height: 38px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #0d1526;
+  color: #eef3ff;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.donate-chip.is-on,
+.donate-chip:hover {
+  border-color: rgba(251, 191, 36, 0.55);
+  background: rgba(251, 191, 36, 0.16);
+  color: #fde68a;
+}
+
 /* Chip "prom. sem." — botón mini al lado de ES/EN (siempre visible) */
 .eia-chip {
   display: inline-flex;
