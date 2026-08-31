@@ -126,7 +126,7 @@ const I18N = {
     buyMeCoffee: "Dóname",
     donate: "Dóname",
     donateTitle: "Dóname lo que quieras",
-    donateSub: "Elige un monto o escribe el tuyo. Pago seguro con Stripe.",
+    donateSub: "Elige un monto o pon el tuyo. Pago seguro con Stripe.",
     donateHint: "Mínimo $1 · tú eliges cuánto",
     donatePay: "Donar con Stripe",
     donateThanks: "¡Gracias por tu donación! 💛",
@@ -259,7 +259,7 @@ const I18N = {
     buyMeCoffee: "Donate",
     donate: "Donate",
     donateTitle: "Donate what you want",
-    donateSub: "Pick an amount or type your own. Secure Stripe checkout.",
+    donateSub: "Pick an amount or enter your own. Secure Stripe checkout.",
     donateHint: "Minimum $1 · you choose how much",
     donatePay: "Donate with Stripe",
     donateThanks: "Thanks for your donation! 💛",
@@ -1604,14 +1604,43 @@ function initPlayBanner() {
   }
 }
 
+let donateDigits = "5";
+
+function donateValue() {
+  const n = Number(donateDigits);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function setDonateDigits(s) {
+  donateDigits = String(s || "");
+  const el = $("#donateAmountText");
+  if (el) el.textContent = donateDigits || "0";
+  syncDonateChips();
+}
+
+function donateKey(k) {
+  if (k === "del") {
+    setDonateDigits(donateDigits.slice(0, -1));
+    return;
+  }
+  if (k === ".") {
+    if (donateDigits.includes(".")) return;
+    setDonateDigits((donateDigits || "0") + ".");
+    return;
+  }
+  if (!/^\d$/.test(k)) return;
+  let next = donateDigits === "0" ? k : donateDigits + k;
+  const parts = next.split(".");
+  if (parts[1] && parts[1].length > 2) return;
+  if (Number(next) > 500) return;
+  setDonateDigits(next);
+}
+
 function openDonate(preset) {
   const modal = $("#donateModal");
   if (!modal) return;
-  const input = $("#donateAmount");
-  if (input && preset != null) input.value = String(preset);
-  syncDonateChips();
+  setDonateDigits(preset != null ? String(preset) : donateDigits || "5");
   modal.classList.add("open");
-  input?.focus();
 }
 
 function closeDonate() {
@@ -1619,8 +1648,7 @@ function closeDonate() {
 }
 
 function syncDonateChips() {
-  const input = $("#donateAmount");
-  const val = Number(input && input.value);
+  const val = donateValue();
   document.querySelectorAll(".donate-chip").forEach((btn) => {
     const amt = Number(btn.getAttribute("data-amt"));
     btn.classList.toggle("is-on", amt === val);
@@ -1628,11 +1656,9 @@ function syncDonateChips() {
 }
 
 async function payDonate() {
-  const input = $("#donateAmount");
-  const raw = Number(input && input.value);
+  const raw = donateValue();
   if (!raw || raw < 1 || raw > 500) {
     showToast(t("donateHint"));
-    input?.focus();
     return;
   }
   const btn = $("#btnDonatePay");
@@ -1732,17 +1758,16 @@ function bind() {
   $("#linkDonateFooter")?.addEventListener("click", () => openDonate(5));
   $("#btnCloseDonate")?.addEventListener("click", closeDonate);
   $("#btnDonatePay")?.addEventListener("click", payDonate);
-  $("#donateAmount")?.addEventListener("input", syncDonateChips);
-  $("#donateAmount")?.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") payDonate();
+  $("#donatePad")?.addEventListener("click", (e) => {
+    const key = e.target.closest("button[data-k]");
+    if (!key) return;
+    donateKey(key.getAttribute("data-k"));
   });
   $("#donatePresets")?.addEventListener("click", (e) => {
     const chip = e.target.closest(".donate-chip");
     if (!chip) return;
     const amt = chip.getAttribute("data-amt");
-    const input = $("#donateAmount");
-    if (input && amt) input.value = amt;
-    syncDonateChips();
+    if (amt) setDonateDigits(amt);
   });
   $("#donateModal")?.addEventListener("click", (e) => {
     if (e.target.id === "donateModal") closeDonate();
@@ -1886,9 +1911,31 @@ function bind() {
     if (e.target.id === "modal") closeReport();
   });
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && $("#donateModal")?.classList.contains("open")) {
-      closeDonate();
-      return;
+    if ($("#donateModal")?.classList.contains("open")) {
+      if (e.key === "Escape") {
+        closeDonate();
+        return;
+      }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        payDonate();
+        return;
+      }
+      if (e.key === "Backspace") {
+        e.preventDefault();
+        donateKey("del");
+        return;
+      }
+      if (e.key === "." || e.key === ",") {
+        e.preventDefault();
+        donateKey(".");
+        return;
+      }
+      if (/^\d$/.test(e.key)) {
+        e.preventDefault();
+        donateKey(e.key);
+        return;
+      }
     }
     if (e.key === "Escape" && $("#modal").classList.contains("open")) {
       closeReport();

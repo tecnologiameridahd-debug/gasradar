@@ -509,7 +509,7 @@
       <div class="modal">
         <h3 id="donateTitle" data-i18n="donateTitle">Dóname lo que quieras</h3>
         <p class="subtitle modal-sub" data-i18n="donateSub">
-          Elige un monto o escribe el tuyo. Pago seguro con Stripe.
+          Elige un monto o pon el tuyo. Pago seguro con Stripe.
         </p>
         <div class="donate-presets" id="donatePresets">
           <button type="button" class="donate-chip" data-amt="3">$3</button>
@@ -517,18 +517,23 @@
           <button type="button" class="donate-chip" data-amt="10">$10</button>
           <button type="button" class="donate-chip" data-amt="20">$20</button>
         </div>
-        <div class="price-input-wrap">
-          <span class="price-prefix">$</span>
-          <input
-            id="donateAmount"
-            type="number"
-            step="0.01"
-            min="1"
-            max="500"
-            inputmode="decimal"
-            placeholder="5.00"
-            value="5"
-          />
+        <div class="donate-amount" id="donateAmountView" aria-live="polite">
+          <span class="donate-currency">$</span>
+          <span id="donateAmountText">5</span>
+        </div>
+        <div class="donate-pad" id="donatePad" role="group" aria-label="Teclado">
+          <button type="button" data-k="1">1</button>
+          <button type="button" data-k="2">2</button>
+          <button type="button" data-k="3">3</button>
+          <button type="button" data-k="4">4</button>
+          <button type="button" data-k="5">5</button>
+          <button type="button" data-k="6">6</button>
+          <button type="button" data-k="7">7</button>
+          <button type="button" data-k="8">8</button>
+          <button type="button" data-k="9">9</button>
+          <button type="button" data-k=".">.</button>
+          <button type="button" data-k="0">0</button>
+          <button type="button" data-k="del" aria-label="Borrar">⌫</button>
         </div>
         <p class="hint" data-i18n="donateHint">Mínimo $1 · tú eliges cuánto</p>
         <div class="row modal-actions">
@@ -565,7 +570,7 @@
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script src="/static/brand-logos.js?v=0.9.1"></script>
-    <script src="/static/app.js?v=0.9.76"></script>
+    <script src="/static/app.js?v=0.9.77"></script>
     <script>
       /* Quita splash cuando la UI ya pintó */
       (function () {

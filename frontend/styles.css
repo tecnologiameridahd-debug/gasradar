@@ -336,6 +336,64 @@ button.bmc-mini {
   color: #fde68a;
 }
 
+.donate-amount {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
+  margin: 4px 0 12px;
+  padding: 10px 12px 8px;
+  border-radius: 14px;
+  background: #0d1526;
+  border: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
+}
+
+.donate-currency {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--gold);
+}
+
+#donateAmountText {
+  font-size: 2.15rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: #eef3ff;
+}
+
+.donate-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 0 0 8px;
+}
+
+.donate-pad button {
+  height: 48px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #121b2e;
+  color: #eef3ff;
+  font-size: 1.25rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.donate-pad button:active {
+  background: rgba(251, 191, 36, 0.18);
+  border-color: rgba(251, 191, 36, 0.45);
+  color: #fde68a;
+}
+
+.donate-pad button[data-k="del"] {
+  font-size: 1.05rem;
+  color: #9aabc7;
+}
+
 /* Chip "prom. sem." — botón mini al lado de ES/EN (siempre visible) */
 .eia-chip {
   display: inline-flex;
