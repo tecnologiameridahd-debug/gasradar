@@ -1841,11 +1841,10 @@ function bind() {
         } catch (_) {}
       }
 
-      // force:true = siempre red (no cache silencioso al cambiar ZIP)
       search({
         zip: newZip,
         soft: !!changing,
-        force: true,
+        force: !!changing,
         background: false,
       });
     } catch (err) {

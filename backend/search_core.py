@@ -4,6 +4,7 @@ GasBuddy VPS + OSM/AAA. Sin Zyla.
 """
 from __future__ import annotations
 
+import re
 import time
 
 from backend.geo import (
@@ -43,6 +44,21 @@ def _search_cache_key(
     else:
         loc = "default"
     return f"{loc}|{fuel}|{round(float(radius_mi), 1)}|{int(limit)}|{'q' if quick else 'f'}"
+
+
+def _mem_get(key: str) -> dict | None:
+    hit = _SEARCH_CACHE.get(key)
+    if not hit:
+        return None
+    if time.time() - float(hit.get("ts") or 0) > _SEARCH_CACHE_TTL:
+        _SEARCH_CACHE.pop(key, None)
+        return None
+    data = hit.get("data")
+    if not isinstance(data, dict):
+        return None
+    out = dict(data)
+    out["cached"] = True
+    return out
 
 
 def _cache_get(key: str) -> dict | None:
@@ -188,8 +204,7 @@ def run_search(
     solo precios reales GasBuddy/reportes.
     """
     t_start = time.time()
-    # Bot: 14s; web: 16s — deja margen al timeout del webhook Telegram (~18–25s)
-    hard_deadline = 14.0 if quick else _SEARCH_HARD_DEADLINE_S
+    hard_deadline = 12.0 if quick else 8.0
 
     def _budget_left() -> float:
         return max(0.0, hard_deadline - (time.time() - t_start))
@@ -199,26 +214,13 @@ def run_search(
     zip_code = None
     city = None
     if zip:
-        g = geocode_zip(zip)
-        if not g:
+        z = re.sub(r"[^0-9]", "", str(zip))[:5]
+        if len(z) != 5:
             raise ValueError(f"ZIP {zip} no encontrado")
-        lat, lon = g["lat"], g["lon"]
-        label = g["label"]
-        state = g.get("state") or "CO"
-        zip_code = g.get("zip") or zip
-        city = g.get("city") or None
+        zip_code = z
+        label = f"ZIP {z}"
     elif lat is not None and lon is not None:
-        rev = None
-        if _budget_left() > 3.0:
-            rev = reverse_geocode(float(lat), float(lon))
-        if rev:
-            label = rev["label"]
-            state = rev.get("state") or "CO"
-            zip_code = rev.get("zip")
-            city = rev.get("city") or None
-        else:
-            label = f"Tu ubicación ({float(lat):.3f}, {float(lon):.3f})"
-            state = "CO"
+        label = f"Tu ubicación ({float(lat):.3f}, {float(lon):.3f})"
     else:
         lat, lon = DEFAULT_LAT, DEFAULT_LON
         label = DEFAULT_LABEL
@@ -240,7 +242,7 @@ def run_search(
         limit=limit,
         quick=quick,
     )
-    cached = _cache_get(ck)
+    cached = _mem_get(ck)
     if cached is not None:
         # No servir cache solo de estimados si pedimos precios reales
         st0 = cached.get("stations") or []
@@ -288,72 +290,64 @@ def run_search(
                 lon=float(lon) if lon is not None else None,
                 fuel=fuel,
                 limit=lim,
-                timeout_s=min(8.0 if quick else 8.0, max(3.0, _budget_left() - 0.4)),
+                timeout_s=min(6.5, max(2.5, _budget_left() - 0.3)),
             )
         except Exception as e:
             print(f"[search] vps_scraper: {e}")
             return []
 
-    def _job_osm() -> list:
+    def _job_geo() -> dict | None:
         try:
-            return stations_near(
-                float(lat),
-                float(lon),
-                radius_mi=radius_mi,
-                limit=min(int(limit) + 10, 30),
-                enrich=False,
-            )
+            if zip_code:
+                return geocode_zip(str(zip_code))
+            if lat is not None and lon is not None:
+                return reverse_geocode(float(lat), float(lon))
         except Exception as e:
-            print(f"[search] stations_near: {e}")
-            return []
+            print(f"[search] geo: {e}")
+        return None
 
     t0 = time.time()
-    # Prioridad: VPS (precios reales). OSM en paralelo como respaldo (bot / sin VPS).
     pool = ThreadPoolExecutor(max_workers=2)
     try:
         fut_vps = pool.submit(_job_vps)
-        fut_osm = pool.submit(_job_osm)
-        vps_wait = min(8.0 if quick else 8.0, max(2.5, _budget_left() - 1.0))
+        fut_geo = pool.submit(_job_geo)
+        vps_wait = min(6.5, max(2.0, _budget_left() - 0.4))
         wait([fut_vps], timeout=vps_wait)
         try:
             if fut_vps.done():
                 gb_stations = fut_vps.result(timeout=0.05) or []
             else:
-                print("[search] vps still running after wait — no retry (evita 2 scrapes)")
+                print("[search] vps still running after wait — no retry")
                 gb_stations = []
         except Exception as e:
             print(f"[search] vps fail: {e}")
             gb_stations = []
-
-        # Reintento solo si el primero YA terminó vacío y queda tiempo (no si sigue colgado)
-        if (
-            not gb_stations
-            and fut_vps.done()
-            and _budget_left() > (4.0 if quick else 5.0)
-        ):
-            print("[search] vps empty — retry once")
-            try:
-                gb_stations = _job_vps() or []
-            except Exception as e:
-                print(f"[search] vps retry: {e}")
-                gb_stations = []
-
-        # OSM: siempre útil en bot; en web solo si no hay VPS y queda tiempo
         try:
-            if fut_osm.done():
-                stations = fut_osm.result(timeout=0.05) or []
-            elif (quick or not gb_stations) and _budget_left() > 2.0:
-                wait([fut_osm], timeout=min(2.0, _budget_left() - 0.4))
-                if fut_osm.done():
-                    stations = fut_osm.result(timeout=0.05) or []
-        except Exception as e:
-            print(f"[search] osm: {e}")
-            stations = []
+            if fut_geo.done():
+                g = fut_geo.result(timeout=0.05)
+                if g:
+                    if lat is None and g.get("lat") is not None:
+                        lat, lon = g["lat"], g["lon"]
+                    label = g.get("label") or label
+                    state = g.get("state") or state
+                    zip_code = g.get("zip") or zip_code
+                    city = g.get("city") or city
+        except Exception:
+            pass
     finally:
         try:
             pool.shutdown(wait=False, cancel_futures=True)
         except TypeError:
             pool.shutdown(wait=False)
+
+    if (lat is None or lon is None) and gb_stations:
+        try:
+            lat = float(gb_stations[0]["lat"])
+            lon = float(gb_stations[0]["lon"])
+        except Exception:
+            pass
+    if lat is None or lon is None:
+        lat, lon = DEFAULT_LAT, DEFAULT_LON
 
     if not gb_stations and zip_code and _budget_left() > 0.4:
         peeked = peek_cached_search(str(zip_code), fuel=fuel)
