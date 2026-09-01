@@ -242,7 +242,7 @@ def run_search(
         limit=limit,
         quick=quick,
     )
-    cached = _mem_get(ck)
+    cached = _mem_get(ck) or _cache_get(ck)
     if cached is not None:
         # No servir cache solo de estimados si pedimos precios reales
         st0 = cached.get("stations") or []
