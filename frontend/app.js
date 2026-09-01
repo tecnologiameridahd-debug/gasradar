@@ -351,8 +351,10 @@ function applyStaticI18n() {
     bmc.setAttribute("title", t("donateTitle"));
     bmc.setAttribute("aria-label", t("donate"));
   }
-  // Título fijo (no cambiar): GasRadar — Gas prices USA
-  document.title = "GasRadar — Gas prices USA";
+  document.title =
+    state.lang === "en"
+      ? "Cheap gas near me (USA) | GasRadar"
+      : "Gasolina barata cerca de ti (USA) | GasRadar";
   const metaDesc = document.getElementById("metaDesc");
   if (metaDesc) {
     metaDesc.setAttribute(

@@ -12,8 +12,8 @@ from _places_data import BAND_EN, BAND_ES, CITIES, STATES
 ROOT = Path(__file__).resolve().parent
 GAS = ROOT / "gas"
 SITE = "https://gasradarapp.com"
-CSS_V = "0.9.60"
-TODAY = "2026-08-15"
+CSS_V = "0.9.76"
+TODAY = "2026-09-01"
 
 STATE_BY_SLUG = {s["slug"]: s for s in STATES}
 CITIES_BY_STATE: dict[str, list[dict]] = defaultdict(list)
@@ -34,6 +34,9 @@ def page_shell(
     content_en: str,
     extra_ld: dict | None = None,
     live_zip: str = "",
+    page_h1: str = "",
+    faq: list[tuple[str, str]] | None = None,
+    geo_place: str = "",
 ) -> str:
     ld = {
         "@context": "https://schema.org",
@@ -41,15 +44,36 @@ def page_shell(
         "name": title,
         "description": description,
         "url": canonical,
-        "inLanguage": ["es-US", "en-US"],
+        "inLanguage": ["en-US", "es-US"],
         "isPartOf": {"@type": "WebSite", "name": "GasRadar", "url": f"{SITE}/"},
-        "about": {"@type": "Thing", "name": "US gasoline prices"},
+        "about": {"@type": "Thing", "name": "Cheap gas prices USA"},
     }
     if extra_ld:
         ld.update(extra_ld)
     ld_json = json.dumps(ld, ensure_ascii=False, indent=2)
+    faq_json = ""
+    if faq:
+        faq_ld = {
+            "@context": "https://schema.org",
+            "@type": "FAQPage",
+            "mainEntity": [
+                {
+                    "@type": "Question",
+                    "name": q,
+                    "acceptedAnswer": {"@type": "Answer", "text": a},
+                }
+                for q, a in faq
+            ],
+        }
+        faq_json = (
+            '\n  <script type="application/ld+json">\n'
+            + json.dumps(faq_ld, ensure_ascii=False, indent=2)
+            + "\n  </script>"
+        )
+    geo = f'\n  <meta name="geo.placename" content="{esc(geo_place)}" />' if geo_place else ""
+    h1 = f'\n    <h1 class="place-h1">{esc(page_h1)}</h1>' if page_h1 else ""
     return f"""<!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -57,21 +81,27 @@ def page_shell(
   <title>{esc(title)}</title>
   <meta name="description" content="{esc(description)}" />
   <meta name="robots" content="index, follow" />
-  <meta name="geo.region" content="US" />
+  <meta name="geo.region" content="US" />{geo}
   <link rel="canonical" href="{canonical}" />
+  <link rel="alternate" hreflang="en" href="{canonical}" />
+  <link rel="alternate" hreflang="es" href="{canonical}" />
+  <link rel="alternate" hreflang="x-default" href="{canonical}" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="GasRadar" />
   <meta property="og:title" content="{esc(title)}" />
   <meta property="og:description" content="{esc(description)}" />
   <meta property="og:url" content="{canonical}" />
   <meta property="og:image" content="{SITE}/static/logo-512.png?v=0.5.0" />
-  <meta property="og:locale" content="es_US" />
-  <meta property="og:locale:alternate" content="en_US" />
+  <meta property="og:locale" content="en_US" />
+  <meta property="og:locale:alternate" content="es_US" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="{esc(title)}" />
+  <meta name="twitter:description" content="{esc(description)}" />
   <link rel="icon" href="/static/favicon-32.png?v=0.2.9" type="image/png" />
   <link rel="stylesheet" href="/static/styles.css?v={CSS_V}" />
   <script type="application/ld+json">
 {ld_json}
-  </script>
+  </script>{faq_json}
 </head>
 <body>
   <div class="app privacy-page blog-page">
@@ -81,8 +111,8 @@ def page_shell(
           <img class="logo" src="/static/logo.svg?v=0.2.9" width="48" height="48" alt="GasRadar" />
         </a>
         <div class="brand-text">
-          <h1><span class="brand-gas">Gas</span><span class="brand-radar">Radar</span></h1>
-          <p class="subtitle" id="blogSub">Gasolina</p>
+          <p class="brand-title"><span class="brand-gas">Gas</span><span class="brand-radar">Radar</span></p>
+          <p class="subtitle" id="blogSub">Gas prices</p>
         </div>
       </div>
       <div class="lang-switch" role="group" aria-label="Language">
@@ -97,7 +127,7 @@ def page_shell(
       <a href="/">App</a>
       <span class="footer-sep">·</span>
       <a href="/blog">Blog</a>
-    </nav>
+    </nav>{h1}
     {f'<p class="live-box card" id="livePrice" data-zip="{live_zip}" style="padding:12px 16px;margin:0 0 12px"></p>' if live_zip else ""}
 
     <section class="card privacy-card blog-card" id="contentEs">
@@ -260,11 +290,12 @@ def build_index() -> None:
     <p class="blog-cta"><a class="btn-blog" href="/">Open GasRadar and search nearby</a></p>
     """
     html_text = page_shell(
-        title="Gasolina barata por ciudad y estado | GasRadar",
-        description="Precios de gasolina en 50 estados + D.C. y las principales ciudades de EE.UU. Compara por ZIP con GasRadar.",
+        title="Cheap gas by city and state (USA) | GasRadar",
+        description="Live cheap gas prices in 50 US states and major cities. Compare stations by ZIP in GasRadar — find the lowest Regular near you.",
         canonical=f"{SITE}/gas",
         content_es=es,
         content_en=en,
+        page_h1="Cheap gas by US city and state",
     )
     write(GAS / "index.html", html_text)
 
@@ -296,11 +327,23 @@ def build_states() -> None:
         {neighbor_links(st, "en")}
         """
         html_text = page_shell(
-            title=f"Gasolina en {st['name_es']} ({st['code']}) | GasRadar",
-            description=f"Precios de gasolina en {st['name_es']}. {st['note_es'][:140]}",
+            title=f"Cheap gas in {st['name_en']} ({st['code']}) today | GasRadar",
+            description=f"Find the cheapest gas in {st['name_en']}. {st['note_en'][:150]} Compare live Regular prices by ZIP with GasRadar.",
             canonical=f"{SITE}/gas/{st['slug']}",
             content_es=es,
             content_en=en,
+            page_h1=f"Cheap gas in {st['name_en']} ({st['code']})",
+            geo_place=f"{st['name_en']}, USA",
+            faq=[
+                (
+                    f"Where is cheap gas in {st['name_en']}?",
+                    f"Open GasRadar with a city ZIP in {st['name_en']} and compare Regular within 3–15 miles. {st['note_en'][:160]}",
+                ),
+                (
+                    f"Is {st['name_en']} expensive for gas?",
+                    f"{st['name_en']} is usually {BAND_EN[st['band']]}. Neighborhood and highway exits change the price more than the state average.",
+                ),
+            ],
         )
         write(GAS / st["slug"] / "index.html", html_text)
 
@@ -336,20 +379,32 @@ def build_cities() -> None:
         <p><a href="/gas/{c["state"]}">All of {esc(st["name_en"])}</a></p>
         """
         html_text = page_shell(
-            title=f"Gasolina barata en {c['name']}, {st['name_es']} | GasRadar",
-            description=f"Gasolina en {c['name']}, {st['name_es']}. ZIP {c['zip']}. {c['tip_es'][:120]}",
+            title=f"Cheap gas in {c['name']}, {st['code']} today | GasRadar",
+            description=f"Cheapest gas stations near {c['name']}, {st['name_en']} (ZIP {c['zip']}). {c['tip_en'][:110]} Compare live Regular in GasRadar.",
             canonical=f"{SITE}/gas/{c['state']}/{c['slug']}",
             content_es=es,
             content_en=en,
             live_zip=c["zip"],
+            page_h1=f"Cheap gas in {c['name']}, {st['code']}",
+            geo_place=f"{c['name']}, {st['name_en']}",
+            faq=[
+                (
+                    f"Where is the cheapest gas in {c['name']}?",
+                    f"Use ZIP {c['zip']} in GasRadar and compare stations 3–15 miles out. {c['tip_en']}",
+                ),
+                (
+                    f"What ZIP code for gas prices in {c['name']}?",
+                    f"Start with {c['zip']}. Nearby: {c['nearby']}. The neighborhood often changes the price more than the city name.",
+                ),
+            ],
         )
         write(GAS / c["state"] / f"{c['slug']}.html", html_text)
 
 
 def collect_urls() -> list[tuple[str, str]]:
     urls = [
-        ("/", "2026-08-18"),
-        ("/download", "2026-08-18"),
+        ("/", TODAY),
+        ("/download", TODAY),
         ("/dmca", "2026-08-18"),
         ("/privacy", "2026-08-01"),
         ("/blog", "2026-08-03"),

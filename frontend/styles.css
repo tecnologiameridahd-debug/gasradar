@@ -488,12 +488,19 @@ button.bmc-mini {
   flex-shrink: 0;
 }
 
-.brand-text h1 {
+.brand-text h1,
+.brand-text .brand-title {
   margin: 0;
   font-size: 1.4rem;
   letter-spacing: -0.03em;
   font-weight: 800;
   line-height: 1.15;
+}
+.place-h1 {
+  margin: 8px 16px 12px;
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
 }
 
 .brand-gas {
