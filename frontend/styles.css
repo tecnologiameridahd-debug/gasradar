@@ -591,8 +591,10 @@ button {
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
 }
-button:active {
-  transform: scale(0.98);
+@media (hover: hover) and (pointer: fine) {
+  button:active {
+    transform: scale(0.98);
+  }
 }
 
 button:disabled {

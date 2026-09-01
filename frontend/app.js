@@ -988,7 +988,7 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
     } catch (_) {
       /* ignore */
     }
-  }, 14000);
+  }, 7000);
   const stillTimer = setTimeout(() => {
     if (myToken === state.searchToken && state.searching && !background) {
       setStatus(t("searchingStill"), "loading");
@@ -1006,7 +1006,7 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
         /* ignore */
       }
     }
-  }, 16000);
+  }, 8000);
 
   try {
     const res = await fetch(`/api/search?${params.toString()}`, {
@@ -1027,8 +1027,11 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
     const data = await res.json();
     clearTimeout(stillTimer);
     if (myToken !== state.searchToken) return;
+    if (!data || !data.center) {
+      setStatus(t("timeoutSoft"), "error");
+      return;
+    }
     try {
-      // Solo cachear si hay estaciones (vacío no se guarda)
       if (data && Array.isArray(data.stations) && data.stations.length > 0) {
         _searchMem.set(memKey, { ts: Date.now(), data });
         if (_searchMem.size > 40) {
@@ -2246,7 +2249,7 @@ function registerServiceWorker() {
 
   const go = () => {
     navigator.serviceWorker
-      .register("/sw.js?v=0.9.57", { scope: "/" })
+      .register("/sw.js?v=0.9.81", { scope: "/" })
       .then((reg) => {
         try {
           reg.update();

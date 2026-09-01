@@ -1,13 +1,13 @@
-/* GasRadar service worker — v0.9.71
+/* GasRadar service worker — v0.9.80
  * JS/CSS: red primero (evita app.js viejo que “no busca”).
  * HTML: red primero + fallback caché (sin flash blanco en cold start).
  */
-const CACHE = "gasradar-v0.9.71";
+const CACHE = "gasradar-v0.9.80";
 const PRECACHE = [
   "/",
-  "/static/styles.css?v=0.9.71",
+  "/static/styles.css?v=0.9.76",
   "/static/brand-logos.js?v=0.9.1",
-  "/static/app.js?v=0.9.71",
+  "/static/app.js?v=0.9.81",
   "/static/logo.svg?v=0.2.9",
   "/static/logo-192.png?v=0.5.0",
   "/static/logo-512.png?v=0.5.0",
@@ -103,13 +103,21 @@ self.addEventListener("fetch", (event) => {
   // API: solo red
   if (url.pathname.startsWith("/api/")) {
     event.respondWith(
-      fetch(req).catch(
-        () =>
-          new Response(JSON.stringify({ ok: false, offline: true }), {
-            status: 503,
+      (async () => {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 5000);
+        try {
+          const res = await fetch(req, { signal: ctrl.signal });
+          return res;
+        } catch (_) {
+          return new Response(JSON.stringify({ ok: false, offline: true }), {
+            status: 504,
             headers: { "Content-Type": "application/json" },
-          })
-      )
+          });
+        } finally {
+          clearTimeout(t);
+        }
+      })()
     );
     return;
   }

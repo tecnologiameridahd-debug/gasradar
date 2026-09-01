@@ -204,7 +204,7 @@ def run_search(
     solo precios reales GasBuddy/reportes.
     """
     t_start = time.time()
-    hard_deadline = 12.0 if quick else 8.0
+    hard_deadline = 8.0 if quick else 4.5
 
     def _budget_left() -> float:
         return max(0.0, hard_deadline - (time.time() - t_start))
@@ -290,7 +290,7 @@ def run_search(
                 lon=float(lon) if lon is not None else None,
                 fuel=fuel,
                 limit=lim,
-                timeout_s=min(6.5, max(2.5, _budget_left() - 0.3)),
+                timeout_s=min(3.0, max(1.5, _budget_left() - 0.2)),
             )
         except Exception as e:
             print(f"[search] vps_scraper: {e}")
@@ -311,7 +311,7 @@ def run_search(
     try:
         fut_vps = pool.submit(_job_vps)
         fut_geo = pool.submit(_job_geo)
-        vps_wait = min(6.5, max(2.0, _budget_left() - 0.4))
+        vps_wait = min(3.2, max(1.5, _budget_left() - 0.3))
         wait([fut_vps], timeout=vps_wait)
         try:
             if fut_vps.done():
