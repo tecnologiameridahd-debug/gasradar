@@ -336,8 +336,8 @@ def run_search(
         try:
             if fut_osm.done():
                 stations = fut_osm.result(timeout=0.05) or []
-            elif (quick or not gb_stations) and _budget_left() > 1.5:
-                wait([fut_osm], timeout=min(4.0 if quick else 4.0, _budget_left() - 0.3))
+            elif (quick or not gb_stations) and _budget_left() > 2.0:
+                wait([fut_osm], timeout=min(2.0, _budget_left() - 0.4))
                 if fut_osm.done():
                     stations = fut_osm.result(timeout=0.05) or []
         except Exception as e:

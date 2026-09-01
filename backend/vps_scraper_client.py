@@ -132,13 +132,18 @@ def fetch_vps_stations(
         params["key"] = key
 
     last_err = ""
+    deadline = time.time() + max(2.5, min(float(timeout_s or 8.0), 10.0))
     for base in urls:
+        left = deadline - time.time()
+        if left < 1.2:
+            print("[vps_scraper] sin tiempo para otra URL")
+            break
         try:
-            wait_s = max(2.5, min(float(timeout_s or 8.0), 12.0))
+            wait_s = max(1.5, min(left, 8.0))
             r = httpx.get(
                 f"{base}/prices",
                 params=params,
-                timeout=httpx.Timeout(wait_s, connect=2.5),
+                timeout=httpx.Timeout(wait_s, connect=min(2.0, wait_s)),
             )
             if r.status_code != 200:
                 last_err = f"{base} HTTP {r.status_code}"
