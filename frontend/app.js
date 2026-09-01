@@ -61,8 +61,8 @@ const I18N = {
     emptyStart: "Escribe tu ZIP o toca Usar mi ubicación.",
     loadLast: "Cargando tu última zona…",
     noStations: "No hay estaciones reales aquí. Prueba 10 millas u otro ZIP.",
-    timeout: "La red tardó. Toca Buscar otra vez (o prueba el mismo ZIP de nuevo).",
-    timeoutSoft: "Aún cargando precios de esa zona… prueba Buscar otra vez en un momento.",
+    timeout: "La red tardó. Espera un momento: seguimos cargando esa zona.",
+    timeoutSoft: "Aún cargando precios de esa zona…",
     searchError: "Error de búsqueda. Prueba un ZIP.",
     stateAvg: (st, price) => `Promedio del estado${st}: ${price}`,
     eiaTitle: "Promedio esta semana",
@@ -195,8 +195,8 @@ const I18N = {
     emptyStart: "Enter your ZIP or tap Use my location.",
     loadLast: "Loading your last area…",
     noStations: "No real stations here. Try 10 miles or another ZIP.",
-    timeout: "Network was slow. Tap Search again (or try the same ZIP once more).",
-    timeoutSoft: "Still loading that area… tap Search again in a moment.",
+    timeout: "Network was slow. Hang on — still loading that area.",
+    timeoutSoft: "Still loading that area…",
     searchError: "Search error. Try a ZIP.",
     stateAvg: (st, price) => `State average${st}: ${price}`,
     eiaTitle: "This week's average",
@@ -888,8 +888,8 @@ function applySearchData(data, { zip } = {}) {
     try {
       showToast(
         state.lang === "en"
-          ? "No live prices right now. Tap Search again in a few seconds."
-          : "Sin precios en vivo ahora. Toca Buscar de nuevo en unos segundos."
+          ? "Loading live prices for that ZIP…"
+          : "Cargando precios en vivo de ese ZIP…"
       );
     } catch (_) {
       /* ignore */
@@ -901,7 +901,18 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
   // Búsqueda en segundo plano: no pisar una del usuario
   if (background && state.searching) return;
 
-  // Nueva búsqueda del usuario: cancela la anterior (cambio de ZIP)
+  const zipDigits0 = zip ? String(zip).replace(/\D/g, "").slice(0, 5) : "";
+  // Mismo ZIP ya en curso: no abortar ni reiniciar (eso obligaba a 5 clics)
+  if (
+    !background &&
+    state.searching &&
+    zipDigits0 &&
+    state.zip === zipDigits0
+  ) {
+    return;
+  }
+
+  // Nueva búsqueda del usuario: cancela la anterior SOLO si cambió el ZIP
   if (!background && state.searchAbort) {
     try {
       state.searchAbort.abort();
@@ -982,49 +993,53 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
 
   const ctrl = new AbortController();
   state.searchAbort = ctrl;
-  const timer = setTimeout(() => {
+  const MAX_TRIES = background ? 1 : 4;
+  const overall = setTimeout(() => {
     try {
       ctrl.abort();
     } catch (_) {
       /* ignore */
     }
-  }, 7000);
+  }, 24000);
   const stillTimer = setTimeout(() => {
     if (myToken === state.searchToken && state.searching && !background) {
       setStatus(t("searchingStill"), "loading");
     }
   }, 4500);
 
-  // Solo soltar UI visual; no abortar el fetch (abortFetch mataba la búsqueda)
-  const safety = setTimeout(() => {
-    if (myToken === state.searchToken) {
-      state.searching = false;
-      try {
-        $("#btnZip")?.classList.remove("is-loading", "is-pressed");
-        $("#btnZip")?.blur();
-      } catch (_) {
-        /* ignore */
-      }
-    }
-  }, 8000);
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   try {
-    const res = await fetch(`/api/search?${params.toString()}`, {
-      signal: ctrl.signal,
-    });
-    clearTimeout(timer);
-    if (myToken !== state.searchToken) return;
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      const detail =
-        typeof err.detail === "string"
-          ? err.detail
-          : Array.isArray(err.detail)
-            ? err.detail.map((d) => d.msg || d).join(", ")
-            : null;
-      throw new Error(detail || `Error ${res.status}`);
+    let data = null;
+    for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
+      if (myToken !== state.searchToken) return;
+      if (attempt > 1) {
+        setStatus(t("searchingStill"), "loading");
+        await sleep(1600);
+        if (myToken !== state.searchToken) return;
+      }
+      const res = await fetch(`/api/search?${params.toString()}`, {
+        signal: ctrl.signal,
+      });
+      if (myToken !== state.searchToken) return;
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        const detail =
+          typeof err.detail === "string"
+            ? err.detail
+            : Array.isArray(err.detail)
+              ? err.detail.map((d) => d.msg || d).join(", ")
+              : null;
+        throw new Error(detail || `Error ${res.status}`);
+      }
+      data = await res.json();
+      if (myToken !== state.searchToken) return;
+      const n = data && Array.isArray(data.stations) ? data.stations.length : 0;
+      if (n > 0) break;
+      if (attempt < MAX_TRIES) {
+        console.log("[GasRadar] empty ZIP, retry", attempt + 1, "/", MAX_TRIES);
+      }
     }
-    const data = await res.json();
     clearTimeout(stillTimer);
     if (myToken !== state.searchToken) return;
     if (!data || !data.center) {
@@ -1046,7 +1061,6 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
     }
     applySearchData(data, { zip });
   } catch (e) {
-    clearTimeout(timer);
     clearTimeout(stillTimer);
     // Reemplazada por otra búsqueda (otro ZIP): no mostrar error ni bloquear
     if (myToken !== state.searchToken) return;
@@ -1059,8 +1073,8 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
           state.stations.length +
             " · " +
             (state.lang === "en"
-              ? "previous area — try Search again"
-              : "zona anterior — toca Buscar otra vez"),
+              ? "previous area — still loading the new ZIP"
+              : "zona anterior — seguimos cargando el ZIP nuevo"),
           "ok"
         );
       } else {
@@ -1071,9 +1085,8 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
       setStatus(isAbort ? t("timeout") : e.message || t("searchError"), "error");
     }
   } finally {
-    clearTimeout(timer);
+    clearTimeout(overall);
     clearTimeout(stillTimer);
-    clearTimeout(safety);
     try {
       const bz = $("#btnZip");
       if (bz) {
@@ -1823,6 +1836,9 @@ function bind() {
       var prevZip = state.zip || "";
       var hasList = state.stations && state.stations.length > 0;
       var changing = prevZip && prevZip !== newZip && hasList;
+      if (state.searching && prevZip === newZip) {
+        return;
+      }
 
       state.zip = newZip;
       if (input) input.value = newZip;

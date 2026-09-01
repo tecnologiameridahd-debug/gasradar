@@ -9,6 +9,7 @@ Env:
 from __future__ import annotations
 
 import os
+import threading
 import time
 from typing import Any
 
@@ -16,6 +17,8 @@ import httpx
 
 _cache: dict[str, Any] = {}
 _CACHE_TTL = 20 * 60  # 20 min en la app (el VPS ya cachea 3h)
+_inflight: dict[str, dict[str, Any]] = {}
+_inflight_lock = threading.Lock()
 
 
 def _enabled() -> bool:
@@ -131,54 +134,78 @@ def fetch_vps_stations(
     if key:
         params["key"] = key
 
+    wait_budget = max(2.5, min(float(timeout_s or 8.0), 12.0))
+    with _inflight_lock:
+        slot = _inflight.get(cache_key)
+        mine = slot is None
+        if mine:
+            slot = {"ev": threading.Event(), "data": None}
+            _inflight[cache_key] = slot
+    if not mine:
+        slot["ev"].wait(timeout=wait_budget)
+        data = slot.get("data")
+        if data:
+            print(f"[vps_scraper] joined in-flight n={len(data)}")
+            return list(data)
+        hit2 = _cache.get(cache_key)
+        if hit2 and time.time() - hit2["ts"] < _CACHE_TTL:
+            return list(hit2["data"])
+        return []
+
     last_err = ""
-    deadline = time.time() + max(2.5, min(float(timeout_s or 8.0), 10.0))
-    for base in urls:
-        left = deadline - time.time()
-        if left < 1.2:
-            print("[vps_scraper] sin tiempo para otra URL")
-            break
-        try:
-            wait_s = max(1.2, min(left, 3.0))
-            r = httpx.get(
-                f"{base}/prices",
-                params=params,
-                timeout=httpx.Timeout(wait_s, connect=min(0.9, wait_s)),
-            )
-            if r.status_code != 200:
-                last_err = f"{base} HTTP {r.status_code}"
-                print(f"[vps_scraper] {last_err}: {r.text[:160]}")
-                continue
-            data = r.json() or {}
-            if not data.get("ok"):
-                last_err = f"{base} fail: {data.get('error')}"
-                print(f"[vps_scraper] {last_err}")
-                continue
-            stations = data.get("stations") or []
-            out = [s for s in stations if isinstance(s, dict) and s.get("price") is not None]
-            if not out:
-                last_err = f"{base} empty"
-                continue
-            _cache[cache_key] = {"ts": now, "data": out}
+    deadline = time.time() + wait_budget
+    out: list = []
+    try:
+        for base in urls:
+            left = deadline - time.time()
+            if left < 1.2:
+                print("[vps_scraper] sin tiempo para otra URL")
+                break
             try:
-                import threading
+                wait_s = max(1.5, min(left, 11.0))
+                r = httpx.get(
+                    f"{base}/prices",
+                    params=params,
+                    timeout=httpx.Timeout(wait_s, connect=min(1.2, wait_s)),
+                )
+                if r.status_code != 200:
+                    last_err = f"{base} HTTP {r.status_code}"
+                    print(f"[vps_scraper] {last_err}: {r.text[:160]}")
+                    continue
+                data = r.json() or {}
+                if not data.get("ok"):
+                    last_err = f"{base} fail: {data.get('error')}"
+                    print(f"[vps_scraper] {last_err}")
+                    continue
+                stations = data.get("stations") or []
+                out = [s for s in stations if isinstance(s, dict) and s.get("price") is not None]
+                if not out:
+                    last_err = f"{base} empty"
+                    continue
+                _cache[cache_key] = {"ts": now, "data": out}
+                slot["data"] = out
+                try:
+                    def _bg_put() -> None:
+                        try:
+                            from backend.price_cache import put as db_put
 
-                def _bg_put() -> None:
-                    try:
-                        from backend.price_cache import put as db_put
+                            db_put(f"vps:{cache_key}", {"stations": out})
+                        except Exception:
+                            pass
 
-                        db_put(f"vps:{cache_key}", {"stations": out})
-                    except Exception:
-                        pass
-
-                threading.Thread(target=_bg_put, daemon=True).start()
-            except Exception:
-                pass
-            print(f"[vps_scraper] OK n={len(out)} method={data.get('method')} via={base}")
-            return out
-        except Exception as e:
-            last_err = f"{base} {type(e).__name__}: {e}"
-            print(f"[vps_scraper] error: {last_err}")
-    if last_err:
-        print(f"[vps_scraper] todos fallaron: {last_err}")
-    return []
+                    threading.Thread(target=_bg_put, daemon=True).start()
+                except Exception:
+                    pass
+                print(f"[vps_scraper] OK n={len(out)} method={data.get('method')} via={base}")
+                return out
+            except Exception as e:
+                last_err = f"{base} {type(e).__name__}: {e}"
+                print(f"[vps_scraper] error: {last_err}")
+        if last_err:
+            print(f"[vps_scraper] todos fallaron: {last_err}")
+        return []
+    finally:
+        slot["ev"].set()
+        with _inflight_lock:
+            if _inflight.get(cache_key) is slot:
+                _inflight.pop(cache_key, None)

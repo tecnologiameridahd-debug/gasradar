@@ -17,15 +17,18 @@ Arranque:
 from __future__ import annotations
 
 import os
+import threading
 import time
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, Header, HTTPException, Query
 
 import cache
-from gasbuddy_client import fetch_stations
+from gasbuddy_client import fetch_stations, scraper_proxy_url
 
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.0.1"
+_inflight: dict[str, dict] = {}
+_inflight_mu = threading.Lock()
 app = FastAPI(title="GasRadar VPS Scraper", version=APP_VERSION)
 
 
@@ -51,6 +54,7 @@ def health():
         "utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "node": (os.environ.get("SCRAPER_NODE") or "").strip() or "vps",
         "flaresolverr": bool((os.environ.get("FLARESOLVERR_URL") or "").strip()),
+        "proxy": scraper_proxy_url() or None,
         "cache_ttl_sec": cache.DEFAULT_TTL,
     }
 
@@ -78,7 +82,11 @@ def prices(
     if not z and (lat is None or lon is None):
         raise HTTPException(400, "Pasa zip= o lat= + lon=")
 
-    cache_key = f"gb:{z or ''}:{lat}:{lon}:{fuel}:{max_age}:{limit}"
+    # Misma zona = misma clave (ZIP gana). Evita 5 scrapes del mismo código.
+    if z:
+        cache_key = f"gb:z:{z}:{fuel}:{limit}"
+    else:
+        cache_key = f"gb:g:{round(float(lat), 2)}:{round(float(lon), 2)}:{fuel}:{limit}"
     if not force:
         hit = cache.get(cache_key)
         if hit and hit.get("ok"):
@@ -86,22 +94,54 @@ def prices(
             hit["cached"] = True
             return hit
 
+    with _inflight_mu:
+        slot = _inflight.get(cache_key)
+        owner = slot is None
+        if owner:
+            slot = {"ev": threading.Event(), "out": None}
+            _inflight[cache_key] = slot
+
+    if not owner:
+        slot["ev"].wait(timeout=40)
+        if slot.get("out") and slot["out"].get("ok"):
+            out = dict(slot["out"])
+            out["cached"] = True
+            return out
+        hit = cache.get(cache_key)
+        if hit and hit.get("ok"):
+            hit = dict(hit)
+            hit["cached"] = True
+            return hit
+        return {
+            "ok": False,
+            "stations": [],
+            "error": "scrape in progress",
+            "cached": False,
+        }
+
     t0 = time.time()
-    # Si hay lat/lon (centro del ZIP), se usan para más estaciones; zip solo es fallback
-    result = fetch_stations(
-        zip_code=z if lat is None or lon is None else None,
-        lat=lat,
-        lon=lon,
-        fuel=fuel,
-        max_age=max_age,
-        limit=limit,
-    )
-    result["elapsed_ms"] = int((time.time() - t0) * 1000)
-    result["cached"] = False
-    result["utc"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    if result.get("ok") and result.get("stations"):
-        cache.set_(cache_key, result)
-    return result
+    try:
+        # Si hay lat/lon (centro del ZIP), se usan para más estaciones; zip solo es fallback
+        result = fetch_stations(
+            zip_code=z if lat is None or lon is None else None,
+            lat=lat,
+            lon=lon,
+            fuel=fuel,
+            max_age=max_age,
+            limit=limit,
+        )
+        result["elapsed_ms"] = int((time.time() - t0) * 1000)
+        result["cached"] = False
+        result["utc"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        if result.get("ok") and result.get("stations"):
+            cache.set_(cache_key, result)
+        slot["out"] = result
+        return result
+    finally:
+        slot["ev"].set()
+        with _inflight_mu:
+            if _inflight.get(cache_key) is slot:
+                _inflight.pop(cache_key, None)
 
 
 @app.get("/warm")

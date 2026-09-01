@@ -204,7 +204,9 @@ def run_search(
     solo precios reales GasBuddy/reportes.
     """
     t_start = time.time()
-    hard_deadline = 8.0 if quick else 4.5
+    # Web: ZIP frío tarda 6–12s en el scraper. Cortar a 4.5s devolvía vacío
+    # y el usuario tenía que tocar Buscar 4–5 veces. Bot se queda en 8s.
+    hard_deadline = 8.0 if quick else 10.0
 
     def _budget_left() -> float:
         return max(0.0, hard_deadline - (time.time() - t_start))
@@ -290,7 +292,7 @@ def run_search(
                 lon=float(lon) if lon is not None else None,
                 fuel=fuel,
                 limit=lim,
-                timeout_s=min(3.0, max(1.5, _budget_left() - 0.2)),
+                timeout_s=min(9.5, max(2.5, _budget_left() - 0.3)),
             )
         except Exception as e:
             print(f"[search] vps_scraper: {e}")
@@ -311,14 +313,25 @@ def run_search(
     try:
         fut_vps = pool.submit(_job_vps)
         fut_geo = pool.submit(_job_geo)
-        vps_wait = min(3.2, max(1.5, _budget_left() - 0.3))
+        vps_wait = min(9.6, max(2.5, _budget_left() - 0.3))
         wait([fut_vps], timeout=vps_wait)
         try:
             if fut_vps.done():
                 gb_stations = fut_vps.result(timeout=0.05) or []
             else:
-                print("[search] vps still running after wait — no retry")
+                print("[search] vps still running — keep in background")
                 gb_stations = []
+
+                def _bg_keep() -> None:
+                    try:
+                        rows = fut_vps.result(timeout=25) or []
+                        print(f"[search] bg vps n={len(rows)}")
+                    except Exception as e:
+                        print(f"[search] bg vps: {e}")
+
+                import threading
+
+                threading.Thread(target=_bg_keep, daemon=True).start()
         except Exception as e:
             print(f"[search] vps fail: {e}")
             gb_stations = []
@@ -336,7 +349,7 @@ def run_search(
             pass
     finally:
         try:
-            pool.shutdown(wait=False, cancel_futures=True)
+            pool.shutdown(wait=False)
         except TypeError:
             pool.shutdown(wait=False)
 
@@ -505,8 +518,8 @@ def run_search(
     note = ""
     if not priced and live_only:
         note = (
-            " No hay precios en vivo cerca ahora. "
-            "Prueba de nuevo en unos segundos o sube el radio a 10 mi."
+            " Cargando precios en vivo de esa zona. "
+            "Si tarda, sube el radio a 10 mi."
         )
         partial = True
     elif not priced:
@@ -574,7 +587,7 @@ def run_search(
                 else (
                     "Sin precios en vivo en esta búsqueda."
                     f"{eia_txt} "
-                    "Toca Buscar de nuevo o amplía el radio."
+                    "Si no aparecen, espera unos segundos: el scraper sigue cargando esa zona."
                 )
             )
             + f"{note}"
