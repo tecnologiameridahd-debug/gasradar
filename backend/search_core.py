@@ -71,10 +71,11 @@ def _cache_get(key: str) -> dict | None:
 
 
 def peek_cached_search(zip_code: str | None, fuel: str = "regular") -> dict | None:
-    """Devuelve un resultado cacheado de ese ZIP si hay precio real."""
+    """Caché en memoria de ese ZIP (sin 16 idas a Postgres: eso colgaba 16s)."""
     z = (str(zip_code or "").strip())[:5]
     if len(z) != 5:
         return None
+    now = time.time()
     for radius in (5.0, 8.0):
         for limit in (12, 16, 22, 30):
             for quick in (True, False):
@@ -87,12 +88,17 @@ def peek_cached_search(zip_code: str | None, fuel: str = "regular") -> dict | No
                     limit=limit,
                     quick=quick,
                 )
-                hit = _cache_get(key)
-                if not hit:
+                hit = _SEARCH_CACHE.get(key)
+                if not hit or now - float(hit.get("ts") or 0) > _SEARCH_CACHE_TTL:
                     continue
-                stations = hit.get("stations") or []
-                if any(s.get("price") is not None for s in stations) or hit.get("cheapest"):
-                    return hit
+                data = hit.get("data")
+                if not isinstance(data, dict):
+                    continue
+                stations = data.get("stations") or []
+                if any(s.get("price") is not None for s in stations) or data.get("cheapest"):
+                    out = dict(data)
+                    out["cached"] = True
+                    return out
     return None
 
 
@@ -349,7 +355,7 @@ def run_search(
         except TypeError:
             pool.shutdown(wait=False)
 
-    if not gb_stations and zip_code:
+    if not gb_stations and zip_code and _budget_left() > 0.4:
         peeked = peek_cached_search(str(zip_code), fuel=fuel)
         if peeked and (peeked.get("stations") or peeked.get("cheapest")):
             print("[search] vps miss — using nearby zip cache")
