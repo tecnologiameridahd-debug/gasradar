@@ -157,8 +157,8 @@ def _overlay_reports(result: dict, fuel: str) -> dict:
         return result
 
 
-# Techo para precios REALES (VPS). Prioridad: GasBuddy en vivo, no estimados AAA/EIA.
-_SEARCH_HARD_DEADLINE_S = 16.0
+# Techo para precios REALES (VPS). Corto: si el scraper se cuelga, la app no se queda 20s en blanco.
+_SEARCH_HARD_DEADLINE_S = 10.0
 
 
 def run_search(
@@ -275,13 +275,14 @@ def run_search(
         try:
             from backend.vps_scraper_client import fetch_vps_stations
 
-            lim = min(max(int(limit), 15), 30) if quick else min(max(int(limit), 25), 40)
+            lim = min(max(int(limit), 15), 30) if quick else min(max(int(limit), 22), 30)
             return fetch_vps_stations(
                 zip_code=str(zip_code) if zip_code else None,
                 lat=float(lat) if lat is not None else None,
                 lon=float(lon) if lon is not None else None,
                 fuel=fuel,
                 limit=lim,
+                timeout_s=min(8.0 if quick else 8.0, max(3.0, _budget_left() - 0.4)),
             )
         except Exception as e:
             print(f"[search] vps_scraper: {e}")
@@ -306,21 +307,24 @@ def run_search(
     try:
         fut_vps = pool.submit(_job_vps)
         fut_osm = pool.submit(_job_osm)
-        # Bot: ~11s al VPS; web: hasta ~14s
-        vps_wait = min(11.0 if quick else 14.0, max(3.0, _budget_left() - 1.0))
+        vps_wait = min(8.0 if quick else 8.0, max(2.5, _budget_left() - 1.0))
         wait([fut_vps], timeout=vps_wait)
         try:
             if fut_vps.done():
                 gb_stations = fut_vps.result(timeout=0.05) or []
             else:
-                print("[search] vps still running after wait")
+                print("[search] vps still running after wait — no retry (evita 2 scrapes)")
                 gb_stations = []
         except Exception as e:
             print(f"[search] vps fail: {e}")
             gb_stations = []
 
-        # Reintento corto si no hay precios reales y queda presupuesto
-        if not gb_stations and _budget_left() > (3.0 if quick else 4.0):
+        # Reintento solo si el primero YA terminó vacío y queda tiempo (no si sigue colgado)
+        if (
+            not gb_stations
+            and fut_vps.done()
+            and _budget_left() > (4.0 if quick else 5.0)
+        ):
             print("[search] vps empty — retry once")
             try:
                 gb_stations = _job_vps() or []
@@ -344,6 +348,15 @@ def run_search(
             pool.shutdown(wait=False, cancel_futures=True)
         except TypeError:
             pool.shutdown(wait=False)
+
+    if not gb_stations and zip_code:
+        peeked = peek_cached_search(str(zip_code), fuel=fuel)
+        if peeked and (peeked.get("stations") or peeked.get("cheapest")):
+            print("[search] vps miss — using nearby zip cache")
+            out = _overlay_reports(peeked, fuel)
+            out["partial"] = True
+            out["cached"] = True
+            return out
 
     if not gb_stations and not quick:
         partial = True  # sin precios en vivo aún

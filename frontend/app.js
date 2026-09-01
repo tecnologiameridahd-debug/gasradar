@@ -972,7 +972,7 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
   const params = new URLSearchParams();
   params.set("fuel", state.fuel);
   params.set("radius_mi", String(state.radius));
-  params.set("limit", "30");
+  params.set("limit", "22");
   if (zip) params.set("zip", zip);
   // Solo GPS si no hay ZIP explícito (evita mezclar ubicación vieja con ZIP nuevo)
   if (!zip && lat != null && lon != null) {
@@ -988,7 +988,7 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
     } catch (_) {
       /* ignore */
     }
-  }, 22000);
+  }, 14000);
   const stillTimer = setTimeout(() => {
     if (myToken === state.searchToken && state.searching && !background) {
       setStatus(t("searchingStill"), "loading");
@@ -1006,7 +1006,7 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
         /* ignore */
       }
     }
-  }, 25000);
+  }, 16000);
 
   try {
     const res = await fetch(`/api/search?${params.toString()}`, {

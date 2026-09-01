@@ -82,6 +82,7 @@ def fetch_vps_stations(
     lon: float | None = None,
     fuel: str = "regular",
     limit: int = 30,
+    timeout_s: float = 8.0,
 ) -> list[dict]:
     """Llama al VPS y devuelve lista normalizada de estaciones con precio."""
     if not _enabled():
@@ -133,10 +134,11 @@ def fetch_vps_stations(
     last_err = ""
     for base in urls:
         try:
+            wait_s = max(2.5, min(float(timeout_s or 8.0), 12.0))
             r = httpx.get(
                 f"{base}/prices",
                 params=params,
-                timeout=httpx.Timeout(14.0, connect=3.0),
+                timeout=httpx.Timeout(wait_s, connect=2.5),
             )
             if r.status_code != 200:
                 last_err = f"{base} HTTP {r.status_code}"
