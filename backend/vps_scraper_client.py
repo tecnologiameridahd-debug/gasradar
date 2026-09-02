@@ -51,6 +51,9 @@ def _base_urls() -> list[str]:
         except ImportError:
             pass
     urls: list[str] = []
+    # IP actual primero: si Render aún apunta a una IP vieja, no esperar el timeout
+    for extra in ("http://54.147.51.124:8788",):
+        urls.append(extra)
     for chunk in (raw_multi.replace(";", ",") + "," + raw_one).split(","):
         u = chunk.strip().rstrip("/")
         if u and u not in urls:

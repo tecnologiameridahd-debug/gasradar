@@ -55,6 +55,21 @@ Redeploy GasRadar.
 - GasRadar los une a la lista (prioridad alta)
 - Si el VPS falla → AAA + reportes (no se cae la app)
 
+## Proxy sticky 48 h (misma IP, luego rota)
+
+En el VPS del scraper GasRadar (`54.147.51.124`):
+
+```bash
+# servicio
+sudo systemctl status rotating-proxy
+curl http://127.0.0.1:8900/status
+```
+
+El scraper Docker usa `SCRAPER_PROXY=http://host.docker.internal:8899`.
+Sin `UPSTREAM_TEMPLATE` / `proxies.txt` sale por la IP del VPS.
+
+Desde el PC: `python C:\Users\Alberto\rotating_proxy\deploy_gasradar.py`
+
 ## Coste
 
 - VPS ~$4–6/mes  
