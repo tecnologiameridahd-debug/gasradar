@@ -22,6 +22,12 @@ services:
         fromDatabase:
           name: gasradar-db
           property: connectionString
+      - key: USE_VPS_SCRAPER
+        value: "1"
+      - key: VPS_SCRAPER_URL
+        value: "http://54.147.51.124:8788"
+      - key: VPS_SCRAPER_KEY
+        sync: false
       - key: STATS_KEY
         sync: false
       - key: ALERTS_SECRET

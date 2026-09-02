@@ -51,12 +51,13 @@ def _base_urls() -> list[str]:
         except ImportError:
             pass
     urls: list[str] = []
-    # IP actual primero: si Render aún apunta a una IP vieja, no esperar el timeout
-    for extra in ("http://54.147.51.124:8788",):
-        urls.append(extra)
+    # IP actual primero. La vieja (54.160.130.79) se ignora: timeout de 12s.
+    current = "http://54.147.51.124:8788"
+    dead = {"http://54.160.130.79:8788", "http://54.82.171.219:8788"}
+    urls.append(current)
     for chunk in (raw_multi.replace(";", ",") + "," + raw_one).split(","):
         u = chunk.strip().rstrip("/")
-        if u and u not in urls:
+        if u and u not in urls and u not in dead:
             urls.append(u)
     return urls
 
