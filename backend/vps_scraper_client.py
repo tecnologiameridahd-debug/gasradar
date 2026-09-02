@@ -108,13 +108,18 @@ def fetch_vps_stations(
     if hit and now - hit["ts"] < _CACHE_TTL:
         return list(hit["data"])
     try:
-        from backend.price_cache import get as db_get
+        def _bg_disk() -> None:
+            try:
+                from backend.price_cache import get as db_get
 
-        disk = db_get(f"vps:{cache_key}", ttl=_CACHE_TTL)
-        stations = (disk or {}).get("stations") if isinstance(disk, dict) else None
-        if stations:
-            _cache[cache_key] = {"ts": now, "data": list(stations)}
-            return list(stations)
+                disk = db_get(f"vps:{cache_key}", ttl=_CACHE_TTL)
+                stations = (disk or {}).get("stations") if isinstance(disk, dict) else None
+                if stations:
+                    _cache[cache_key] = {"ts": time.time(), "data": list(stations)}
+            except Exception:
+                pass
+
+        threading.Thread(target=_bg_disk, daemon=True).start()
     except Exception:
         pass
 

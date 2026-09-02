@@ -71,16 +71,23 @@ def _cache_get(key: str) -> dict | None:
             return out
     elif hit:
         _SEARCH_CACHE.pop(key, None)
-    # Caché aparte (Postgres): sobrevive al redeploy y a que un VPS se caiga
+    # Postgres en background: un SELECT frío en Neon colgaba y Render devolvía 504
     try:
-        from backend.price_cache import get as db_get
+        import threading
 
-        disk = db_get(f"search:{key}", ttl=_SEARCH_CACHE_TTL)
-        if isinstance(disk, dict) and (disk.get("stations") or disk.get("cheapest")):
-            _SEARCH_CACHE[key] = {"ts": time.time(), "data": disk}
-            out = dict(disk)
-            out["cached"] = True
-            return out
+        def _bg_disk() -> None:
+            try:
+                from backend.price_cache import get as db_get
+
+                disk = db_get(f"search:{key}", ttl=_SEARCH_CACHE_TTL)
+                if isinstance(disk, dict) and (
+                    disk.get("stations") or disk.get("cheapest")
+                ):
+                    _SEARCH_CACHE[key] = {"ts": time.time(), "data": disk}
+            except Exception:
+                pass
+
+        threading.Thread(target=_bg_disk, daemon=True).start()
     except Exception:
         pass
     return None
@@ -126,9 +133,17 @@ def _cache_put(key: str, data: dict) -> None:
             _SEARCH_CACHE.pop(k, None)
     _SEARCH_CACHE[key] = {"ts": time.time(), "data": data}
     try:
-        from backend.price_cache import put as db_put
+        import threading
 
-        db_put(f"search:{key}", data)
+        def _bg_put() -> None:
+            try:
+                from backend.price_cache import put as db_put
+
+                db_put(f"search:{key}", data)
+            except Exception:
+                pass
+
+        threading.Thread(target=_bg_put, daemon=True).start()
     except Exception:
         pass
 
@@ -206,7 +221,7 @@ def run_search(
     t_start = time.time()
     # Web: ZIP frío tarda 6–12s en el scraper. Cortar a 4.5s devolvía vacío
     # y el usuario tenía que tocar Buscar 4–5 veces. Bot se queda en 8s.
-    hard_deadline = 8.0 if quick else 10.0
+    hard_deadline = 8.0 if quick else 7.5
 
     def _budget_left() -> float:
         return max(0.0, hard_deadline - (time.time() - t_start))
@@ -292,7 +307,7 @@ def run_search(
                 lon=float(lon) if lon is not None else None,
                 fuel=fuel,
                 limit=lim,
-                timeout_s=min(9.5, max(2.5, _budget_left() - 0.3)),
+                timeout_s=min(7.0, max(2.0, _budget_left() - 0.3)),
             )
         except Exception as e:
             print(f"[search] vps_scraper: {e}")
@@ -313,7 +328,7 @@ def run_search(
     try:
         fut_vps = pool.submit(_job_vps)
         fut_geo = pool.submit(_job_geo)
-        vps_wait = min(9.6, max(2.5, _budget_left() - 0.3))
+        vps_wait = min(7.2, max(2.0, _budget_left() - 0.3))
         wait([fut_vps], timeout=vps_wait)
         try:
             if fut_vps.done():
@@ -481,12 +496,13 @@ def run_search(
         ]
 
     # Reportes de usuarios pisan el precio de esa estación (aunque el caché tenga 3 h)
-    try:
-        from backend.prices import apply_user_reports
+    if priced and _budget_left() > 0.5:
+        try:
+            from backend.prices import apply_user_reports
 
-        priced = apply_user_reports(priced, fuel)
-    except Exception as e:
-        print(f"[search] apply_user_reports: {e}")
+            priced = apply_user_reports(priced, fuel)
+        except Exception as e:
+            print(f"[search] apply_user_reports: {e}")
 
     priced.sort(
         key=lambda x: (

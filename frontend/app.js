@@ -993,7 +993,7 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
 
   const ctrl = new AbortController();
   state.searchAbort = ctrl;
-  const MAX_TRIES = background ? 1 : 4;
+  const MAX_TRIES = background ? 1 : 3;
   const overall = setTimeout(() => {
     try {
       ctrl.abort();
@@ -1023,6 +1023,10 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
       });
       if (myToken !== state.searchToken) return;
       if (!res.ok) {
+        if ([502, 503, 504].includes(res.status) && attempt < MAX_TRIES) {
+          console.log("[GasRadar] gateway", res.status, "retry", attempt + 1);
+          continue;
+        }
         const err = await res.json().catch(() => ({}));
         const detail =
           typeof err.detail === "string"
@@ -1030,7 +1034,7 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
             : Array.isArray(err.detail)
               ? err.detail.map((d) => d.msg || d).join(", ")
               : null;
-        throw new Error(detail || `Error ${res.status}`);
+        throw new Error(detail || t("timeoutSoft"));
       }
       data = await res.json();
       if (myToken !== state.searchToken) return;
