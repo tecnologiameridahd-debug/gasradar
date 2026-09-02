@@ -331,7 +331,13 @@ def run_search(
     vps_key = f"{zip_code}|{round(float(lat or 0), 2)}|{round(float(lon or 0), 2)}|{fuel}|{limit}"
     with _VPS_LOCK:
         fut_vps = _VPS_FUTS.get(vps_key)
-        if fut_vps is None or getattr(fut_vps, "done", lambda: True)():
+        keep = False
+        if fut_vps is not None and fut_vps.done():
+            try:
+                keep = bool(fut_vps.result(timeout=0.05))
+            except Exception:
+                keep = False
+        if fut_vps is None or (fut_vps.done() and not keep):
             fut_vps = _BG.submit(_job_vps)
             _VPS_FUTS[vps_key] = fut_vps
     fut_geo = _BG.submit(_job_geo)

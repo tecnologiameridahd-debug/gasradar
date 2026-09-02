@@ -17,7 +17,7 @@ from backend.prices import report_price
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.9.85"
+APP_VERSION = "0.9.86"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -140,6 +140,31 @@ def _donate_status() -> dict:
     return {"configured": stripe_configured(), "mode": stripe_mode()}
 
 
+def _vps_live_ping() -> dict:
+    """¿Render puede hablar con el scraper? Timeout corto para no colgar /health."""
+    import time
+
+    import httpx
+
+    try:
+        from backend.vps_scraper_client import _base_urls
+
+        urls = _base_urls()
+        if not urls:
+            return {"ok": False, "error": "no_url"}
+        host = urls[0].split("/")[2]
+        t0 = time.time()
+        r = httpx.get(urls[0].rstrip("/") + "/health", timeout=2.0)
+        return {
+            "ok": r.status_code == 200,
+            "ms": int((time.time() - t0) * 1000),
+            "status": r.status_code,
+            "host": host,
+        }
+    except Exception as e:
+        return {"ok": False, "error": type(e).__name__}
+
+
 @app.get("/api/health")
 def health():
     """Healthcheck para Render y keep-alive (cron / script)."""
@@ -228,6 +253,7 @@ def health():
                 in ("1", "true", "yes", "on")
             ),
             "url_set": bool((os.environ.get("VPS_SCRAPER_URL") or "").strip()),
+            "live": _vps_live_ping(),
         },
         "donate": {
             "stripe": _donate_status(),
