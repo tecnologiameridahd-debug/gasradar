@@ -226,7 +226,7 @@ def run_search(
     t_start = time.time()
     # Web: cada HTTP < 2.5s o Cloudflare/Render mandan 504.
     # El scraper sigue en background; el front vuelve a preguntar.
-    hard_deadline = 8.0 if quick else 2.2
+    hard_deadline = 8.0 if quick else 16.0
 
     def _budget_left() -> float:
         return max(0.0, hard_deadline - (time.time() - t_start))
@@ -311,7 +311,7 @@ def run_search(
                 lon=float(lon) if lon is not None else None,
                 fuel=fuel,
                 limit=lim,
-                timeout_s=18.0 if not quick else min(7.0, max(2.0, _budget_left() - 0.3)),
+                timeout_s=22.0 if not quick else min(7.0, max(2.0, _budget_left() - 0.3)),
             )
         except Exception as e:
             print(f"[search] vps_scraper: {e}")
@@ -341,7 +341,7 @@ def run_search(
             fut_vps = _BG.submit(_job_vps)
             _VPS_FUTS[vps_key] = fut_vps
     fut_geo = _BG.submit(_job_geo)
-    vps_wait = min(7.0, _budget_left()) if quick else min(1.6, _budget_left())
+    vps_wait = min(7.0, _budget_left()) if quick else min(15.0, _budget_left())
     wait([fut_vps], timeout=max(0.2, vps_wait))
     try:
         if fut_vps.done():

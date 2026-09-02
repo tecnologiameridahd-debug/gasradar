@@ -142,7 +142,7 @@ def fetch_vps_stations(
     if key:
         params["key"] = key
 
-    wait_budget = max(2.5, min(float(timeout_s or 8.0), 12.0))
+    wait_budget = max(2.5, min(float(timeout_s or 8.0), 22.0))
     with _inflight_lock:
         slot = _inflight.get(cache_key)
         mine = slot is None
@@ -170,7 +170,7 @@ def fetch_vps_stations(
                 print("[vps_scraper] sin tiempo para otra URL")
                 break
             try:
-                wait_s = max(1.5, min(left, 11.0))
+                wait_s = max(1.5, min(left, 20.0))
                 r = httpx.get(
                     f"{base}/prices",
                     params=params,
