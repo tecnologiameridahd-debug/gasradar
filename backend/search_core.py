@@ -5,7 +5,9 @@ GasBuddy VPS + OSM/AAA. Sin Zyla.
 from __future__ import annotations
 
 import re
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, wait
 
 from backend.geo import (
     DEFAULT_LABEL,
@@ -25,6 +27,9 @@ from backend.stations import stations_near
 _SEARCH_CACHE: dict[str, dict] = {}
 _SEARCH_CACHE_TTL = 25 * 60  # 25 min — reabrir mismo ZIP / ciudad es instantáneo
 _SEARCH_CACHE_MAX = 120
+_BG = ThreadPoolExecutor(max_workers=8, thread_name_prefix="gr-bg")
+_VPS_FUTS: dict[str, object] = {}
+_VPS_LOCK = threading.Lock()
 
 
 def _search_cache_key(
@@ -219,9 +224,9 @@ def run_search(
     solo precios reales GasBuddy/reportes.
     """
     t_start = time.time()
-    # Web: ZIP frío tarda 6–12s en el scraper. Cortar a 4.5s devolvía vacío
-    # y el usuario tenía que tocar Buscar 4–5 veces. Bot se queda en 8s.
-    hard_deadline = 8.0 if quick else 7.5
+    # Web: cada HTTP < 2.5s o Cloudflare/Render mandan 504.
+    # El scraper sigue en background; el front vuelve a preguntar.
+    hard_deadline = 8.0 if quick else 2.2
 
     def _budget_left() -> float:
         return max(0.0, hard_deadline - (time.time() - t_start))
@@ -282,9 +287,10 @@ def run_search(
                     )
                 except Exception:
                     pass
-            return _overlay_reports(cached, fuel)
-
-    from concurrent.futures import ThreadPoolExecutor, wait
+            # Web: no tocar Postgres aquí (Neon frío = 504). Bot sí puede overlay.
+            if quick:
+                return _overlay_reports(cached, fuel)
+            return cached
 
     from backend.geo import haversine_miles
     from backend.stations import _display_brand, _pretty_station_name, _station_id
@@ -295,8 +301,6 @@ def run_search(
     live_only = not quick  # web: solo precios reales; bot puede usar estimados
 
     def _job_vps() -> list:
-        # Importante: el bot (quick) también necesita VPS — si se omite, a menudo
-        # no hay datos (OSM/estimados fallan o llegan vacíos en Render).
         try:
             from backend.vps_scraper_client import fetch_vps_stations
 
@@ -307,7 +311,7 @@ def run_search(
                 lon=float(lon) if lon is not None else None,
                 fuel=fuel,
                 limit=lim,
-                timeout_s=min(7.0, max(2.0, _budget_left() - 0.3)),
+                timeout_s=18.0 if not quick else min(7.0, max(2.0, _budget_left() - 0.3)),
             )
         except Exception as e:
             print(f"[search] vps_scraper: {e}")
@@ -324,49 +328,36 @@ def run_search(
         return None
 
     t0 = time.time()
-    pool = ThreadPoolExecutor(max_workers=2)
+    vps_key = f"{zip_code}|{round(float(lat or 0), 2)}|{round(float(lon or 0), 2)}|{fuel}|{limit}"
+    with _VPS_LOCK:
+        fut_vps = _VPS_FUTS.get(vps_key)
+        if fut_vps is None or getattr(fut_vps, "done", lambda: True)():
+            fut_vps = _BG.submit(_job_vps)
+            _VPS_FUTS[vps_key] = fut_vps
+    fut_geo = _BG.submit(_job_geo)
+    vps_wait = min(7.0, _budget_left()) if quick else min(1.6, _budget_left())
+    wait([fut_vps], timeout=max(0.2, vps_wait))
     try:
-        fut_vps = pool.submit(_job_vps)
-        fut_geo = pool.submit(_job_geo)
-        vps_wait = min(7.2, max(2.0, _budget_left() - 0.3))
-        wait([fut_vps], timeout=vps_wait)
-        try:
-            if fut_vps.done():
-                gb_stations = fut_vps.result(timeout=0.05) or []
-            else:
-                print("[search] vps still running — keep in background")
-                gb_stations = []
-
-                def _bg_keep() -> None:
-                    try:
-                        rows = fut_vps.result(timeout=25) or []
-                        print(f"[search] bg vps n={len(rows)}")
-                    except Exception as e:
-                        print(f"[search] bg vps: {e}")
-
-                import threading
-
-                threading.Thread(target=_bg_keep, daemon=True).start()
-        except Exception as e:
-            print(f"[search] vps fail: {e}")
+        if fut_vps.done():
+            gb_stations = fut_vps.result(timeout=0.05) or []
+        else:
+            print("[search] vps still running — return pending, scrape continues")
             gb_stations = []
-        try:
-            if fut_geo.done():
-                g = fut_geo.result(timeout=0.05)
-                if g:
-                    if lat is None and g.get("lat") is not None:
-                        lat, lon = g["lat"], g["lon"]
-                    label = g.get("label") or label
-                    state = g.get("state") or state
-                    zip_code = g.get("zip") or zip_code
-                    city = g.get("city") or city
-        except Exception:
-            pass
-    finally:
-        try:
-            pool.shutdown(wait=False)
-        except TypeError:
-            pool.shutdown(wait=False)
+    except Exception as e:
+        print(f"[search] vps fail: {e}")
+        gb_stations = []
+    try:
+        if fut_geo.done():
+            g = fut_geo.result(timeout=0.05)
+            if g:
+                if lat is None and g.get("lat") is not None:
+                    lat, lon = g["lat"], g["lon"]
+                label = g.get("label") or label
+                state = g.get("state") or state
+                zip_code = g.get("zip") or zip_code
+                city = g.get("city") or city
+    except Exception:
+        pass
 
     if (lat is None or lon is None) and gb_stations:
         try:
@@ -495,8 +486,8 @@ def run_search(
             if p.get("price_source") in ("gasbuddy", "user")
         ]
 
-    # Reportes de usuarios pisan el precio de esa estación (aunque el caché tenga 3 h)
-    if priced and _budget_left() > 0.5:
+    # Reportes: solo bot. En la web Neon frío aquí provocaba 504.
+    if priced and quick and _budget_left() > 0.5:
         try:
             from backend.prices import apply_user_reports
 
@@ -586,6 +577,7 @@ def run_search(
         "fuel": fuel,
         "radius_mi": radius_mi,
         "partial": partial,
+        "pending": bool(partial and not priced),
         "elapsed_s": elapsed,
         "state_avg": avg,
         "price_meta": meta,

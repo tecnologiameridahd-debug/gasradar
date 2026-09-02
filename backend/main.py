@@ -17,7 +17,7 @@ from backend.prices import report_price
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.9.83"
+APP_VERSION = "0.9.84"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -414,54 +414,23 @@ def api_search(
     fuel: str = Query("regular", pattern="^(regular|mid|premium|diesel)$"),
     limit: int = Query(30, ge=5, le=60),
 ):
-    from concurrent.futures import ThreadPoolExecutor
-    from concurrent.futures import TimeoutError as FutTimeout
-
     from backend.analytics import client_country, client_ip
     from backend.search_core import run_search
 
-    kwargs = dict(
-        lat=lat,
-        lon=lon,
-        zip=zip,
-        radius_mi=radius_mi,
-        fuel=fuel,
-        limit=limit,
-        track=True,
-        client_ip=client_ip(request),
-        client_country=client_country(request),
-    )
-    # Render/Cloudflare cortan a ~30s (504). Nunca dejamos colgada la petición.
-    pool = ThreadPoolExecutor(max_workers=1)
     try:
-        fut = pool.submit(run_search, **kwargs)
-        try:
-            return fut.result(timeout=11.0)
-        except FutTimeout:
-            z = (zip or "").strip()[:5] or None
-            return {
-                "center": {
-                    "lat": lat,
-                    "lon": lon,
-                    "label": f"ZIP {z}" if z else "Buscando…",
-                    "state": "",
-                    "zip": z,
-                },
-                "fuel": fuel,
-                "radius_mi": radius_mi,
-                "partial": True,
-                "elapsed_s": 11,
-                "count": 0,
-                "stations": [],
-                "cheapest": None,
-                "cached": False,
-                "live_prices": False,
-                "disclaimer": "Cargando precios en vivo de esa zona…",
-            }
-        except ValueError as e:
-            raise HTTPException(404, str(e)) from e
-    finally:
-        pool.shutdown(wait=False)
+        return run_search(
+            lat=lat,
+            lon=lon,
+            zip=zip,
+            radius_mi=radius_mi,
+            fuel=fuel,
+            limit=limit,
+            track=True,
+            client_ip=client_ip(request),
+            client_country=client_country(request),
+        )
+    except ValueError as e:
+        raise HTTPException(404, str(e)) from e
 
 
 @app.post("/api/report")

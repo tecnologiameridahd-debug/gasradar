@@ -993,7 +993,7 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
 
   const ctrl = new AbortController();
   state.searchAbort = ctrl;
-  const MAX_TRIES = background ? 1 : 3;
+  const MAX_TRIES = background ? 1 : 8;
   const overall = setTimeout(() => {
     try {
       ctrl.abort();
@@ -1015,7 +1015,7 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
       if (myToken !== state.searchToken) return;
       if (attempt > 1) {
         setStatus(t("searchingStill"), "loading");
-        await sleep(1600);
+        await sleep(1100);
         if (myToken !== state.searchToken) return;
       }
       const res = await fetch(`/api/search?${params.toString()}`, {
