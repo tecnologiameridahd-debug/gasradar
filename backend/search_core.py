@@ -328,6 +328,19 @@ def run_search(
         return None
 
     t0 = time.time()
+    # ZIP solo a menudo vuelve vacío en GasBuddy. Centro del ZIP (lat/lon) sí trae estaciones.
+    if zip_code and (lat is None or lon is None):
+        try:
+            g0 = geocode_zip(str(zip_code))
+            if g0:
+                if lat is None and g0.get("lat") is not None:
+                    lat, lon = g0["lat"], g0["lon"]
+                label = g0.get("label") or label
+                state = g0.get("state") or state
+                city = g0.get("city") or city
+        except Exception as e:
+            print(f"[search] geo zip: {e}")
+
     vps_key = f"{zip_code}|{round(float(lat or 0), 2)}|{round(float(lon or 0), 2)}|{fuel}|{limit}"
     with _VPS_LOCK:
         fut_vps = _VPS_FUTS.get(vps_key)
