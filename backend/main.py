@@ -17,7 +17,7 @@ from backend.prices import report_price
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.9.90"
+APP_VERSION = "0.9.91"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -727,6 +727,7 @@ if FRONTEND.is_dir():
 
 
 @app.get("/")
+@app.get("/index.html")
 def index():
     index_path = FRONTEND / "index.html"
     if not index_path.exists():
