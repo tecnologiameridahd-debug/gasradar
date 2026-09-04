@@ -17,7 +17,7 @@ from backend.prices import report_price
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.9.89"
+APP_VERSION = "0.9.90"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -765,11 +765,50 @@ def robots_txt(request: Request):
 
 
 @app.api_route("/sitemap.xml", methods=["GET", "HEAD"])
-@app.api_route("/sitemap_index.xml", methods=["GET", "HEAD"])
 def sitemap_xml(request: Request):
     """Sitemap XML — GET+HEAD + text/xml (formato preferido por Google)."""
-    # text/xml es el tipo que GSC documenta con más frecuencia
     return _seo_file_response(FRONTEND / "sitemap.xml", "text/xml", request)
+
+
+@app.api_route("/sitemap_index.xml", methods=["GET", "HEAD"])
+def sitemap_index_xml(request: Request):
+    """Índice de sitemaps (GSC falla si /sitemap_index.xml es un urlset)."""
+    body = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        "  <sitemap>\n"
+        "    <loc>https://gasradarapp.com/sitemap.xml</loc>\n"
+        "  </sitemap>\n"
+        "</sitemapindex>\n"
+    ).encode("utf-8")
+    headers = {
+        "Cache-Control": "public, max-age=86400, s-maxage=86400",
+        "Content-Length": str(len(body)),
+    }
+    mt = "text/xml; charset=utf-8"
+    if request.method == "HEAD":
+        return Response(content=b"", status_code=200, media_type=mt, headers=headers)
+    return Response(content=body, status_code=200, media_type=mt, headers=headers)
+
+
+@app.api_route("/google2649243aadb1f2d8.html", methods=["GET", "HEAD"])
+def google_site_verification(request: Request):
+    """Archivo HTML de Search Console. Sin esta ruta GSC ve 404 y no deja indexar."""
+    for path in (
+        FRONTEND / "google2649243aadb1f2d8.html",
+        ROOT / "google2649243aadb1f2d8.html",
+    ):
+        if path.is_file():
+            return _seo_file_response(path, "text/html", request)
+    raise HTTPException(404, "verification file missing")
+
+
+@app.get("/favicon.ico")
+def favicon_ico():
+    path = FRONTEND / "favicon-32.png"
+    if not path.is_file():
+        raise HTTPException(404, "favicon missing")
+    return FileResponse(path, media_type="image/png")
 
 
 @app.get("/manifest.webmanifest")
