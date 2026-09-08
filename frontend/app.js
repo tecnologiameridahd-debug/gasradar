@@ -677,6 +677,11 @@ function openDirections(st) {
   launchMaps(st);
 }
 
+function setSeoHomeVisible(on) {
+  const el = document.getElementById("seoHome");
+  if (el) el.hidden = !on;
+}
+
 function setStatus(msg, kind = "loading") {
   const el = $("#status");
   if (!el) return;
@@ -961,6 +966,7 @@ async function search({ lat, lon, zip, force = false, soft = false, background =
       state.zip !== zipDigits);
 
   if (!background) {
+    setSeoHomeVisible(false);
     if (!keepList) {
       setStatus(
         zipDigits ? t("searchingZip", zipDigits) : t("searching"),
@@ -1266,11 +1272,13 @@ function render(data) {
 
   if (!state.stations.length) {
     setStatus(t("noStations"), "empty");
+    setSeoHomeVisible(true);
     const head = $("#resultsHead");
     if (head) head.hidden = true;
     return;
   }
 
+  setSeoHomeVisible(false);
   hideStatus();
   const head = $("#resultsHead");
   if (head) {
@@ -1758,6 +1766,7 @@ function startApp() {
   }
 
   setStatus(t("emptyStart"), "empty");
+  setSeoHomeVisible(true);
   $("#locationLabel").textContent = t("noLocation");
   $("#stateAvg").textContent = t("locHint");
   setLocDot("off");
@@ -2269,7 +2278,7 @@ function registerServiceWorker() {
 
   const go = () => {
     navigator.serviceWorker
-      .register("/sw.js?v=0.9.81", { scope: "/" })
+      .register("/sw.js?v=0.9.93", { scope: "/" })
       .then((reg) => {
         try {
           reg.update();

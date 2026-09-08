@@ -2268,6 +2268,59 @@ body.modal-open .social-rail {
   border: 0;
 }
 
+.seo-home {
+  padding: 18px 16px 16px;
+}
+.seo-home h1 {
+  margin: 0 0 10px;
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  color: var(--text);
+}
+.seo-home h2 {
+  margin: 16px 0 8px;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.seo-home p {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+.seo-cities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+}
+.seo-cities a {
+  display: inline-block;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--blue-soft);
+  color: var(--blue);
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.seo-cities a:hover {
+  color: var(--text);
+}
+.seo-more {
+  margin: 0;
+}
+.seo-more a {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
 @media (min-width: 600px) {
   .app {
     padding-top: 22px;

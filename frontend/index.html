@@ -77,7 +77,16 @@
         from { opacity: 0.35; transform: scale(0.85); }
         to { opacity: 1; transform: scale(1); }
       }
+      html.bot-no-splash .boot-splash { display: none !important; }
     </style>
+    <script>
+      (function () {
+        var ua = navigator.userAgent || "";
+        if (/Googlebot|Google-InspectionTool|bingbot|BingPreview|Slurp|DuckDuckBot|facebookexternalhit|Twitterbot|Applebot/i.test(ua)) {
+          document.documentElement.classList.add("bot-no-splash");
+        }
+      })();
+    </script>
     <meta
       name="description"
       id="metaDesc"
@@ -187,7 +196,7 @@
     <link rel="icon" href="/static/favicon-64.png?v=0.2.9" type="image/png" sizes="64x64" />
     <link rel="apple-touch-icon" href="/static/logo-192.png?v=0.5.0" sizes="192x192" />
     <link rel="apple-touch-icon" href="/static/logo-512.png?v=0.5.0" sizes="512x512" />
-    <link rel="stylesheet" href="/static/styles.css?v=0.9.76" />
+    <link rel="stylesheet" href="/static/styles.css?v=0.9.92" />
   </head>
   <body style="background:#0b1220;margin:0">
     <div class="boot-splash" id="bootSplash" aria-hidden="true">
@@ -260,7 +269,7 @@
             title="GasRadar"
           />
           <div class="brand-text">
-            <h1><span class="brand-gas">Gas</span><span class="brand-radar">Radar</span></h1>
+            <p class="brand-title"><span class="brand-gas">Gas</span><span class="brand-radar">Radar</span></p>
             <p class="subtitle" data-i18n="subtitle">Gasolina más barata cerca de ti</p>
           </div>
         </div>
@@ -373,6 +382,36 @@
         </button>
       </section>
 
+      <section class="card seo-home" id="seoHome">
+        <h1>Cheap gas near me in the USA</h1>
+        <p>
+          GasRadar compares live station prices so you can fill up for less. Search by GPS or ZIP
+          for Regular, Mid, Premium, and Diesel across all 50 states.
+        </p>
+        <p>
+          Encuentra la gasolina más barata cerca de ti. Compara estaciones reales y elige el precio
+          más bajo antes de manejar.
+        </p>
+        <h2>Cheap gas by city</h2>
+        <ul class="seo-cities">
+          <li><a href="/gas/colorado/denver">Denver</a></li>
+          <li><a href="/gas/california/los-angeles">Los Angeles</a></li>
+          <li><a href="/gas/texas/houston">Houston</a></li>
+          <li><a href="/gas/florida/miami">Miami</a></li>
+          <li><a href="/gas/illinois/chicago">Chicago</a></li>
+          <li><a href="/gas/new-york/new-york">New York</a></li>
+          <li><a href="/gas/arizona/phoenix">Phoenix</a></li>
+          <li><a href="/gas/georgia/atlanta">Atlanta</a></li>
+          <li><a href="/gas/washington/seattle">Seattle</a></li>
+          <li><a href="/gas/nevada/las-vegas">Las Vegas</a></li>
+        </ul>
+        <p class="seo-more">
+          <a href="/gas">All cities and states</a>
+          · <a href="/blog">Gas-saving guides</a>
+          · <a href="/download">Get the Android app</a>
+        </p>
+      </section>
+
       <section class="card best" id="bestCard" hidden>
         <div class="best-top">
           <span class="badge gold" data-i18n="cheapestBadge">★ Más barata</span>
@@ -410,7 +449,7 @@
           <h2 class="results-title" data-i18n="nearYou">Cerca de ti</h2>
           <span class="results-count" id="resultsCount"></span>
         </div>
-        <div id="status" class="loading" data-i18n="loading">Cargando…</div>
+        <div id="status" class="empty" hidden></div>
         <div id="skeleton" class="skeleton-list" hidden>
           <div class="skeleton-row"></div>
           <div class="skeleton-row"></div>
@@ -584,7 +623,7 @@
     </noscript>
 
     <script src="/static/brand-logos.js?v=0.9.1"></script>
-    <script src="/static/app.js?v=0.9.84"></script>
+    <script src="/static/app.js?v=0.9.92"></script>
     <script>
       /* Quita splash cuando la UI ya pintó */
       (function () {
