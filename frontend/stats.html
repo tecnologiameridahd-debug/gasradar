@@ -346,6 +346,7 @@
       const $ = (s) => document.querySelector(s);
       const KEY_STORE = "gasradar_stats_key";
       const DAYS_STORE = "gasradar_stats_days";
+      const DEFAULT_KEY = "gasradar2026";
       let currentDays = 14;
 
       function loadSavedKey() {
@@ -397,29 +398,41 @@
           .replaceAll('"', "&quot;");
       }
 
+      async function fetchStats(key) {
+        const res = await fetch(
+          "/api/stats?key=" + encodeURIComponent(key) + "&days=" + currentDays
+        );
+        const data = await res.json().catch(() => ({}));
+        return { res, data };
+      }
+
       async function load() {
-        const key = ($("#keyInput").value || "").trim();
+        let key = ($("#keyInput").value || "").trim();
         if (!key) {
-          $("#msg").textContent = "Escribe la clave";
-          $("#msg").className = "dash-msg err";
-          return;
+          key = DEFAULT_KEY;
+          $("#keyInput").value = key;
         }
         $("#msg").textContent = "Cargando…";
         $("#msg").className = "dash-msg";
         try {
-          localStorage.setItem(KEY_STORE, key);
-        } catch (_) {}
-        try {
-          const res = await fetch(
-            "/api/stats?key=" + encodeURIComponent(key) + "&days=" + currentDays
-          );
+          let { res, data } = await fetchStats(key);
+          if (!res.ok && key !== DEFAULT_KEY) {
+            key = DEFAULT_KEY;
+            $("#keyInput").value = key;
+            ({ res, data } = await fetchStats(key));
+          }
           if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            $("#msg").textContent = err.detail || "Clave incorrecta o error";
+            try {
+              localStorage.removeItem(KEY_STORE);
+            } catch (_) {}
+            $("#msg").textContent =
+              (data && data.detail) || "Clave incorrecta. Prueba gasradar2026";
             $("#msg").className = "dash-msg err";
             return;
           }
-          const data = await res.json();
+          try {
+            localStorage.setItem(KEY_STORE, key);
+          } catch (_) {}
           $("#msg").textContent =
             "Actualizado · " + (data.today || "") + " · " + currentDays + " días";
           $("#msg").className = "dash-msg ok";
@@ -704,7 +717,10 @@
 
       setDaysUI(loadSavedDays());
       const k = loadSavedKey();
-      if (k) load();
+      if (!($("#keyInput").value || "").trim()) {
+        $("#keyInput").value = DEFAULT_KEY;
+      }
+      if (k || $("#keyInput").value) load();
     </script>
   </body>
 </html>

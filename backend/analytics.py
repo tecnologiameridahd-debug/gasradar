@@ -19,7 +19,9 @@ def stats_key() -> str:
 
 
 def check_stats_key(key: str | None) -> bool:
-    return bool(key) and key.strip() == stats_key()
+    got = (key or "").strip()
+    want = stats_key()
+    return bool(got) and bool(want) and got.lower() == want.lower()
 
 
 def _now_local() -> datetime:
