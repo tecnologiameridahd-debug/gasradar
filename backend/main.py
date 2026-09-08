@@ -7,7 +7,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse, Response
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -17,7 +18,7 @@ from backend.prices import report_price
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.9.91"
+APP_VERSION = "0.9.92"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -742,7 +743,45 @@ def index():
     )
 
 
-def _seo_file_response(path: Path, media_type: str, request: Request) -> Response:
+_HTML_404 = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>Not found | GasRadar</title>
+  <meta name="robots" content="noindex, nofollow"/>
+  <link rel="canonical" href="https://gasradarapp.com/"/>
+</head>
+<body style="background:#0b1220;color:#eef3ff;font-family:system-ui;padding:48px;text-align:center">
+  <h1>Page not found</h1>
+  <p>That URL is not on GasRadar.</p>
+  <p>
+    <a href="https://gasradarapp.com/" style="color:#86efac">Home</a>
+    · <a href="https://gasradarapp.com/gas" style="color:#86efac">Cities</a>
+    · <a href="https://gasradarapp.com/blog" style="color:#86efac">Blog</a>
+  </p>
+</body>
+</html>
+"""
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    """GSC trata `{"detail":"Not Found"}` como página rota; 404 HTML en rutas públicas."""
+    if exc.status_code == 404 and not request.url.path.startswith("/api"):
+        return HTMLResponse(
+            _HTML_404,
+            status_code=404,
+            headers={"X-Robots-Tag": "noindex, nofollow"},
+        )
+    return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
+
+
+def _seo_file_response(
+    path: Path,
+    media_type: str,
+    request: Request,
+    extra_headers: dict | None = None,
+) -> Response:
     """Sirve robots/sitemap con GET+HEAD, text/xml y sin redirects (exigencia GSC)."""
     if not path.is_file():
         raise HTTPException(404, f"{path.name} missing")
@@ -753,6 +792,8 @@ def _seo_file_response(path: Path, media_type: str, request: Request) -> Respons
         "Cache-Control": "public, max-age=86400, s-maxage=86400",
         "Content-Length": str(len(body)),
     }
+    if extra_headers:
+        headers.update(extra_headers)
     mt = f"{media_type}; charset=utf-8"
     if request.method == "HEAD":
         return Response(content=b"", status_code=200, media_type=mt, headers=headers)
@@ -800,8 +841,33 @@ def google_site_verification(request: Request):
         ROOT / "google2649243aadb1f2d8.html",
     ):
         if path.is_file():
-            return _seo_file_response(path, "text/html", request)
+            return _seo_file_response(
+                path,
+                "text/html",
+                request,
+                extra_headers={
+                    "Cache-Control": "no-store, max-age=0",
+                    "X-Robots-Tag": "noindex",
+                },
+            )
     raise HTTPException(404, "verification file missing")
+
+
+@app.api_route("/.well-known/assetlinks.json", methods=["GET", "HEAD"])
+def digital_asset_links(request: Request):
+    """App Links / indexación Play: sin este archivo Google reporta 404."""
+    path = FRONTEND / ".well-known" / "assetlinks.json"
+    if not path.is_file():
+        raise HTTPException(404, "assetlinks missing")
+    body = path.read_bytes().lstrip(b"\xef\xbb\xbf")
+    headers = {
+        "Cache-Control": "public, max-age=3600",
+        "Content-Length": str(len(body)),
+    }
+    mt = "application/json"
+    if request.method == "HEAD":
+        return Response(content=b"", status_code=200, media_type=mt, headers=headers)
+    return Response(content=body, status_code=200, media_type=mt, headers=headers)
 
 
 @app.get("/favicon.ico")

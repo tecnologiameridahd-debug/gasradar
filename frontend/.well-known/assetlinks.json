@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.gasradar.app",
+      "sha256_cert_fingerprints": [
+        "49:F4:7B:66:05:E2:15:E9:0A:04:E6:2F:15:EA:6C:35:49:D1:9A:BE:7A:CB:48:C2:19:EC:F7:02:BA:D7:30:80"
+      ]
+    }
+  }
+]
