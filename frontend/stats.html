@@ -7,7 +7,7 @@
     <meta name="robots" content="noindex,nofollow" />
     <title>GasRadar — Dashboard</title>
     <link rel="icon" href="/static/favicon-32.png?v=0.2.9" type="image/png" />
-    <link rel="stylesheet" href="/static/styles.css?v=0.9.12" />
+    <link rel="stylesheet" href="/static/styles.css?v=0.9.92" />
     <style>
       .dash-head {
         display: flex;
@@ -263,6 +263,12 @@
         </div>
         <div class="stats-grid wide" id="totals"></div>
         <p class="privacy-meta" id="note" style="margin-top: 10px"></p>
+      </section>
+
+      <section class="card" id="tgCard" hidden>
+        <h2 style="margin: 0 0 10px; font-size: 1.05rem">Alertas Telegram</h2>
+        <div class="stats-grid wide" id="tgTotals"></div>
+        <div id="tgZips" style="margin-top: 12px"></div>
       </section>
 
       <section class="card" id="chartCard" hidden>
@@ -523,7 +529,36 @@
             <div class="l">IPs únicas (${currentDays}d)</div>
           </div>
         `;
-        $("#note").textContent = data.note || "";
+        $("#note").textContent =
+          (data.timezone ? "Zona: " + data.timezone + " · " : "") + (data.note || "");
+
+        const tg = data.telegram_alerts || {};
+        const tgOk = !tg.error && (tg.total_users != null);
+        $("#tgCard").hidden = !tgOk;
+        if (tgOk) {
+          $("#tgTotals").innerHTML = `
+            <div class="stat-box hi">
+              <div class="n">${tg.alerts_ready || 0}</div>
+              <div class="l">Alertas listas</div>
+            </div>
+            <div class="stat-box">
+              <div class="n">${tg.total_users || 0}</div>
+              <div class="l">Usuarios bot</div>
+            </div>
+            <div class="stat-box">
+              <div class="n">${tg.active_users || 0}</div>
+              <div class="l">Activos</div>
+            </div>
+            <div class="stat-box">
+              <div class="n">${tg.with_zip || 0}</div>
+              <div class="l">Con ZIP</div>
+            </div>
+          `;
+          const tz = tg.top_zips || [];
+          $("#tgZips").innerHTML = tz.length
+            ? rankRows(tz.map((z) => ({ zip: "ZIP " + z.zip, n: z.n })), "zip")
+            : "";
+        }
 
         const chart = data.chart || [];
         const days = data.by_day || [];

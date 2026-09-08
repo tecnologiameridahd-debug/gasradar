@@ -6,9 +6,12 @@ from __future__ import annotations
 
 import os
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from backend.db import execute, fetchall, fetchone
+
+STATS_TZ = ZoneInfo("America/Denver")
 
 
 def stats_key() -> str:
@@ -19,12 +22,21 @@ def check_stats_key(key: str | None) -> bool:
     return bool(key) and key.strip() == stats_key()
 
 
-def _day_utc() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+def _now_local() -> datetime:
+    return datetime.now(STATS_TZ)
+
+
+def _day_local() -> str:
+    return _now_local().strftime("%Y-%m-%d")
 
 
 def _day_offset(days_ago: int) -> str:
-    return (datetime.now(timezone.utc) - timedelta(days=days_ago)).strftime("%Y-%m-%d")
+    return (_now_local() - timedelta(days=days_ago)).strftime("%Y-%m-%d")
+
+
+def _local_midnight_ts(days_ago: int = 0) -> float:
+    d = (_now_local() - timedelta(days=days_ago)).date()
+    return datetime.combine(d, datetime.min.time(), tzinfo=STATS_TZ).timestamp()
 
 
 def client_ip(request) -> str:
@@ -136,7 +148,7 @@ def track_event(
             )
             VALUES (?,?,?,?,?,?,?,?,?)
             """,
-            (et, path, ref, lang, detail, _day_utc(), time.time(), ip, ip_country),
+            (et, path, ref, lang, detail, _day_local(), time.time(), ip, ip_country),
         )
     except Exception as e:
         print(f"[analytics] track fail: {e}")
@@ -149,16 +161,18 @@ def _n(row) -> int:
 def _fmt_ts(ts) -> str:
     try:
         t = float(ts)
-        return datetime.fromtimestamp(t, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        return datetime.fromtimestamp(t, tz=STATS_TZ).strftime("%Y-%m-%d %H:%M")
     except Exception:
         return str(ts or "")[:19]
 
 
 def summary(days: int = 14) -> dict:
     days = max(1, min(int(days), 90))
-    today = _day_utc()
+    today = _day_local()
     yesterday = _day_offset(1)
     since = _day_offset(days - 1)
+    start_today = _local_midnight_ts(0)
+    start_yesterday = _local_midnight_ts(1)
 
     total_views = fetchone(
         "SELECT COUNT(*) AS n FROM site_events WHERE event_type=?",
@@ -169,20 +183,20 @@ def summary(days: int = 14) -> dict:
         ("search",),
     )
     today_views = fetchone(
-        "SELECT COUNT(*) AS n FROM site_events WHERE event_type=? AND day=?",
-        ("pageview", today),
+        "SELECT COUNT(*) AS n FROM site_events WHERE event_type=? AND created_at>=?",
+        ("pageview", start_today),
     )
     today_searches = fetchone(
-        "SELECT COUNT(*) AS n FROM site_events WHERE event_type=? AND day=?",
-        ("search", today),
+        "SELECT COUNT(*) AS n FROM site_events WHERE event_type=? AND created_at>=?",
+        ("search", start_today),
     )
     y_views = fetchone(
-        "SELECT COUNT(*) AS n FROM site_events WHERE event_type=? AND day=?",
-        ("pageview", yesterday),
+        "SELECT COUNT(*) AS n FROM site_events WHERE event_type=? AND created_at>=? AND created_at<?",
+        ("pageview", start_yesterday, start_today),
     )
     y_searches = fetchone(
-        "SELECT COUNT(*) AS n FROM site_events WHERE event_type=? AND day=?",
-        ("search", yesterday),
+        "SELECT COUNT(*) AS n FROM site_events WHERE event_type=? AND created_at>=? AND created_at<?",
+        ("search", start_yesterday, start_today),
     )
 
     period_views = fetchone(
@@ -416,6 +430,7 @@ def summary(days: int = 14) -> dict:
 
     return {
         "today": today,
+        "timezone": "America/Denver",
         "yesterday": yesterday,
         "days": days,
         "since": since,
@@ -493,8 +508,7 @@ def summary(days: int = 14) -> dict:
             for r in recent_ips
         ],
         "note": (
-            "IPs y modo GPS/ZIP se guardan en site_events. "
-            "Con DATABASE_URL (Postgres) los datos sobreviven al redeploy. "
-            "Sin Postgres en Render free, SQLite se borra al redeploy."
+            "Hoy = día en hora Denver (America/Denver). "
+            "IPs y GPS/ZIP se guardan en Postgres y sobreviven al redeploy."
         ),
     }
