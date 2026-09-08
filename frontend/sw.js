@@ -1,8 +1,8 @@
-/* GasRadar service worker — v0.9.93
+/* GasRadar service worker — v0.9.96
  * JS/CSS: red primero (evita app.js viejo que “no busca”).
  * HTML: red primero + fallback caché (sin flash blanco en cold start).
  */
-const CACHE = "gasradar-v0.9.93";
+const CACHE = "gasradar-v0.9.96";
 const PRECACHE = [
   "/",
   "/static/styles.css?v=0.9.92",
@@ -100,10 +100,21 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
-  // API: solo red
+  // API: solo red. /api/stats tarda >5s (Postgres); no abortar.
   if (url.pathname.startsWith("/api/")) {
+    const slow = url.pathname.startsWith("/api/stats") || url.pathname.startsWith("/api/reel");
     event.respondWith(
       (async () => {
+        if (slow) {
+          try {
+            return await fetch(req);
+          } catch (_) {
+            return new Response(JSON.stringify({ ok: false, offline: true }), {
+              status: 504,
+              headers: { "Content-Type": "application/json" },
+            });
+          }
+        }
         const ctrl = new AbortController();
         const t = setTimeout(() => ctrl.abort(), 5000);
         try {

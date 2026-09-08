@@ -242,10 +242,11 @@
         <div class="row">
           <input
             id="keyInput"
-            type="password"
+            type="text"
             class="grow"
-            placeholder="STATS_KEY"
+            placeholder="gasradar2026"
             autocomplete="off"
+            spellcheck="false"
           />
           <button class="btn-primary" type="button" id="btnLoad">Actualizar</button>
         </div>
@@ -400,23 +401,29 @@
 
       async function fetchStats(key) {
         const res = await fetch(
-          "/api/stats?key=" + encodeURIComponent(key) + "&days=" + currentDays
+          "/api/stats?key=" + encodeURIComponent(key) + "&days=" + currentDays,
+          { cache: "no-store" }
         );
         const data = await res.json().catch(() => ({}));
         return { res, data };
       }
 
+      function activeKey() {
+        try {
+          const q = new URL(location.href).searchParams.get("key");
+          if (q && q.trim()) return q.trim();
+        } catch (_) {}
+        return ($("#keyInput").value || "").trim() || DEFAULT_KEY;
+      }
+
       async function load() {
-        let key = ($("#keyInput").value || "").trim();
-        if (!key) {
-          key = DEFAULT_KEY;
-          $("#keyInput").value = key;
-        }
-        $("#msg").textContent = "Cargando…";
+        let key = activeKey();
+        $("#keyInput").value = key;
+        $("#msg").textContent = "Cargando… (puede tardar unos segundos)";
         $("#msg").className = "dash-msg";
         try {
           let { res, data } = await fetchStats(key);
-          if (!res.ok && key !== DEFAULT_KEY) {
+          if (!res.ok && key !== DEFAULT_KEY && res.status === 401) {
             key = DEFAULT_KEY;
             $("#keyInput").value = key;
             ({ res, data } = await fetchStats(key));
@@ -425,8 +432,11 @@
             try {
               localStorage.removeItem(KEY_STORE);
             } catch (_) {}
-            $("#msg").textContent =
-              (data && data.detail) || "Clave incorrecta. Prueba gasradar2026";
+            let msg = "No se pudo cargar el dashboard";
+            if (res.status === 401) msg = "Clave incorrecta. Escribe gasradar2026 y pulsa Actualizar";
+            else if (res.status === 504 || data.offline) msg = "Tardó demasiado. Pulsa Actualizar otra vez";
+            else if (data.detail) msg = String(data.detail);
+            $("#msg").textContent = msg;
             $("#msg").className = "dash-msg err";
             return;
           }
@@ -438,7 +448,7 @@
           $("#msg").className = "dash-msg ok";
           render(data);
         } catch (e) {
-          $("#msg").textContent = "Error de red";
+          $("#msg").textContent = "Error de red. Pulsa Actualizar";
           $("#msg").className = "dash-msg err";
         }
       }
@@ -720,6 +730,23 @@
       if (!($("#keyInput").value || "").trim()) {
         $("#keyInput").value = DEFAULT_KEY;
       }
+
+      (async function refreshSw() {
+        if (!navigator.serviceWorker) return;
+        try {
+          const reg = await navigator.serviceWorker.register("/sw.js?v=0.9.96", { scope: "/" });
+          await reg.update();
+          if (reg.waiting) {
+            reg.waiting.postMessage({ type: "SKIP_WAITING" });
+            if (!sessionStorage.getItem("gr_sw_stats_96")) {
+              sessionStorage.setItem("gr_sw_stats_96", "1");
+              location.reload();
+              return;
+            }
+          }
+        } catch (_) {}
+      })();
+
       if (k || $("#keyInput").value) load();
     </script>
   </body>

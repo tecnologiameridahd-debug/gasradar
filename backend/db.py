@@ -136,6 +136,9 @@ def init_schema() -> None:
                     "CREATE INDEX IF NOT EXISTS idx_events_ip ON site_events (ip)"
                 )
                 cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_events_created ON site_events (event_type, created_at)"
+                )
+                cur.execute(
                     """
                     CREATE TABLE IF NOT EXISTS price_cache (
                         cache_key TEXT PRIMARY KEY,
@@ -183,6 +186,9 @@ def init_schema() -> None:
                 conn.execute("ALTER TABLE site_events ADD COLUMN ip_country TEXT")
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_events_ip ON site_events (ip)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_events_created ON site_events (event_type, created_at)"
             )
             conn.execute(
                 """

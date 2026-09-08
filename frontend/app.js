@@ -2278,7 +2278,7 @@ function registerServiceWorker() {
 
   const go = () => {
     navigator.serviceWorker
-      .register("/sw.js?v=0.9.93", { scope: "/" })
+      .register("/sw.js?v=0.9.96", { scope: "/" })
       .then((reg) => {
         try {
           reg.update();
