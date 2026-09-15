@@ -31,7 +31,7 @@ _WARM_LOCK = threading.Lock()
 _ZIP_RE = re.compile(r'id="livePrice"[^>]*data-zip="(\d{5})"', re.I)
 _TITLE_RE = re.compile(r"<title>(.*?)</title>", re.I | re.S)
 _H1_RE = re.compile(
-    r'class="place-h1">Cheap gas in\s+([^,<]+),\s*([A-Z]{2})',
+    r'class="place-h1">(?:Cheap gas in|Gasolina barata en)\s+([^,<]+),\s*([A-Z]{2})',
     re.I,
 )
 
