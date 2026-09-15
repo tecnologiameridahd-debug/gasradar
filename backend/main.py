@@ -18,7 +18,7 @@ from backend.prices import report_price
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.9.105"
+APP_VERSION = "0.9.106"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -614,11 +614,49 @@ def api_telegram_status(key: str | None = None):
     }
 
 
+@app.get("/precio-gasolina/{state}")
+@app.get("/precio-gasolina/{state}/")
+def precio_gasolina_state(state: str):
+    if not _safe_place_slug(state):
+        raise HTTPException(404, "State not found")
+    return RedirectResponse(f"https://gasradarapp.com/es/gas/{state}", status_code=301)
+
+
+@app.get("/precio-gasolina/{state}/{city}")
+def precio_gasolina_city(state: str, city: str):
+    if not _safe_place_slug(state) or not _safe_place_slug(city):
+        raise HTTPException(404, "City not found")
+    return RedirectResponse(
+        f"https://gasradarapp.com/es/gas/{state}/{city}", status_code=301
+    )
+
+
+@app.get("/gas-prices/{state}")
+@app.get("/gas-prices/{state}/")
+def gas_prices_state(state: str):
+    if not _safe_place_slug(state):
+        raise HTTPException(404, "State not found")
+    return RedirectResponse(f"https://gasradarapp.com/gas/{state}", status_code=301)
+
+
+@app.get("/gas-prices/{state}/{city}")
+def gas_prices_city(state: str, city: str):
+    if not _safe_place_slug(state) or not _safe_place_slug(city):
+        raise HTTPException(404, "City not found")
+    return RedirectResponse(f"https://gasradarapp.com/gas/{state}/{city}", status_code=301)
+
+
 @app.get("/api/alerts/run")
-def api_alerts_run(key: str | None = None, force: bool = False):
+def api_alerts_run(
+    key: str | None = None,
+    force: bool = False,
+    kind: str = "price",
+):
     """
-    Cron: revisa alertas y envía Telegram si el precio <= tope.
-    Protegido con ALERTS_SECRET o STATS_KEY.
+    Cron Telegram.
+    kind=price     → tope o baja ≥5% (cada 1–2 h)
+    kind=thursday  → digest fin de semana (jueves ~21:00 UTC)
+    kind=dormant   → 14 días sin usar el bot (1×/día)
     """
     from backend.telegram_bot import (
         alerts_secret,
@@ -626,6 +664,8 @@ def api_alerts_run(key: str | None = None, force: bool = False):
         check_alerts_key,
         key_error_hint,
         run_alert_checks,
+        run_dormant_nudge,
+        run_thursday_digest,
     )
 
     if not bot_ready():
@@ -638,6 +678,11 @@ def api_alerts_run(key: str | None = None, force: bool = False):
         )
     if not check_alerts_key(key):
         raise HTTPException(401, key_error_hint(key))
+    k = (kind or "price").strip().lower()
+    if k == "thursday":
+        return run_thursday_digest(force=force)
+    if k == "dormant":
+        return run_dormant_nudge(force=force)
     return run_alert_checks(force=force)
 
 

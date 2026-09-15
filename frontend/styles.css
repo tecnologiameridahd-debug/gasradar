@@ -2291,6 +2291,38 @@ body.modal-open .social-rail {
   font-size: 0.92rem;
   line-height: 1.45;
 }
+.fuel-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 10px 0 14px;
+  font-size: 0.92rem;
+}
+.fuel-table th,
+.fuel-table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.fuel-table th {
+  color: #9aabc7;
+  font-weight: 600;
+}
+.fuel-table td:nth-child(2),
+.fuel-table td:nth-child(3) {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: #86efac;
+}
+.live-updated {
+  margin: 0 0 8px;
+  color: #9aabc7;
+  font-size: 0.85rem;
+}
+.live-stations .ago {
+  color: #9aabc7;
+  font-weight: 400;
+  font-size: 0.82rem;
+}
 .live-stations {
   list-style: none;
   margin: 8px 0 0;

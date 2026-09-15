@@ -25,7 +25,7 @@
   <meta name="twitter:title" content="Cheap gas in Wyoming (WY) — live prices | GasRadar" />
   <meta name="twitter:description" content="Lowest Regular in Wyoming right now. Cheyenne and I-80/I-25 are usually cheap. Jackson and park tourism lift the price. Compare live prices by ZIP on GasRadar." />
   <link rel="icon" href="/static/favicon-32.png?v=0.2.9" type="image/png" />
-  <link rel="stylesheet" href="/static/styles.css?v=0.9.94" />
+  <link rel="stylesheet" href="/static/styles.css?v=0.9.96" />
   <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -173,7 +173,10 @@
       var zip = box.dataset.zip;
       var lang = document.documentElement.lang || "es";
       box.hidden = false;
-      box.textContent = lang === "en" ? "Checking live price…" : "Buscando precio en vivo…";
+      var hasTable = !!box.querySelector(".fuel-table");
+      if (!hasTable) {
+        box.textContent = lang === "en" ? "Checking live price…" : "Buscando precio en vivo…";
+      }
       fetch("/api/search?zip=" + encodeURIComponent(zip) + "&radius_mi=8&limit=12")
         .then(function (r) { return r.json(); })
         .then(function (d) {
@@ -182,9 +185,11 @@
             var p = "$" + Number(c.price).toFixed(2);
             var name = c.name || c.brand || "";
             var brand = (c.brand || c.name || "").toString();
-            box.innerHTML = lang === "en"
-              ? ("Cheapest Regular now: <strong>" + p + "</strong> " + name)
-              : ("Regular más barata ahora: <strong>" + p + "</strong> " + name);
+            if (!box.querySelector(".fuel-table")) {
+              box.innerHTML = lang === "en"
+                ? ("Cheapest Regular now: <strong>" + p + "</strong> " + name)
+                : ("Regular más barata ahora: <strong>" + p + "</strong> " + name);
+            }
             var h1 = document.querySelector(".place-h1");
             var hm = h1 && h1.textContent ? h1.textContent.match(/Cheap gas in\s+([^,]+)/i) : null;
             if (hm) {

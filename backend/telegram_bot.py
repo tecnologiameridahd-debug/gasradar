@@ -1060,9 +1060,6 @@ def run_alert_checks(*, force: bool = False) -> dict:
         radius = float(row.get("radius_mi") or 5)
         max_p = row.get("max_price")
         lang = row.get("lang") or "es"
-        if max_p is None:
-            skipped += 1
-            continue
         if not force and row.get("last_sent_day") == today:
             skipped += 1
             continue
@@ -1089,12 +1086,33 @@ def run_alert_checks(*, force: bool = False) -> dict:
         if price is None:
             skipped += 1
             continue
-        if float(price) > float(max_p):
+        last_p = row.get("last_price")
+        dropped = (
+            last_p is not None
+            and float(last_p) > 0
+            and float(price) <= float(last_p) * 0.95
+        )
+        under_cap = max_p is not None and float(price) <= float(max_p)
+        if not dropped and not under_cap:
             skipped += 1
             continue
 
         body = _format_now(data, lang)
-        if lang == "en":
+        st_name = best.get("name") or best.get("brand") or ""
+        if dropped and not under_cap:
+            if lang == "en":
+                header = (
+                    f"📉 Gas dropped near you!\n"
+                    f"{st_name} Regular is {_money(float(price))} "
+                    f"(was {_money(float(last_p))}).\n\n"
+                )
+            else:
+                header = (
+                    f"📉 ¡Bajó la gasolina cerca de ti!\n"
+                    f"{st_name} Regular a {_money(float(price))} "
+                    f"(antes {_money(float(last_p))}).\n\n"
+                )
+        elif lang == "en":
             header = f"🚨 Price alert!\nYour max: {_money(float(max_p))}\n\n"
         else:
             header = f"🚨 ¡Alerta de precio!\nTu tope: {_money(float(max_p))}\n\n"
@@ -1108,9 +1126,124 @@ def run_alert_checks(*, force: bool = False) -> dict:
 
     return {
         "ok": True,
+        "kind": "price",
         "checked": checked,
         "sent": sent,
         "skipped": skipped,
         "errors": errors,
         "unique_searches": len(cache),
     }
+
+
+def _search_zip(cache: dict, zip_c: str, fuel: str, radius: float) -> dict:
+    from backend.search_core import run_search
+
+    key = (zip_c, fuel, round(radius, 1))
+    if key not in cache:
+        cache[key] = run_search(
+            zip=zip_c,
+            fuel=fuel,
+            radius_mi=radius,
+            limit=12,
+            track=False,
+            quick=True,
+        )
+    return cache[key]
+
+
+def run_thursday_digest(*, force: bool = False) -> dict:
+    """Jueves: aviso de fin de semana con promedio y estación más barata."""
+    from datetime import datetime, timezone
+
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    rows = list_active_alerts()
+    cache: dict = {}
+    sent = skipped = errors = 0
+    for row in rows:
+        chat_id = row["chat_id"]
+        zip_c = str(row.get("zip") or "")
+        lang = row.get("lang") or "es"
+        if not zip_c:
+            skipped += 1
+            continue
+        if not force and row.get("last_sent_day") == today:
+            skipped += 1
+            continue
+        try:
+            data = _search_zip(
+                cache, zip_c, str(row.get("fuel") or "regular"), float(row.get("radius_mi") or 5)
+            )
+        except Exception as e:
+            print(f"[alerts thursday] {zip_c}: {e}")
+            errors += 1
+            continue
+        best = data.get("cheapest") or {}
+        price = best.get("price")
+        if price is None:
+            skipped += 1
+            continue
+        st_name = best.get("name") or best.get("brand") or ""
+        priced_st = [
+            float(s["price"])
+            for s in (data.get("stations") or [])
+            if s.get("price") is not None
+        ]
+        avg = sum(priced_st) / len(priced_st) if priced_st else float(price)
+        avg_s = _money(avg)
+        if lang == "en":
+            msg = (
+                f"⛽ Weekend road trip?\n"
+                f"Gas around ZIP {zip_c}: avg {avg_s}. "
+                f"Fill up at {st_name} for {_money(float(price))} before prices jump."
+            )
+        else:
+            msg = (
+                f"⛽ ¿Viajas este fin de semana?\n"
+                f"En ZIP {zip_c} el promedio es {avg_s}. "
+                f"Llena en {st_name} por {_money(float(price))} antes de que suba."
+            )
+        res = send_message(chat_id, msg, lang=lang, disable_preview=True)
+        if res.get("ok"):
+            mark_sent(chat_id, float(price))
+            sent += 1
+        else:
+            errors += 1
+    return {"ok": True, "kind": "thursday", "sent": sent, "skipped": skipped, "errors": errors}
+
+
+def run_dormant_nudge(*, force: bool = False) -> dict:
+    """Usuarios con alerta activa y 14 días sin movimiento."""
+    import time
+    from datetime import datetime, timezone
+
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    cutoff = time.time() - 14 * 24 * 3600
+    sent = skipped = errors = 0
+    for row in list_active_alerts():
+        chat_id = row["chat_id"]
+        lang = row.get("lang") or "es"
+        updated = float(row.get("updated_at") or 0)
+        if updated > cutoff and not force:
+            skipped += 1
+            continue
+        if not force and row.get("last_sent_day") == today:
+            skipped += 1
+            continue
+        zip_c = str(row.get("zip") or "")
+        if lang == "en":
+            msg = (
+                "💰 You're missing savings. GasRadar users nearby save on every fill-up. "
+                f"Tap for today's prices" + (f" in ZIP {zip_c}." if zip_c else ".")
+            )
+        else:
+            msg = (
+                "💰 Te estás perdiendo de ahorrar. Abre GasRadar y mira los precios de hoy"
+                + (f" en ZIP {zip_c}." if zip_c else ".")
+            )
+        res = send_message(chat_id, msg, lang=lang, disable_preview=True)
+        if res.get("ok"):
+            mark_sent(chat_id, float(row.get("last_price") or 0) or 0.0)
+            sent += 1
+        else:
+            errors += 1
+    return {"ok": True, "kind": "dormant", "sent": sent, "skipped": skipped, "errors": errors}

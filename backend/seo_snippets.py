@@ -80,56 +80,117 @@ def _unique_priced(stations: list[dict], n: int = 3) -> list[tuple[str, float]]:
     return rows
 
 
+def _fmt_usd(v: float | None) -> str:
+    if v is None:
+        return "—"
+    try:
+        return f"${float(v):.2f}"
+    except (TypeError, ValueError):
+        return "—"
+
+
+def _aaa_cached(state_code: str, city: str) -> dict:
+    try:
+        from backend.aaa_scraper import get_aaa_averages
+
+        row = get_aaa_averages(state_code, city=city) or {}
+        return row if isinstance(row, dict) else {}
+    except Exception:
+        return {}
+
+
+def _top_stations(stations: list[dict], n: int = 5) -> list[dict]:
+    seen: set[str] = set()
+    out: list[dict] = []
+    for s in stations:
+        brand = _short_brand(s)
+        key = f"{brand.lower()}|{(s.get('address') or '')[:24].lower()}"
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(s)
+        if len(out) >= n:
+            break
+    return out
+
+
 def format_city_snippet(
     *,
     city: str,
     state_code: str,
     stations: list[dict],
     lang: str = "en",
-) -> tuple[str, str, str] | None:
-    """(title, description, live_html) o None si no hay precio vivo."""
-    priced = _unique_priced(stations, 8)
+) -> tuple[str, str, str, str] | None:
+    """(title, description, live_html, h1) o None si no hay precio vivo."""
+    live_rows = _live_stations({"stations": stations}) if stations else []
+    if not live_rows:
+        live_rows = stations
+    priced = _unique_priced(live_rows, 8)
     if not priced:
         return None
     brand0, price0 = priced[0]
     p0 = f"${price0:.2f}"
-    bits = [f"{b} ${p:.2f}" if b else f"${p:.2f}" for b, p in priced[:3]]
-    items = "".join(
-        f"<li><span>{_esc(b) or 'Station'}</span> <strong>${p:.2f}</strong></li>"
-        for b, p in priced
-    )
+    regs = [float(s["price"]) for s in live_rows if s.get("price") is not None]
+    avg_reg = sum(regs) / len(regs) if regs else price0
+    min_reg = min(regs) if regs else price0
+    aaa = _aaa_cached(state_code, city)
     es = lang == "es"
     if es:
-        title = (
-            f"{city} {p0} {brand0} · gasolina hoy | GasRadar"
-            if brand0
-            else f"{city} {p0} · gasolina más barata | GasRadar"
-        )
+        title = f"Precio de la gasolina en {city}, {state_code} hoy | GasRadar"
         desc = (
-            f"Regular más barata ahora: {', '.join(bits)}. "
-            f"En vivo en {city}, {state_code}. Compara estaciones a 3–15 millas."
+            f"Regular desde {p0} en {city}, {state_code}. "
+            f"Las estaciones más baratas ahora: Regular, Premium y Diesel en vivo."
         )
-        live = (
-            f"Regular más barata ahora: <strong>{_esc(p0)}</strong> {_esc(brand0)}"
-            f'<ol class="live-stations">{items}</ol>'
-        )
+        h1 = f"Precios de gasolina en {city}, {state_code}"
+        updated = "Actualizado el: "
+        th_fuel, th_avg, th_min = "Tipo de combustible", "Precio promedio", "El más barato"
+        h2 = f"Las 5 gasolineras más baratas en {city}"
+        ago = "en vivo"
     else:
-        title = (
-            f"{city} {p0} {brand0} · cheap gas today | GasRadar"
-            if brand0
-            else f"{city} gas {p0} · cheapest today | GasRadar"
-        )
+        title = f"Gas prices in {city}, {state_code} today | GasRadar"
         desc = (
-            f"Lowest Regular now: {', '.join(bits)}. "
-            f"Live in {city}, {state_code}. Compare stations 3–15 miles on GasRadar."
+            f"Regular from {p0} in {city}, {state_code}. "
+            f"Cheapest stations now — Regular, Premium and Diesel, live."
         )
-        live = (
-            f"Cheapest Regular now: <strong>{_esc(p0)}</strong> {_esc(brand0)}"
-            f'<ol class="live-stations">{items}</ol>'
-        )
+        h1 = f"Gas prices in {city}, {state_code}"
+        updated = "Updated: "
+        th_fuel, th_avg, th_min = "Fuel", "Average", "Cheapest"
+        h2 = f"Cheapest 5 gas stations in {city}"
+        ago = "live"
     if len(desc) > 160:
         desc = desc[:157].rstrip() + "…"
-    return title[:65], desc, live
+    from datetime import date
+
+    today = date.today().isoformat()
+    prem_avg = aaa.get("premium")
+    die_avg = aaa.get("diesel")
+    table = (
+        f'<p class="live-updated">{_esc(updated)}<time datetime="{today}">{today}</time></p>'
+        f'<table class="fuel-table">'
+        f"<thead><tr><th>{_esc(th_fuel)}</th><th>{_esc(th_avg)}</th><th>{_esc(th_min)}</th></tr></thead>"
+        f"<tbody>"
+        f"<tr><td>Regular</td><td>{_fmt_usd(avg_reg)}</td><td>{_fmt_usd(min_reg)}</td></tr>"
+        f"<tr><td>Premium</td><td>{_fmt_usd(prem_avg)}</td><td>—</td></tr>"
+        f"<tr><td>Diesel</td><td>{_fmt_usd(die_avg)}</td><td>—</td></tr>"
+        f"</tbody></table>"
+    )
+    lis = []
+    for s in _top_stations(live_rows, 5):
+        name = _esc(_short_brand(s) or s.get("name") or "Station")
+        addr = _esc((s.get("address") or "").strip())
+        price = _fmt_usd(s.get("price"))
+        loc = f" — {addr}" if addr else ""
+        lis.append(
+            f"<li><strong>{name}</strong>{loc} | <strong>Regular: {price}</strong> "
+            f'<span class="ago">{_esc(ago)}</span></li>'
+        )
+    live = (
+        f"<p>Regular {p0} {_esc(brand0)}</p>"
+        f"{table}"
+        f"<h2>{_esc(h2)}</h2>"
+        f'<ol class="live-stations">{"".join(lis)}</ol>'
+    )
+    return title[:70], desc, live, h1
 
 
 def _parse_place(html_text: str) -> tuple[str, str, str]:
@@ -145,7 +206,9 @@ def _parse_place(html_text: str) -> tuple[str, str, str]:
     return city, code, zip_code
 
 
-def apply_snippet(html_text: str, title: str, desc: str, live_html: str) -> str:
+def apply_snippet(
+    html_text: str, title: str, desc: str, live_html: str, h1: str = ""
+) -> str:
     html_text = _TITLE_RE.sub(lambda _m: f"<title>{_esc(title)}</title>", html_text, count=1)
     html_text = re.sub(
         r'(<(?:meta)[^>]*(?:property|name)="(?:og:title|twitter:title)"[^>]*content=")[^"]*(")',
@@ -173,12 +236,20 @@ def apply_snippet(html_text: str, title: str, desc: str, live_html: str) -> str:
         count=1,
     )
     html_text = re.sub(
-        r'(<p class="live-box card" id="livePrice"[^>]*>)(.*?)(</p>)',
+        r'(<(?:p|div) class="live-box card" id="livePrice"[^>]*>)(.*?)(</(?:p|div)>)',
         lambda m: m.group(1) + live_html + m.group(3),
         html_text,
         count=1,
         flags=re.I | re.S,
     )
+    if h1:
+        html_text = re.sub(
+            r'(<h1 class="place-h1">)(.*?)(</h1>)',
+            lambda m: m.group(1) + _esc(h1) + m.group(3),
+            html_text,
+            count=1,
+            flags=re.I | re.S,
+        )
     return html_text
 
 
@@ -245,8 +316,8 @@ def inject_city_seo(html_text: str, lang: str = "en") -> tuple[str, bool]:
         )
         if not snippet:
             return html_text, False
-        title, desc, live = snippet
-        return apply_snippet(html_text, title, desc, live), True
+        title, desc, live, h1 = snippet
+        return apply_snippet(html_text, title, desc, live, h1=h1), True
     except Exception as e:
         print(f"[seo] inject fail: {type(e).__name__}: {e}")
         return html_text, False

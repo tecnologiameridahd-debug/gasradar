@@ -13,7 +13,7 @@ from _places_data import BAND_EN, BAND_ES, CITIES, STATES
 ROOT = Path(__file__).resolve().parent
 GAS = ROOT / "gas"
 SITE = "https://gasradarapp.com"
-CSS_V = "0.9.94"
+CSS_V = "0.9.96"
 TODAY = "2026-09-14"
 
 STATE_BY_SLUG = {s["slug"]: s for s in STATES}
@@ -129,7 +129,7 @@ def page_shell(
       <span class="footer-sep">·</span>
       <a href="/blog">Blog</a>
     </nav>{h1}
-    {f'<p class="live-box card" id="livePrice" data-zip="{live_zip}" style="padding:12px 16px;margin:0 0 12px"></p>' if live_zip else ""}
+    {f'<div class="live-box card" id="livePrice" data-zip="{live_zip}" style="padding:12px 16px;margin:0 0 12px"></div>' if live_zip else ""}
 
     <section class="card privacy-card blog-card" id="contentEn">
       {content_en}
@@ -187,7 +187,10 @@ def page_shell(
       var zip = box.dataset.zip;
       var lang = document.documentElement.lang || "es";
       box.hidden = false;
-      box.textContent = lang === "en" ? "Checking live price…" : "Buscando precio en vivo…";
+      var hasTable = !!box.querySelector(".fuel-table");
+      if (!hasTable) {{
+        box.textContent = lang === "en" ? "Checking live price…" : "Buscando precio en vivo…";
+      }}
       fetch("/api/search?zip=" + encodeURIComponent(zip) + "&radius_mi=8&limit=12")
         .then(function (r) {{ return r.json(); }})
         .then(function (d) {{
@@ -196,9 +199,11 @@ def page_shell(
             var p = "$" + Number(c.price).toFixed(2);
             var name = c.name || c.brand || "";
             var brand = (c.brand || c.name || "").toString();
-            box.innerHTML = lang === "en"
-              ? ("Cheapest Regular now: <strong>" + p + "</strong> " + name)
-              : ("Regular más barata ahora: <strong>" + p + "</strong> " + name);
+            if (!box.querySelector(".fuel-table")) {{
+              box.innerHTML = lang === "en"
+                ? ("Cheapest Regular now: <strong>" + p + "</strong> " + name)
+                : ("Regular más barata ahora: <strong>" + p + "</strong> " + name);
+            }}
             var h1 = document.querySelector(".place-h1");
             var hm = h1 && h1.textContent ? h1.textContent.match(/Cheap gas in\\s+([^,]+)/i) : null;
             if (hm) {{
