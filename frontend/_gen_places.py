@@ -85,7 +85,7 @@ def page_shell(
   <meta name="geo.region" content="US" />{geo}
   <link rel="canonical" href="{canonical}" />
   <link rel="alternate" hreflang="en" href="{canonical}" />
-  <link rel="alternate" hreflang="es" href="{canonical}" />
+  <link rel="alternate" hreflang="es" href="{SITE}/es{canonical.replace(SITE, '')}" />
   <link rel="alternate" hreflang="x-default" href="{canonical}" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="GasRadar" />
@@ -156,7 +156,12 @@ def page_shell(
   </div>
   <script>
     const LANG_KEY = "gasradar_lang";
+    function pathIsEs() {{
+      var p = location.pathname || "";
+      return p === "/es" || p.indexOf("/es/") === 0;
+    }}
     function loadLang() {{
+      if (window.__GASRADAR_FORCE_LANG === "es" || pathIsEs()) return "es";
       try {{
         const s = localStorage.getItem(LANG_KEY);
         if (s === "en" || s === "es") return s;
@@ -164,6 +169,15 @@ def page_shell(
       return (navigator.language || "es").toLowerCase().startsWith("en") ? "en" : "es";
     }}
     function setLang(lang) {{
+      if (pathIsEs() && lang === "en") {{
+        location.href = (location.pathname || "/").replace(/^\\/es\\/?/, "/") || "/";
+        return;
+      }}
+      if (!pathIsEs() && lang === "es") {{
+        var p0 = location.pathname || "/";
+        location.href = p0 === "/" ? "/es" : "/es" + p0;
+        return;
+      }}
       try {{ localStorage.setItem(LANG_KEY, lang); }} catch (_) {{}}
       document.documentElement.lang = lang;
       document.getElementById("contentEs").hidden = lang !== "es";
@@ -420,6 +434,8 @@ def collect_urls() -> list[tuple[str, str]]:
         ("/terminos", TODAY),
         ("/reglas", TODAY),
         ("/gas", TODAY),
+        ("/es", TODAY),
+        ("/es/gas", TODAY),
     ]
     try:
         from _gen_blog import POSTS
@@ -429,8 +445,10 @@ def collect_urls() -> list[tuple[str, str]]:
         pass
     for st in STATES:
         urls.append((f"/gas/{st['slug']}", TODAY))
+        urls.append((f"/es/gas/{st['slug']}", TODAY))
     for c in CITIES:
         urls.append((f"/gas/{c['state']}/{c['slug']}", TODAY))
+        urls.append((f"/es/gas/{c['state']}/{c['slug']}", TODAY))
     return urls
 
 

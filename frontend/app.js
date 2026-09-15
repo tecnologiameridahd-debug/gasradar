@@ -291,7 +291,14 @@ const state = {
   lang: loadLang(),
 };
 
+function isEsPath() {
+  const p = location.pathname || "";
+  return p === "/es" || p === "/es/" || p.startsWith("/es/");
+}
+
 function loadLang() {
+  if (typeof window !== "undefined" && window.__GASRADAR_FORCE_LANG === "es") return "es";
+  if (isEsPath()) return "es";
   try {
     const s = localStorage.getItem(LANG_KEY);
     if (s === "en" || s === "es") return s;
@@ -351,10 +358,14 @@ function applyStaticI18n() {
     bmc.setAttribute("title", t("donateTitle"));
     bmc.setAttribute("aria-label", t("donate"));
   }
-  document.title =
-    state.lang === "en"
-      ? "Cheap gas near me — live prices | GasRadar"
-      : "Gasolina barata cerca de ti — precios en vivo | GasRadar";
+  if (!isEsPath()) {
+    document.title =
+      state.lang === "en"
+        ? "Cheap gas near me — live prices | GasRadar"
+        : "Gasolina barata cerca de mí — precios en vivo | GasRadar";
+  } else {
+    document.title = "Gasolina barata cerca de mí — precios en vivo | GasRadar";
+  }
   const metaDesc = document.getElementById("metaDesc");
   if (metaDesc) {
     metaDesc.setAttribute(
@@ -376,6 +387,16 @@ function applyStaticI18n() {
 
 function setLang(lang) {
   if (lang !== "es" && lang !== "en") return;
+  const p = location.pathname || "/";
+  if (isEsPath() && lang === "en") {
+    const next = p.replace(/^\/es\/?/, "/") || "/";
+    location.href = next === "//" ? "/" : next;
+    return;
+  }
+  if (!isEsPath() && lang === "es" && (p === "/" || p.startsWith("/gas"))) {
+    location.href = p === "/" ? "/es" : "/es" + p;
+    return;
+  }
   state.lang = lang;
   saveLang(lang);
   applyStaticI18n();

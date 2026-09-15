@@ -11,7 +11,7 @@
   <meta name="geo.placename" content="Honolulu, Hawaii" />
   <link rel="canonical" href="https://gasradarapp.com/gas/hawaii/honolulu" />
   <link rel="alternate" hreflang="en" href="https://gasradarapp.com/gas/hawaii/honolulu" />
-  <link rel="alternate" hreflang="es" href="https://gasradarapp.com/gas/hawaii/honolulu" />
+  <link rel="alternate" hreflang="es" href="https://gasradarapp.com/es/gas/hawaii/honolulu" />
   <link rel="alternate" hreflang="x-default" href="https://gasradarapp.com/gas/hawaii/honolulu" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="GasRadar" />
@@ -144,7 +144,12 @@
   </div>
   <script>
     const LANG_KEY = "gasradar_lang";
+    function pathIsEs() {
+      var p = location.pathname || "";
+      return p === "/es" || p.indexOf("/es/") === 0;
+    }
     function loadLang() {
+      if (window.__GASRADAR_FORCE_LANG === "es" || pathIsEs()) return "es";
       try {
         const s = localStorage.getItem(LANG_KEY);
         if (s === "en" || s === "es") return s;
@@ -152,6 +157,15 @@
       return (navigator.language || "es").toLowerCase().startsWith("en") ? "en" : "es";
     }
     function setLang(lang) {
+      if (pathIsEs() && lang === "en") {
+        location.href = (location.pathname || "/").replace(/^\/es\/?/, "/") || "/";
+        return;
+      }
+      if (!pathIsEs() && lang === "es") {
+        var p0 = location.pathname || "/";
+        location.href = p0 === "/" ? "/es" : "/es" + p0;
+        return;
+      }
       try { localStorage.setItem(LANG_KEY, lang); } catch (_) {}
       document.documentElement.lang = lang;
       document.getElementById("contentEs").hidden = lang !== "es";

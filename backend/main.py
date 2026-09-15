@@ -18,7 +18,7 @@ from backend.prices import report_price
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.9.102"
+APP_VERSION = "0.9.103"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -737,6 +737,30 @@ if FRONTEND.is_dir():
     app.mount("/static", StaticFiles(directory=str(FRONTEND)), name="static")
 
 
+@app.get("/es")
+@app.get("/es/")
+def index_es():
+    index_path = FRONTEND / "index.html"
+    if not index_path.exists():
+        raise HTTPException(404, "Frontend missing")
+    from backend.seo_i18n import localize_home_es
+
+    html = localize_home_es(index_path.read_text(encoding="utf-8"))
+    return HTMLResponse(
+        html,
+        headers={
+            "Cache-Control": "public, max-age=0, s-maxage=300, stale-while-revalidate=86400",
+            "Content-Type": "text/html; charset=utf-8",
+        },
+    )
+
+
+@app.get("/gasolina-barata")
+@app.get("/gasolina-barata-cerca-de-mi")
+def gasolina_barata_redirect():
+    return RedirectResponse("https://gasradarapp.com/es", status_code=301)
+
+
 @app.get("/")
 def index():
     index_path = FRONTEND / "index.html"
@@ -1041,6 +1065,10 @@ def gas_city(state: str, city: str):
     from backend.seo_snippets import inject_city_seo
 
     html_out, injected = inject_city_seo(raw)
+    from backend.seo_i18n import SITE, apply_hreflang
+
+    en_url = f"{SITE}/gas/{state}/{city}"
+    html_out = apply_hreflang(html_out, en_url, f"{SITE}/es/gas/{state}/{city}")
     cache = (
         "public, max-age=0, s-maxage=900, stale-while-revalidate=3600"
         if injected
@@ -1048,6 +1076,70 @@ def gas_city(state: str, city: str):
     )
     return HTMLResponse(
         html_out,
+        headers={
+            "Cache-Control": cache,
+            "Content-Type": "text/html; charset=utf-8",
+        },
+    )
+
+
+@app.get("/es/gas")
+@app.get("/es/gas/")
+def gas_index_es():
+    path = FRONTEND / "gas" / "index.html"
+    if not path.is_file():
+        raise HTTPException(404, "Places missing")
+    from backend.seo_i18n import localize_place_es
+
+    html = localize_place_es(path.read_text(encoding="utf-8"), "/gas")
+    return HTMLResponse(
+        html,
+        headers={
+            "Cache-Control": "public, max-age=0, s-maxage=600, stale-while-revalidate=86400",
+            "Content-Type": "text/html; charset=utf-8",
+        },
+    )
+
+
+@app.get("/es/gas/{state}")
+@app.get("/es/gas/{state}/")
+def gas_state_es(state: str):
+    if not _safe_place_slug(state):
+        raise HTTPException(404, "State not found")
+    path = FRONTEND / "gas" / state / "index.html"
+    if not path.is_file():
+        raise HTTPException(404, "State not found")
+    from backend.seo_i18n import localize_place_es
+
+    html = localize_place_es(path.read_text(encoding="utf-8"), f"/gas/{state}")
+    return HTMLResponse(
+        html,
+        headers={
+            "Cache-Control": "public, max-age=0, s-maxage=600, stale-while-revalidate=86400",
+            "Content-Type": "text/html; charset=utf-8",
+        },
+    )
+
+
+@app.get("/es/gas/{state}/{city}")
+def gas_city_es(state: str, city: str):
+    if not _safe_place_slug(state) or not _safe_place_slug(city):
+        raise HTTPException(404, "City not found")
+    path = FRONTEND / "gas" / state / f"{city}.html"
+    if not path.is_file():
+        raise HTTPException(404, "City not found")
+    from backend.seo_i18n import localize_place_es
+    from backend.seo_snippets import inject_city_seo
+
+    html = localize_place_es(path.read_text(encoding="utf-8"), f"/gas/{state}/{city}")
+    html, injected = inject_city_seo(html, lang="es")
+    cache = (
+        "public, max-age=0, s-maxage=900, stale-while-revalidate=3600"
+        if injected
+        else "public, max-age=0, s-maxage=120, stale-while-revalidate=600"
+    )
+    return HTMLResponse(
+        html,
         headers={
             "Cache-Control": cache,
             "Content-Type": "text/html; charset=utf-8",

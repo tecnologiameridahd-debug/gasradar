@@ -85,6 +85,7 @@ def format_city_snippet(
     city: str,
     state_code: str,
     stations: list[dict],
+    lang: str = "en",
 ) -> tuple[str, str, str] | None:
     """(title, description, live_html) o None si no hay precio vivo."""
     priced = _unique_priced(stations, 8)
@@ -92,25 +93,42 @@ def format_city_snippet(
         return None
     brand0, price0 = priced[0]
     p0 = f"${price0:.2f}"
-    if brand0:
-        title = f"{city} {p0} {brand0} · cheap gas today | GasRadar"
-    else:
-        title = f"{city} gas {p0} · cheapest today | GasRadar"
     bits = [f"{b} ${p:.2f}" if b else f"${p:.2f}" for b, p in priced[:3]]
-    desc = (
-        f"Lowest Regular now: {', '.join(bits)}. "
-        f"Live in {city}, {state_code}. Compare stations 3–15 miles on GasRadar."
-    )
-    if len(desc) > 160:
-        desc = desc[:157].rstrip() + "…"
     items = "".join(
         f"<li><span>{_esc(b) or 'Station'}</span> <strong>${p:.2f}</strong></li>"
         for b, p in priced
     )
-    live = (
-        f"Cheapest Regular now: <strong>{_esc(p0)}</strong> {_esc(brand0)}"
-        f'<ol class="live-stations">{items}</ol>'
-    )
+    es = lang == "es"
+    if es:
+        title = (
+            f"{city} {p0} {brand0} · gasolina hoy | GasRadar"
+            if brand0
+            else f"{city} {p0} · gasolina más barata | GasRadar"
+        )
+        desc = (
+            f"Regular más barata ahora: {', '.join(bits)}. "
+            f"En vivo en {city}, {state_code}. Compara estaciones a 3–15 millas."
+        )
+        live = (
+            f"Regular más barata ahora: <strong>{_esc(p0)}</strong> {_esc(brand0)}"
+            f'<ol class="live-stations">{items}</ol>'
+        )
+    else:
+        title = (
+            f"{city} {p0} {brand0} · cheap gas today | GasRadar"
+            if brand0
+            else f"{city} gas {p0} · cheapest today | GasRadar"
+        )
+        desc = (
+            f"Lowest Regular now: {', '.join(bits)}. "
+            f"Live in {city}, {state_code}. Compare stations 3–15 miles on GasRadar."
+        )
+        live = (
+            f"Cheapest Regular now: <strong>{_esc(p0)}</strong> {_esc(brand0)}"
+            f'<ol class="live-stations">{items}</ol>'
+        )
+    if len(desc) > 160:
+        desc = desc[:157].rstrip() + "…"
     return title[:65], desc, live
 
 
@@ -194,7 +212,7 @@ def warm_zip(zip_code: str) -> None:
     threading.Thread(target=_run, name=f"seo-warm-{z}", daemon=True).start()
 
 
-def inject_city_seo(html_text: str) -> tuple[str, bool]:
+def inject_city_seo(html_text: str, lang: str = "en") -> tuple[str, bool]:
     """Devuelve (html, injected). Nunca lanza; si falla, el HTML original."""
     try:
         city, code, zip_code = _parse_place(html_text)
@@ -222,7 +240,9 @@ def inject_city_seo(html_text: str) -> tuple[str, bool]:
             city = "This city"
         if not code:
             code = "US"
-        snippet = format_city_snippet(city=city, state_code=code, stations=stations)
+        snippet = format_city_snippet(
+            city=city, state_code=code, stations=stations, lang=lang
+        )
         if not snippet:
             return html_text, False
         title, desc, live = snippet
