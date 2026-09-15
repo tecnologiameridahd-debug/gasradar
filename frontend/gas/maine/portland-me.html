@@ -157,15 +157,6 @@
       return (navigator.language || "es").toLowerCase().startsWith("en") ? "en" : "es";
     }
     function setLang(lang) {
-      if (pathIsEs() && lang === "en") {
-        location.href = (location.pathname || "/").replace(/^\/es\/?/, "/") || "/";
-        return;
-      }
-      if (!pathIsEs() && lang === "es") {
-        var p0 = location.pathname || "/";
-        location.href = p0 === "/" ? "/es" : "/es" + p0;
-        return;
-      }
       try { localStorage.setItem(LANG_KEY, lang); } catch (_) {}
       document.documentElement.lang = lang;
       document.getElementById("contentEs").hidden = lang !== "es";
