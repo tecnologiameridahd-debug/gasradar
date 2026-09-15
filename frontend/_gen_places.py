@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html
 import json
+import re
 from collections import defaultdict
 from pathlib import Path
 
@@ -433,6 +434,29 @@ def collect_urls() -> list[tuple[str, str]]:
     return urls
 
 
+def sync_home_cities() -> None:
+    """Pone las 91 ciudades en el bloque SEO de la home."""
+    path = ROOT / "index.html"
+    html_text = path.read_text(encoding="utf-8")
+    items = sorted(CITIES, key=lambda c: (c["name"], c["state"]))
+    lis = "".join(
+        f'\n          <li><a href="/gas/{c["state"]}/{c["slug"]}">{esc(c["name"])}</a></li>'
+        for c in items
+    )
+    block = f'        <ul class="seo-cities">{lis}\n        </ul>'
+    new, n = re.subn(
+        r'        <ul class="seo-cities">.*?</ul>',
+        block,
+        html_text,
+        count=1,
+        flags=re.S,
+    )
+    if n != 1:
+        raise SystemExit("no se encontró ul.seo-cities en index.html")
+    path.write_text(new, encoding="utf-8", newline="\n")
+    print("home cities", len(items))
+
+
 def build_sitemap() -> None:
     urls = collect_urls()
     lines = [
@@ -454,4 +478,5 @@ if __name__ == "__main__":
     build_states()
     build_cities()
     build_sitemap()
+    sync_home_cities()
     print("done", len(STATES), "states +", len(CITIES), "cities")
