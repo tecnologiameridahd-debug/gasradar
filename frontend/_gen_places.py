@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parent
 GAS = ROOT / "gas"
 SITE = "https://gasradarapp.com"
 CSS_V = "0.9.76"
-TODAY = "2026-09-01"
+TODAY = "2026-09-14"
 
 STATE_BY_SLUG = {s["slug"]: s for s in STATES}
 CITIES_BY_STATE: dict[str, list[dict]] = defaultdict(list)
@@ -189,9 +189,17 @@ def page_shell(
           if (c && c.price != null) {{
             var p = "$" + Number(c.price).toFixed(2);
             var name = c.name || c.brand || "";
+            var brand = (c.brand || c.name || "").toString();
             box.innerHTML = lang === "en"
               ? ("Cheapest Regular now: <strong>" + p + "</strong> " + name)
               : ("Regular más barata ahora: <strong>" + p + "</strong> " + name);
+            var h1 = document.querySelector(".place-h1");
+            var hm = h1 && h1.textContent ? h1.textContent.match(/Cheap gas in\\s+([^,]+)/i) : null;
+            if (hm) {{
+              document.title = hm[1] + " " + p + (brand ? " " + brand.slice(0, 18) : "") + " · cheap gas today | GasRadar";
+              var mt = document.querySelector('meta[name="description"]');
+              if (mt) mt.setAttribute("content", "Lowest Regular now: " + (brand ? brand + " " : "") + p + ". Live in " + hm[1] + ".");
+            }}
           }} else {{
             box.textContent = lang === "en" ? "Open the app to compare." : "Abre la app para comparar.";
           }}
@@ -327,8 +335,8 @@ def build_states() -> None:
         {neighbor_links(st, "en")}
         """
         html_text = page_shell(
-            title=f"Cheap gas in {st['name_en']} ({st['code']}) today | GasRadar",
-            description=f"Find the cheapest gas in {st['name_en']}. {st['note_en'][:150]} Compare live Regular prices by ZIP with GasRadar.",
+            title=f"Cheap gas in {st['name_en']} ({st['code']}) — live prices | GasRadar",
+            description=f"Lowest Regular in {st['name_en']} right now. {st['note_en'][:120]} Compare live prices by ZIP on GasRadar.",
             canonical=f"{SITE}/gas/{st['slug']}",
             content_es=es,
             content_en=en,
@@ -379,8 +387,8 @@ def build_cities() -> None:
         <p><a href="/gas/{c["state"]}">All of {esc(st["name_en"])}</a></p>
         """
         html_text = page_shell(
-            title=f"Cheap gas in {c['name']}, {st['code']} today | GasRadar",
-            description=f"Cheapest gas stations near {c['name']}, {st['name_en']} (ZIP {c['zip']}). {c['tip_en'][:110]} Compare live Regular in GasRadar.",
+            title=f"Cheap gas in {c['name']}, {st['code']} — live prices | GasRadar",
+            description=f"Lowest Regular in {c['name']} right now. Compare Costco, Murphy, QT and more (ZIP {c['zip']}). Updated live on GasRadar.",
             canonical=f"{SITE}/gas/{c['state']}/{c['slug']}",
             content_es=es,
             content_en=en,

@@ -353,15 +353,15 @@ function applyStaticI18n() {
   }
   document.title =
     state.lang === "en"
-      ? "Cheap gas near me (USA) | GasRadar"
-      : "Gasolina barata cerca de ti (USA) | GasRadar";
+      ? "Cheap gas near me — live prices | GasRadar"
+      : "Gasolina barata cerca de ti — precios en vivo | GasRadar";
   const metaDesc = document.getElementById("metaDesc");
   if (metaDesc) {
     metaDesc.setAttribute(
       "content",
       state.lang === "en"
-        ? "Find the cheapest gas near you in the USA. Compare prices by GPS or ZIP with GasRadar."
-        : "Gasolina más barata cerca de ti en USA. Compara precios por GPS o ZIP con GasRadar. Encuentra la estación más barata al instante."
+        ? "See the cheapest Regular near you. GPS or ZIP. Compare Costco, Murphy, QT and more — live prices, cheapest station first."
+        : "La Regular más barata cerca de ti. GPS o ZIP. Compara Costco, Murphy, QT y más — precios en vivo."
     );
   }
   // Actualiza chip "prom. sem." / "wk avg" al cambiar idioma

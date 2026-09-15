@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0b1220" />
-  <title>Cheap gas in Indiana (IN) today | GasRadar</title>
-  <meta name="description" content="Find the cheapest gas in Indiana. Indianapolis and I-65/I-70 have lots of competition. Just skip IND airport. Compare live Regular prices by ZIP with GasRadar." />
+  <title>Cheap gas in Indiana (IN) — live prices | GasRadar</title>
+  <meta name="description" content="Lowest Regular in Indiana right now. Indianapolis and I-65/I-70 have lots of competition. Just skip IND airport. Compare live prices by ZIP on GasRadar." />
   <meta name="robots" content="index, follow" />
   <meta name="geo.region" content="US" />
   <meta name="geo.placename" content="Indiana, USA" />
@@ -15,23 +15,23 @@
   <link rel="alternate" hreflang="x-default" href="https://gasradarapp.com/gas/indiana" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="GasRadar" />
-  <meta property="og:title" content="Cheap gas in Indiana (IN) today | GasRadar" />
-  <meta property="og:description" content="Find the cheapest gas in Indiana. Indianapolis and I-65/I-70 have lots of competition. Just skip IND airport. Compare live Regular prices by ZIP with GasRadar." />
+  <meta property="og:title" content="Cheap gas in Indiana (IN) — live prices | GasRadar" />
+  <meta property="og:description" content="Lowest Regular in Indiana right now. Indianapolis and I-65/I-70 have lots of competition. Just skip IND airport. Compare live prices by ZIP on GasRadar." />
   <meta property="og:url" content="https://gasradarapp.com/gas/indiana" />
   <meta property="og:image" content="https://gasradarapp.com/static/logo-512.png?v=0.5.0" />
   <meta property="og:locale" content="en_US" />
   <meta property="og:locale:alternate" content="es_US" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Cheap gas in Indiana (IN) today | GasRadar" />
-  <meta name="twitter:description" content="Find the cheapest gas in Indiana. Indianapolis and I-65/I-70 have lots of competition. Just skip IND airport. Compare live Regular prices by ZIP with GasRadar." />
+  <meta name="twitter:title" content="Cheap gas in Indiana (IN) — live prices | GasRadar" />
+  <meta name="twitter:description" content="Lowest Regular in Indiana right now. Indianapolis and I-65/I-70 have lots of competition. Just skip IND airport. Compare live prices by ZIP on GasRadar." />
   <link rel="icon" href="/static/favicon-32.png?v=0.2.9" type="image/png" />
   <link rel="stylesheet" href="/static/styles.css?v=0.9.76" />
   <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "WebPage",
-  "name": "Cheap gas in Indiana (IN) today | GasRadar",
-  "description": "Find the cheapest gas in Indiana. Indianapolis and I-65/I-70 have lots of competition. Just skip IND airport. Compare live Regular prices by ZIP with GasRadar.",
+  "name": "Cheap gas in Indiana (IN) — live prices | GasRadar",
+  "description": "Lowest Regular in Indiana right now. Indianapolis and I-65/I-70 have lots of competition. Just skip IND airport. Compare live prices by ZIP on GasRadar.",
   "url": "https://gasradarapp.com/gas/indiana",
   "inLanguage": [
     "en-US",
@@ -176,9 +176,17 @@
           if (c && c.price != null) {
             var p = "$" + Number(c.price).toFixed(2);
             var name = c.name || c.brand || "";
+            var brand = (c.brand || c.name || "").toString();
             box.innerHTML = lang === "en"
               ? ("Cheapest Regular now: <strong>" + p + "</strong> " + name)
               : ("Regular más barata ahora: <strong>" + p + "</strong> " + name);
+            var h1 = document.querySelector(".place-h1");
+            var hm = h1 && h1.textContent ? h1.textContent.match(/Cheap gas in\s+([^,]+)/i) : null;
+            if (hm) {
+              document.title = hm[1] + " " + p + (brand ? " " + brand.slice(0, 18) : "") + " · cheap gas today | GasRadar";
+              var mt = document.querySelector('meta[name="description"]');
+              if (mt) mt.setAttribute("content", "Lowest Regular now: " + (brand ? brand + " " : "") + p + ". Live in " + hm[1] + ".");
+            }
           } else {
             box.textContent = lang === "en" ? "Open the app to compare." : "Abre la app para comparar.";
           }

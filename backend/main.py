@@ -18,7 +18,7 @@ from backend.prices import report_price
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.9.97"
+APP_VERSION = "0.9.98"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -61,6 +61,16 @@ def _startup_jobs():
             print(f"[prices] warm startup error: {type(e).__name__}: {e}")
 
     threading.Thread(target=_warm_prices, name="prices-warm", daemon=True).start()
+
+    def _warm_seo() -> None:
+        try:
+            from backend.seo_snippets import warm_seo_cities
+
+            warm_seo_cities()
+        except Exception as e:
+            print(f"[seo] warm cities error: {type(e).__name__}: {e}")
+
+    threading.Thread(target=_warm_seo, name="seo-warm", daemon=True).start()
 
     # 2) Telegram webhook
     if (os.environ.get("AUTO_TELEGRAM_WEBHOOK") or "1").strip().lower() in (
@@ -861,7 +871,7 @@ def digital_asset_links(request: Request):
         raise HTTPException(404, "assetlinks missing")
     body = path.read_bytes().lstrip(b"\xef\xbb\xbf")
     headers = {
-        "Cache-Control": "public, max-age=3600",
+        "Cache-Control": "no-store, max-age=0",
         "Content-Length": str(len(body)),
     }
     mt = "application/json"
@@ -1023,10 +1033,19 @@ def gas_city(state: str, city: str):
     path = FRONTEND / "gas" / state / f"{city}.html"
     if not path.is_file():
         raise HTTPException(404, "City not found")
-    return FileResponse(
-        path,
+    raw = path.read_text(encoding="utf-8")
+    from backend.seo_snippets import inject_city_seo
+
+    html_out, injected = inject_city_seo(raw)
+    cache = (
+        "public, max-age=0, s-maxage=900, stale-while-revalidate=3600"
+        if injected
+        else "public, max-age=0, s-maxage=120, stale-while-revalidate=600"
+    )
+    return HTMLResponse(
+        html_out,
         headers={
-            "Cache-Control": "public, max-age=0, s-maxage=600, stale-while-revalidate=86400",
+            "Cache-Control": cache,
             "Content-Type": "text/html; charset=utf-8",
         },
     )

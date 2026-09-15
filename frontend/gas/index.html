@@ -153,9 +153,17 @@
           if (c && c.price != null) {
             var p = "$" + Number(c.price).toFixed(2);
             var name = c.name || c.brand || "";
+            var brand = (c.brand || c.name || "").toString();
             box.innerHTML = lang === "en"
               ? ("Cheapest Regular now: <strong>" + p + "</strong> " + name)
               : ("Regular más barata ahora: <strong>" + p + "</strong> " + name);
+            var h1 = document.querySelector(".place-h1");
+            var hm = h1 && h1.textContent ? h1.textContent.match(/Cheap gas in\s+([^,]+)/i) : null;
+            if (hm) {
+              document.title = hm[1] + " " + p + (brand ? " " + brand.slice(0, 18) : "") + " · cheap gas today | GasRadar";
+              var mt = document.querySelector('meta[name="description"]');
+              if (mt) mt.setAttribute("content", "Lowest Regular now: " + (brand ? brand + " " : "") + p + ". Live in " + hm[1] + ".");
+            }
           } else {
             box.textContent = lang === "en" ? "Open the app to compare." : "Abre la app para comparar.";
           }
