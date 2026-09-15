@@ -87,7 +87,7 @@ def format_city_snippet(
     stations: list[dict],
 ) -> tuple[str, str, str] | None:
     """(title, description, live_html) o None si no hay precio vivo."""
-    priced = _unique_priced(stations, 3)
+    priced = _unique_priced(stations, 8)
     if not priced:
         return None
     brand0, price0 = priced[0]
@@ -96,14 +96,21 @@ def format_city_snippet(
         title = f"{city} {p0} {brand0} · cheap gas today | GasRadar"
     else:
         title = f"{city} gas {p0} · cheapest today | GasRadar"
-    bits = [f"{b} ${p:.2f}" if b else f"${p:.2f}" for b, p in priced]
+    bits = [f"{b} ${p:.2f}" if b else f"${p:.2f}" for b, p in priced[:3]]
     desc = (
         f"Lowest Regular now: {', '.join(bits)}. "
         f"Live in {city}, {state_code}. Compare stations 3–15 miles on GasRadar."
     )
     if len(desc) > 160:
         desc = desc[:157].rstrip() + "…"
-    live = f"Cheapest Regular now: <strong>{_esc(p0)}</strong> {_esc(brand0)}"
+    items = "".join(
+        f"<li><span>{_esc(b) or 'Station'}</span> <strong>${p:.2f}</strong></li>"
+        for b, p in priced
+    )
+    live = (
+        f"Cheapest Regular now: <strong>{_esc(p0)}</strong> {_esc(brand0)}"
+        f'<ol class="live-stations">{items}</ol>'
+    )
     return title[:65], desc, live
 
 

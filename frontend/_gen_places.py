@@ -12,7 +12,7 @@ from _places_data import BAND_EN, BAND_ES, CITIES, STATES
 ROOT = Path(__file__).resolve().parent
 GAS = ROOT / "gas"
 SITE = "https://gasradarapp.com"
-CSS_V = "0.9.76"
+CSS_V = "0.9.94"
 TODAY = "2026-09-14"
 
 STATE_BY_SLUG = {s["slug"]: s for s in STATES}
@@ -37,7 +37,6 @@ def page_shell(
     page_h1: str = "",
     faq: list[tuple[str, str]] | None = None,
     geo_place: str = "",
-    cse: bool = False,
 ) -> str:
     ld = {
         "@context": "https://schema.org",
@@ -73,14 +72,6 @@ def page_shell(
         )
     geo = f'\n  <meta name="geo.placename" content="{esc(geo_place)}" />' if geo_place else ""
     h1 = f'\n    <h1 class="place-h1">{esc(page_h1)}</h1>' if page_h1 else ""
-    cse_block = (
-        '\n    <div class="gcse-wrap">'
-        '\n      <script async src="https://cse.google.com/cse.js?cx=651dd0dbf38444671"></script>'
-        '\n      <div class="gcse-search"></div>'
-        "\n    </div>"
-        if cse
-        else ""
-    )
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -136,14 +127,14 @@ def page_shell(
       <a href="/">App</a>
       <span class="footer-sep">·</span>
       <a href="/blog">Blog</a>
-    </nav>{h1}{cse_block}
+    </nav>{h1}
     {f'<p class="live-box card" id="livePrice" data-zip="{live_zip}" style="padding:12px 16px;margin:0 0 12px"></p>' if live_zip else ""}
 
-    <section class="card privacy-card blog-card" id="contentEs">
-      {content_es}
-    </section>
-    <section class="card privacy-card blog-card" id="contentEn" hidden>
+    <section class="card privacy-card blog-card" id="contentEn">
       {content_en}
+    </section>
+    <section class="card privacy-card blog-card" id="contentEs" hidden>
+      {content_es}
     </section>
 
     <footer class="site-footer">
@@ -273,9 +264,9 @@ def build_index() -> None:
         )
     feat_es, feat_en = [], []
     featured = [
-        "houston", "dallas", "el-paso", "miami", "denver", "colorado-springs",
-        "los-angeles", "chicago", "new-york", "phoenix", "las-vegas", "reno",
-        "san-antonio", "atlanta", "orlando",
+        "charlotte", "birmingham", "grand-rapids", "memphis", "fresno",
+        "columbus", "albuquerque", "baltimore", "denver", "los-angeles",
+        "houston", "chicago", "new-york", "phoenix", "miami",
     ]
     by_slug = {c["slug"]: c for c in CITIES}
     for sl in featured:
@@ -313,7 +304,6 @@ def build_index() -> None:
         content_es=es,
         content_en=en,
         page_h1="Cheap gas by US city and state",
-        cse=True,
     )
     write(GAS / "index.html", html_text)
 

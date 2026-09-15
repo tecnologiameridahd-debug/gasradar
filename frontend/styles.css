@@ -2291,23 +2291,21 @@ body.modal-open .social-rail {
   font-size: 0.92rem;
   line-height: 1.45;
 }
-.gcse-wrap {
-  margin: 12px 0 4px;
-  max-width: 100%;
+.live-stations {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
 }
-.gcse-wrap .gsc-control-cse,
-.gcse-wrap .gsc-control-cse-en,
-.gcse-wrap .gsc-control-cse-es {
-  background: transparent !important;
-  border: 0 !important;
-  padding: 0 !important;
+.live-stations li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 0.92rem;
 }
-.gcse-wrap .gsc-input-box {
-  border-radius: 10px !important;
-  border-color: rgba(255, 255, 255, 0.12) !important;
-}
-.gcse-wrap table.gsc-search-box td {
-  vertical-align: middle;
+.live-stations strong {
+  color: #86efac;
 }
 .seo-cities {
   display: flex;
