@@ -8,7 +8,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -18,7 +18,7 @@ from backend.prices import report_price
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.9.101"
+APP_VERSION = "0.9.102"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -738,7 +738,6 @@ if FRONTEND.is_dir():
 
 
 @app.get("/")
-@app.get("/index.html")
 def index():
     index_path = FRONTEND / "index.html"
     if not index_path.exists():
@@ -753,13 +752,18 @@ def index():
     )
 
 
+@app.get("/index.html")
+def index_html_redirect():
+    """Evita duplicar la home: GSC ve /index.html como URL extra."""
+    return RedirectResponse("https://gasradarapp.com/", status_code=301)
+
+
 _HTML_404 = """<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8"/>
   <title>Not found | GasRadar</title>
   <meta name="robots" content="noindex, nofollow"/>
-  <link rel="canonical" href="https://gasradarapp.com/"/>
 </head>
 <body style="background:#0b1220;color:#eef3ff;font-family:system-ui;padding:48px;text-align:center">
   <h1>Page not found</h1>
