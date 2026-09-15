@@ -37,6 +37,7 @@ def page_shell(
     page_h1: str = "",
     faq: list[tuple[str, str]] | None = None,
     geo_place: str = "",
+    cse: bool = False,
 ) -> str:
     ld = {
         "@context": "https://schema.org",
@@ -72,6 +73,14 @@ def page_shell(
         )
     geo = f'\n  <meta name="geo.placename" content="{esc(geo_place)}" />' if geo_place else ""
     h1 = f'\n    <h1 class="place-h1">{esc(page_h1)}</h1>' if page_h1 else ""
+    cse_block = (
+        '\n    <div class="gcse-wrap">'
+        '\n      <script async src="https://cse.google.com/cse.js?cx=651dd0dbf38444671"></script>'
+        '\n      <div class="gcse-search"></div>'
+        "\n    </div>"
+        if cse
+        else ""
+    )
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -127,7 +136,7 @@ def page_shell(
       <a href="/">App</a>
       <span class="footer-sep">·</span>
       <a href="/blog">Blog</a>
-    </nav>{h1}
+    </nav>{h1}{cse_block}
     {f'<p class="live-box card" id="livePrice" data-zip="{live_zip}" style="padding:12px 16px;margin:0 0 12px"></p>' if live_zip else ""}
 
     <section class="card privacy-card blog-card" id="contentEs">
@@ -304,6 +313,7 @@ def build_index() -> None:
         content_es=es,
         content_en=en,
         page_h1="Cheap gas by US city and state",
+        cse=True,
     )
     write(GAS / "index.html", html_text)
 

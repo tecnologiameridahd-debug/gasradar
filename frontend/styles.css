@@ -2291,6 +2291,24 @@ body.modal-open .social-rail {
   font-size: 0.92rem;
   line-height: 1.45;
 }
+.gcse-wrap {
+  margin: 12px 0 4px;
+  max-width: 100%;
+}
+.gcse-wrap .gsc-control-cse,
+.gcse-wrap .gsc-control-cse-en,
+.gcse-wrap .gsc-control-cse-es {
+  background: transparent !important;
+  border: 0 !important;
+  padding: 0 !important;
+}
+.gcse-wrap .gsc-input-box {
+  border-radius: 10px !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+.gcse-wrap table.gsc-search-box td {
+  vertical-align: middle;
+}
 .seo-cities {
   display: flex;
   flex-wrap: wrap;
