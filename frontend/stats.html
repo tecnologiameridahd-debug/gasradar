@@ -362,15 +362,25 @@
       const DAYS_STORE = "gasradar_stats_days";
       let currentDays = 14;
 
+      const WEAK_KEYS = ["gasradar2026", "gasradar", "changeme", "secret"];
+
+      function isWeakKey(k) {
+        return !k || WEAK_KEYS.includes(String(k).trim().toLowerCase());
+      }
+
       function loadSavedKey() {
         try {
           const u = new URL(location.href);
           const q = u.searchParams.get("key");
-          if (q) {
+          if (q && !isWeakKey(q)) {
             $("#keyInput").value = q;
             return q;
           }
           const s = localStorage.getItem(KEY_STORE);
+          if (isWeakKey(s)) {
+            localStorage.removeItem(KEY_STORE);
+            return null;
+          }
           if (s) $("#keyInput").value = s;
           return s;
         } catch (_) {
@@ -458,7 +468,8 @@
               localStorage.removeItem(KEY_STORE);
             } catch (_) {}
             let msg = "No se pudo cargar el dashboard";
-            if (res.status === 401) msg = "Clave incorrecta. Pega STATS_KEY de Render y pulsa Actualizar";
+            if (res.status === 401)
+              msg = "Clave incorrecta o vieja. Borra lo que hay, pega la STATS_KEY nueva y pulsa Actualizar";
             else if (res.status === 504 || data.offline) msg = "Tardó demasiado. Pulsa Actualizar otra vez";
             else if (data.detail) msg = String(data.detail);
             $("#msg").textContent = msg;
