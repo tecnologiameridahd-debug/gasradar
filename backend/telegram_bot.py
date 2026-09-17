@@ -71,19 +71,17 @@ def alerts_secret() -> str:
 
 def check_alerts_key(key: str | None) -> bool:
     """True si la clave del URL coincide con ALERTS_SECRET o STATS_KEY."""
+    from backend.security import is_weak_key, on_render
+
     secret = alerts_secret()
     if not secret:
-        # Sin secret en servidor: permitir (solo para setup inicial)
-        return True
+        return False
+    if on_render() and is_weak_key(secret):
+        return False
     provided = _normalize_secret(key)
     if not provided:
         return False
     if provided == secret:
-        return True
-    # Aceptar también la versión “limpia” (solo letras/números) por si copió mal
-    clean_secret = re.sub(r"[^A-Za-z0-9_-]", "", secret)
-    clean_key = re.sub(r"[^A-Za-z0-9_-]", "", provided)
-    if clean_secret and clean_key and clean_secret == clean_key:
         return True
     return False
 
@@ -105,12 +103,7 @@ def key_error_hint(key: str | None) -> str:
             "Falta ?key= en la URL. "
             "Ejemplo: /api/telegram/setup?key=TU_ALERTS_SECRET"
         )
-    return (
-        f"Clave incorrecta. Enviaste {len(provided)} caracteres. "
-        f"El servidor usa {active} ({len(secret)} caracteres). "
-        f"ALERTS_SECRET={len(env_a) or 0} chars, STATS_KEY={len(env_s) or 0} chars. "
-        f"Deben coincidir exactamente. Si cambiaste la variable, Save + espera Live."
-    )
+    return "Clave incorrecta. Si cambiaste la variable en Render, Save y espera Live."
 
 
 def webhook_secret_token() -> str:

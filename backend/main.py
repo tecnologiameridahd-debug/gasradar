@@ -18,7 +18,7 @@ from backend.prices import report_price
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.9.106"
+APP_VERSION = "0.9.107"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -151,124 +151,20 @@ def _donate_status() -> dict:
     return {"configured": stripe_configured(), "mode": stripe_mode()}
 
 
-def _vps_live_ping() -> dict:
-    """¿Render puede hablar con el scraper? Timeout corto para no colgar /health."""
-    import time
-
-    import httpx
-
-    try:
-        from backend.vps_scraper_client import _base_urls
-
-        urls = _base_urls()
-        if not urls:
-            return {"ok": False, "error": "no_url"}
-        host = urls[0].split("/")[2]
-        t0 = time.time()
-        r = httpx.get(urls[0].rstrip("/") + "/health", timeout=2.0)
-        return {
-            "ok": r.status_code == 200,
-            "ms": int((time.time() - t0) * 1000),
-            "status": r.status_code,
-            "host": host,
-        }
-    except Exception as e:
-        return {"ok": False, "error": type(e).__name__}
-
-
 @app.get("/api/health")
 def health():
-    """Healthcheck para Render y keep-alive (cron / script)."""
-    import os
-    from datetime import datetime, timezone
-
-    from backend.db import db_status, init_schema
-    from backend.prices import (
-        _eia_mem,
-        _load_disk_eia,
-        price_meta,
-    )
-    from backend.telegram_bot import alerts_secret, bot_ready, get_me, get_webhook_info
-
-    # Asegura tablas (Postgres/SQLite) en cada health de cold start
+    """Público: solo alive. Nada de scraper, IPs, secretos ni Telegram."""
     try:
+        from backend.db import init_schema
+
         init_schema()
     except Exception as e:
         print(f"[health] init_schema: {type(e).__name__}: {e}")
-
-    eia_co = price_meta("CO", fast=True)
-    eia_disk = bool((_load_disk_eia() or {}).get("CO", {}).get("ok"))
-    eia_mem = bool((_eia_mem.get("by_state") or {}).get("CO", {}).get("ok"))
-
-    tg: dict = {
-        "token": bot_ready(),
-        "secret_set": bool(alerts_secret()),
-        "secret_len": len(alerts_secret()) if alerts_secret() else 0,
-        "username": None,
-        "webhook_url": None,
-        "webhook_ok": None,
-        "pending_updates": None,
-        "last_error": None,
-    }
-    if bot_ready():
-        try:
-            me = get_me()
-            if me.get("ok"):
-                tg["username"] = (me.get("result") or {}).get("username")
-            info = get_webhook_info()
-            res = (info or {}).get("result") or {}
-            wh_url = res.get("url") or ""
-            try:
-                from urllib.parse import urlsplit
-
-                parts = urlsplit(wh_url)
-                tg["webhook_set"] = bool(wh_url)
-                tg["webhook_host"] = parts.netloc or None
-            except Exception:
-                tg["webhook_set"] = bool(wh_url)
-            tg["webhook_ok"] = bool(wh_url) and not res.get("last_error_message")
-            tg["pending_updates"] = res.get("pending_update_count")
-            err = res.get("last_error_message") or None
-            if err and ("key=" in err.lower() or "token" in err.lower()):
-                err = "Telegram webhook error (detalle oculto)"
-            tg["last_error"] = err
-        except Exception as e:
-            tg["last_error"] = f"{type(e).__name__}: {e}"
-
-    db = db_status()
     return {
         "ok": True,
         "app": "gasradar",
         "version": APP_VERSION,
-        "utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "status": "alive",
-        "db": db,
-        "telegram_bot": bot_ready(),
-        "telegram": tg,
-        "zyla": {
-            "enabled": False,
-            "ready": False,
-            "note": "Desactivado. Precios: GasBuddy VPS + AAA/EIA.",
-        },
-        "eia": {
-            "ok": bool(eia_co.get("eia_ok")),
-            "source": eia_co.get("avg_source"),
-            "period": eia_co.get("eia_period"),
-            "co_regular": (eia_co.get("state_avg") or {}).get("regular"),
-            "mem": eia_mem,
-            "disk": eia_disk,
-        },
-        "vps_scraper": {
-            "enabled": bool(
-                (os.environ.get("USE_VPS_SCRAPER") or "").strip().lower()
-                in ("1", "true", "yes", "on")
-            ),
-            "url_set": bool((os.environ.get("VPS_SCRAPER_URL") or "").strip()),
-            "live": _vps_live_ping(),
-        },
-        "donate": {
-            "stripe": _donate_status(),
-        },
     }
 
 
@@ -431,14 +327,8 @@ def api_min_wage(state: str = Query(""), gallons: float = 15, price: float | Non
 
 
 @app.get("/api/zyla/test")
-def api_zyla_test(zip: str = Query("80903")):
-    """Zyla desactivado."""
-    return {
-        "enabled": False,
-        "ok": False,
-        "note": "Zyla no se usa. Precios: GasBuddy VPS + AAA/EIA.",
-        "zip": zip,
-    }
+def api_zyla_test():
+    raise HTTPException(404, "Not found")
 
 
 @app.get("/api/search")
@@ -590,6 +480,8 @@ def api_telegram_status(key: str | None = None):
 
     if not check_alerts_key(key):
         raise HTTPException(401, key_error_hint(key))
+    from backend.security import strip_url_secrets
+
     secret = alerts_secret()
     me = get_me() if bot_ready() else {}
     info = get_webhook_info() if bot_ready() else {}
@@ -606,7 +498,7 @@ def api_telegram_status(key: str | None = None):
         "secret_length": len(secret) if secret else 0,
         "me_ok": bool((me or {}).get("ok")),
         "username": ((me or {}).get("result") or {}).get("username"),
-        "webhook_url": result.get("url"),
+        "webhook_url": strip_url_secrets(result.get("url") or ""),
         "pending_update_count": result.get("pending_update_count"),
         "last_error_message": result.get("last_error_message"),
         "last_error_date": result.get("last_error_date"),

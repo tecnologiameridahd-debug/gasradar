@@ -15,13 +15,31 @@ STATS_TZ = ZoneInfo("America/Denver")
 
 
 def stats_key() -> str:
-    return (os.environ.get("STATS_KEY") or "gasradar2026").strip()
+    k = (os.environ.get("STATS_KEY") or "").strip()
+    if k:
+        return k
+    from backend.security import on_render
+
+    if on_render():
+        return ""
+    try:
+        import config_local as cfg  # type: ignore
+
+        return (getattr(cfg, "STATS_KEY", None) or "").strip()
+    except ImportError:
+        return ""
 
 
 def check_stats_key(key: str | None) -> bool:
+    from backend.security import is_weak_key, on_render
+
     got = (key or "").strip()
     want = stats_key()
-    return bool(got) and bool(want) and got.lower() == want.lower()
+    if not got or not want:
+        return False
+    if on_render() and is_weak_key(want):
+        return False
+    return got.lower() == want.lower()
 
 
 def _now_local() -> datetime:

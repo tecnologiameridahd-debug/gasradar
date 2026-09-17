@@ -47,16 +47,8 @@ def _check_key(key: str | None, x_api_key: str | None) -> None:
 
 @app.get("/health")
 def health():
-    return {
-        "ok": True,
-        "app": "gasradar-vps-scraper",
-        "version": APP_VERSION,
-        "utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "node": (os.environ.get("SCRAPER_NODE") or "").strip() or "vps",
-        "flaresolverr": bool((os.environ.get("FLARESOLVERR_URL") or "").strip()),
-        "proxy": scraper_proxy_url() or None,
-        "cache_ttl_sec": cache.DEFAULT_TTL,
-    }
+    """Público: no identificar el servicio ni FlareSolver/proxy."""
+    return {"ok": True}
 
 
 @app.get("/prices")

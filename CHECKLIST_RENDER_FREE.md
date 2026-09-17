@@ -72,13 +72,13 @@ git push origin main
 
 ---
 
-## Cron de precios (scrapers propios, gratis)
+## Cron de precios (fuentes propias, gratis)
 
 ### 1) AAA diario — **todo USA** (recomendado para cron-job.org)
 **1 solo link** (responde en segundos, no hace timeout):
 
 ```
-https://gasradarapp.com/api/cron/aaa?key=gasradar2026
+https://gasradarapp.com/api/cron/aaa?key=TU_STATS_KEY
 ```
 
 - Method: **GET**  
@@ -89,19 +89,19 @@ https://gasradarapp.com/api/cron/aaa?key=gasradar2026
 Opcional (metros en background, sigue respondiendo rápido):
 
 ```
-https://gasradarapp.com/api/cron/aaa?key=gasradar2026&full=1
+https://gasradarapp.com/api/cron/aaa?key=TU_STATS_KEY&full=1
 ```
 
 Estado del job:
 
 ```
-https://gasradarapp.com/api/cron/aaa/status?key=gasradar2026
+https://gasradarapp.com/api/cron/aaa/status?key=TU_STATS_KEY
 ```
 
 ### 2) EIA semanal — respaldo oficial
 
 ```
-https://gasradarapp.com/api/eia/refresh?key=gasradar2026
+https://gasradarapp.com/api/eia/refresh?key=TU_STATS_KEY
 ```
 
 - Schedule: **Every Monday**  

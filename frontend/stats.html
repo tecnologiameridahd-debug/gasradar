@@ -237,14 +237,14 @@
 
       <section class="card">
         <p class="loc-sub" style="margin: 0 0 10px">
-          Clave (<code>STATS_KEY</code> en Render; por defecto <code>gasradar2026</code>)
+          Clave (<code>STATS_KEY</code> en Render)
         </p>
         <div class="row">
           <input
             id="keyInput"
-            type="text"
+            type="password"
             class="grow"
-            placeholder="gasradar2026"
+            placeholder="STATS_KEY"
             autocomplete="off"
             spellcheck="false"
           />
@@ -347,7 +347,6 @@
       const $ = (s) => document.querySelector(s);
       const KEY_STORE = "gasradar_stats_key";
       const DAYS_STORE = "gasradar_stats_days";
-      const DEFAULT_KEY = "gasradar2026";
       let currentDays = 14;
 
       function loadSavedKey() {
@@ -413,27 +412,27 @@
           const q = new URL(location.href).searchParams.get("key");
           if (q && q.trim()) return q.trim();
         } catch (_) {}
-        return ($("#keyInput").value || "").trim() || DEFAULT_KEY;
+        return ($("#keyInput").value || "").trim();
       }
 
       async function load() {
         let key = activeKey();
         $("#keyInput").value = key;
+        if (!key) {
+          $("#msg").textContent = "Escribe tu STATS_KEY de Render y pulsa Actualizar";
+          $("#msg").className = "dash-msg err";
+          return;
+        }
         $("#msg").textContent = "Cargando… (puede tardar unos segundos)";
         $("#msg").className = "dash-msg";
         try {
-          let { res, data } = await fetchStats(key);
-          if (!res.ok && key !== DEFAULT_KEY && res.status === 401) {
-            key = DEFAULT_KEY;
-            $("#keyInput").value = key;
-            ({ res, data } = await fetchStats(key));
-          }
+          const { res, data } = await fetchStats(key);
           if (!res.ok) {
             try {
               localStorage.removeItem(KEY_STORE);
             } catch (_) {}
             let msg = "No se pudo cargar el dashboard";
-            if (res.status === 401) msg = "Clave incorrecta. Escribe gasradar2026 y pulsa Actualizar";
+            if (res.status === 401) msg = "Clave incorrecta. Usa STATS_KEY de Render (no uses claves por defecto)";
             else if (res.status === 504 || data.offline) msg = "Tardó demasiado. Pulsa Actualizar otra vez";
             else if (data.detail) msg = String(data.detail);
             $("#msg").textContent = msg;
@@ -726,10 +725,7 @@
       });
 
       setDaysUI(loadSavedDays());
-      const k = loadSavedKey();
-      if (!($("#keyInput").value || "").trim()) {
-        $("#keyInput").value = DEFAULT_KEY;
-      }
+      loadSavedKey();
 
       (async function refreshSw() {
         if (!navigator.serviceWorker) return;

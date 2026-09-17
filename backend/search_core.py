@@ -607,14 +607,14 @@ def run_search(
         "cached": False,
         "disclaimer": (
             (
-                "Precios en vivo del scraper GasBuddy cerca de ti."
+                "Precios en vivo cerca de ti."
                 f"{eia_txt} "
                 "Pueden variar en la bomba; reporta el precio real al pasar."
                 if gb_hits
                 else (
                     "Sin precios en vivo en esta búsqueda."
                     f"{eia_txt} "
-                    "Si no aparecen, espera unos segundos: el scraper sigue cargando esa zona."
+                    "Si no aparecen, espera unos segundos e inténtalo de nuevo."
                 )
             )
             + f"{note}"
