@@ -9,7 +9,7 @@ import time
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from backend.db import execute, fetchall, fetchone
+from backend.db import connect, execute, fetchall, fetchall_on, fetchone, fetchone_on, init_schema
 
 STATS_TZ = ZoneInfo("America/Denver")
 
@@ -186,7 +186,7 @@ def _fmt_ts(ts) -> str:
         return str(ts or "")[:19]
 
 
-def summary(days: int = 14) -> dict:
+def summary(days: int = 14, include_ips: bool = False) -> dict:
     days = max(1, min(int(days), 90))
     today = _day_local()
     yesterday = _day_offset(1)
@@ -194,41 +194,67 @@ def summary(days: int = 14) -> dict:
     start_today = _local_midnight_ts(0)
     start_yesterday = _local_midnight_ts(1)
 
-    total_views = fetchone(
-        "SELECT COUNT(*) AS n FROM site_events WHERE event_type=?",
-        ("pageview",),
-    )
-    total_searches = fetchone(
-        "SELECT COUNT(*) AS n FROM site_events WHERE event_type=?",
-        ("search",),
-    )
-    today_views = fetchone(
-        "SELECT COUNT(*) AS n FROM site_events WHERE event_type=? AND created_at>=?",
-        ("pageview", start_today),
-    )
-    today_searches = fetchone(
-        "SELECT COUNT(*) AS n FROM site_events WHERE event_type=? AND created_at>=?",
-        ("search", start_today),
-    )
-    y_views = fetchone(
-        "SELECT COUNT(*) AS n FROM site_events WHERE event_type=? AND created_at>=? AND created_at<?",
-        ("pageview", start_yesterday, start_today),
-    )
-    y_searches = fetchone(
-        "SELECT COUNT(*) AS n FROM site_events WHERE event_type=? AND created_at>=? AND created_at<?",
-        ("search", start_yesterday, start_today),
-    )
+    init_schema()
+    with connect() as conn:
+        return _summary_on(
+            conn,
+            days=days,
+            today=today,
+            yesterday=yesterday,
+            since=since,
+            start_today=start_today,
+            start_yesterday=start_yesterday,
+            include_ips=include_ips,
+        )
 
-    period_views = fetchone(
-        "SELECT COUNT(*) AS n FROM site_events WHERE event_type=? AND day>=?",
-        ("pageview", since),
-    )
-    period_searches = fetchone(
-        "SELECT COUNT(*) AS n FROM site_events WHERE event_type=? AND day>=?",
-        ("search", since),
-    )
 
-    by_day = fetchall(
+def _summary_on(
+    conn,
+    *,
+    days: int,
+    today: str,
+    yesterday: str,
+    since: str,
+    start_today: float,
+    start_yesterday: float,
+    include_ips: bool,
+) -> dict:
+    totals_row = fetchone_on(
+        conn,
+        """
+        SELECT
+          SUM(CASE WHEN event_type='pageview' THEN 1 ELSE 0 END) AS pv_all,
+          SUM(CASE WHEN event_type='search' THEN 1 ELSE 0 END) AS se_all,
+          SUM(CASE WHEN event_type='pageview' AND created_at>=? THEN 1 ELSE 0 END) AS pv_today,
+          SUM(CASE WHEN event_type='search' AND created_at>=? THEN 1 ELSE 0 END) AS se_today,
+          SUM(CASE WHEN event_type='pageview' AND created_at>=? AND created_at<? THEN 1 ELSE 0 END) AS pv_y,
+          SUM(CASE WHEN event_type='search' AND created_at>=? AND created_at<? THEN 1 ELSE 0 END) AS se_y,
+          SUM(CASE WHEN event_type='pageview' AND day>=? THEN 1 ELSE 0 END) AS pv_period,
+          SUM(CASE WHEN event_type='search' AND day>=? THEN 1 ELSE 0 END) AS se_period
+        FROM site_events
+        """,
+        (
+            start_today,
+            start_today,
+            start_yesterday,
+            start_today,
+            start_yesterday,
+            start_today,
+            since,
+            since,
+        ),
+    ) or {}
+    total_views = {"n": totals_row.get("pv_all")}
+    total_searches = {"n": totals_row.get("se_all")}
+    today_views = {"n": totals_row.get("pv_today")}
+    today_searches = {"n": totals_row.get("se_today")}
+    y_views = {"n": totals_row.get("pv_y")}
+    y_searches = {"n": totals_row.get("se_y")}
+    period_views = {"n": totals_row.get("pv_period")}
+    period_searches = {"n": totals_row.get("se_period")}
+
+    by_day = fetchall_on(
+        conn,
         """
         SELECT day, event_type, COUNT(*) AS n
         FROM site_events
@@ -250,7 +276,8 @@ def summary(days: int = 14) -> dict:
     days_list = sorted(day_map.values(), key=lambda x: x["day"], reverse=True)[:days]
     chart_days = list(reversed(days_list))
 
-    top_refs = fetchall(
+    top_refs = fetchall_on(
+        conn,
         """
         SELECT referrer AS source, COUNT(*) AS n
         FROM site_events
@@ -264,7 +291,8 @@ def summary(days: int = 14) -> dict:
         (since,),
     )
     # Búsquedas: ZIP vs GPS (search + search_cache en el periodo)
-    search_details = fetchall(
+    search_details = fetchall_on(
+        conn,
         """
         SELECT detail, COUNT(*) AS n
         FROM site_events
@@ -290,7 +318,8 @@ def summary(days: int = 14) -> dict:
             if z:
                 top_zips_map[z] = top_zips_map.get(z, 0) + n
     # Compat: también contaba solo event_type=search con detail=zip suelto
-    legacy_zips = fetchall(
+    legacy_zips = fetchall_on(
+        conn,
         """
         SELECT detail AS zip, COUNT(*) AS n
         FROM site_events
@@ -344,7 +373,8 @@ def summary(days: int = 14) -> dict:
             else 0.0,
         },
     ]
-    top_langs = fetchall(
+    top_langs = fetchall_on(
+        conn,
         """
         SELECT lang, COUNT(*) AS n
         FROM site_events
@@ -356,7 +386,8 @@ def summary(days: int = 14) -> dict:
         (since,),
     )
     try:
-        recent = fetchall(
+        recent = fetchall_on(
+            conn,
             """
             SELECT event_type, path, referrer, lang, detail, day, created_at, ip, ip_country
             FROM site_events
@@ -365,7 +396,8 @@ def summary(days: int = 14) -> dict:
             """
         )
     except Exception:
-        recent = fetchall(
+        recent = fetchall_on(
+            conn,
             """
             SELECT event_type, path, referrer, lang, detail, day, created_at
             FROM site_events
@@ -378,56 +410,61 @@ def summary(days: int = 14) -> dict:
             r["ip_country"] = ""
 
     # Bloque IPs: no tumbar /stats si falla
-    unique_ips = {"n": 0}
+    unique_ips = {"n": None}
     top_ip_rows: list = []
     by_country: list = []
     recent_ips: list = []
-    try:
-        unique_ips = fetchone(
-            """
-            SELECT COUNT(DISTINCT ip) AS n FROM site_events
-            WHERE day >= ? AND ip IS NOT NULL AND TRIM(ip) <> ''
-            """,
-            (since,),
-        ) or {"n": 0}
-        top_ip_rows = fetchall(
-            """
-            SELECT ip, MAX(ip_country) AS country, COUNT(*) AS n, MAX(created_at) AS last_seen
-            FROM site_events
-            WHERE day >= ? AND ip IS NOT NULL AND TRIM(ip) <> ''
-            GROUP BY ip
-            ORDER BY n DESC
-            LIMIT 40
-            """,
-            (since,),
-        )
-        by_country = fetchall(
-            """
-            SELECT COALESCE(NULLIF(TRIM(ip_country), ''), '-') AS country, COUNT(*) AS n
-            FROM site_events
-            WHERE day >= ? AND ip IS NOT NULL AND TRIM(ip) <> ''
-            GROUP BY 1
-            ORDER BY n DESC
-            LIMIT 20
-            """,
-            (since,),
-        )
-        recent_ips = fetchall(
-            """
-            SELECT created_at, event_type, path, referrer, detail, lang, ip, ip_country, day
-            FROM site_events
-            WHERE day >= ? AND ip IS NOT NULL AND TRIM(ip) <> ''
-            ORDER BY created_at DESC
-            LIMIT 50
-            """,
-            (since,),
-        )
-    except Exception as e2:
-        print(f"[analytics] ip block fail: {type(e2).__name__}: {e2}")
-        unique_ips = {"n": 0}
-        top_ip_rows = []
-        by_country = []
-        recent_ips = []
+    if include_ips:
+        try:
+            unique_ips = fetchone_on(
+                conn,
+                """
+                SELECT COUNT(DISTINCT ip) AS n FROM site_events
+                WHERE day >= ? AND ip IS NOT NULL AND TRIM(ip) <> ''
+                """,
+                (since,),
+            ) or {"n": 0}
+            top_ip_rows = fetchall_on(
+                conn,
+                """
+                SELECT ip, MAX(ip_country) AS country, COUNT(*) AS n, MAX(created_at) AS last_seen
+                FROM site_events
+                WHERE day >= ? AND ip IS NOT NULL AND TRIM(ip) <> ''
+                GROUP BY ip
+                ORDER BY n DESC
+                LIMIT 40
+                """,
+                (since,),
+            )
+            by_country = fetchall_on(
+                conn,
+                """
+                SELECT COALESCE(NULLIF(TRIM(ip_country), ''), '-') AS country, COUNT(*) AS n
+                FROM site_events
+                WHERE day >= ? AND ip IS NOT NULL AND TRIM(ip) <> ''
+                GROUP BY 1
+                ORDER BY n DESC
+                LIMIT 20
+                """,
+                (since,),
+            )
+            recent_ips = fetchall_on(
+                conn,
+                """
+                SELECT created_at, event_type, path, referrer, detail, lang, ip, ip_country, day
+                FROM site_events
+                WHERE day >= ? AND ip IS NOT NULL AND TRIM(ip) <> ''
+                ORDER BY created_at DESC
+                LIMIT 50
+                """,
+                (since,),
+            )
+        except Exception as e2:
+            print(f"[analytics] ip block fail: {type(e2).__name__}: {e2}")
+            unique_ips = {"n": 0}
+            top_ip_rows = []
+            by_country = []
+            recent_ips = []
 
     pv_today = _n(today_views)
     se_today = _n(today_searches)

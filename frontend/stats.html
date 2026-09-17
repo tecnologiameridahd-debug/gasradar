@@ -7,7 +7,7 @@
     <meta name="robots" content="noindex,nofollow" />
     <title>GasRadar — Dashboard</title>
     <link rel="icon" href="/static/favicon-32.png?v=0.2.9" type="image/png" />
-    <link rel="stylesheet" href="/static/styles.css?v=0.9.92" />
+    <link rel="stylesheet" href="/static/styles.css?v=0.9.96" />
     <style>
       .dash-head {
         display: flex;
@@ -63,6 +63,19 @@
       .stat-box.hi {
         border-color: rgba(34, 197, 94, 0.35);
         background: linear-gradient(160deg, rgba(34, 197, 94, 0.1), #0d1526 70%);
+      }
+      .dash-msg.ok { color: #86efac; }
+      .dash-msg.err { color: #fca5a5; }
+      .dash-skel {
+        height: 88px;
+        border-radius: 12px;
+        background: linear-gradient(90deg, #0d1526, #152038, #0d1526);
+        background-size: 200% 100%;
+        animation: dashShine 1.1s linear infinite;
+      }
+      @keyframes dashShine {
+        from { background-position: 100% 0; }
+        to { background-position: -100% 0; }
       }
       .stat-box .n {
         font-size: 1.55rem;
@@ -398,13 +411,23 @@
           .replaceAll('"', "&quot;");
       }
 
-      async function fetchStats(key) {
-        const res = await fetch(
-          "/api/stats?key=" + encodeURIComponent(key) + "&days=" + currentDays,
-          { cache: "no-store" }
-        );
-        const data = await res.json().catch(() => ({}));
-        return { res, data };
+      async function fetchStats(key, extra) {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 12000);
+        try {
+          const res = await fetch(
+            "/api/stats?key=" +
+              encodeURIComponent(key) +
+              "&days=" +
+              currentDays +
+              (extra || ""),
+            { cache: "no-store", signal: ctrl.signal }
+          );
+          const data = await res.json().catch(() => ({}));
+          return { res, data };
+        } finally {
+          clearTimeout(timer);
+        }
       }
 
       function activeKey() {
@@ -423,8 +446,11 @@
           $("#msg").className = "dash-msg err";
           return;
         }
-        $("#msg").textContent = "Cargando… (puede tardar unos segundos)";
+        $("#msg").textContent = "Cargando resumen…";
         $("#msg").className = "dash-msg";
+        $("#summaryCard").hidden = false;
+        $("#totals").innerHTML =
+          '<div class="dash-skel"></div><div class="dash-skel"></div><div class="dash-skel"></div>';
         try {
           const { res, data } = await fetchStats(key);
           if (!res.ok) {
@@ -432,7 +458,7 @@
               localStorage.removeItem(KEY_STORE);
             } catch (_) {}
             let msg = "No se pudo cargar el dashboard";
-            if (res.status === 401) msg = "Clave incorrecta. Usa STATS_KEY de Render (no uses claves por defecto)";
+            if (res.status === 401) msg = "Clave incorrecta. Pega STATS_KEY de Render y pulsa Actualizar";
             else if (res.status === 504 || data.offline) msg = "Tardó demasiado. Pulsa Actualizar otra vez";
             else if (data.detail) msg = String(data.detail);
             $("#msg").textContent = msg;
@@ -443,11 +469,24 @@
             localStorage.setItem(KEY_STORE, key);
           } catch (_) {}
           $("#msg").textContent =
-            "Actualizado · " + (data.today || "") + " · " + currentDays + " días";
+            "Listo · " + (data.today || "") + " · " + currentDays + " días";
           $("#msg").className = "dash-msg ok";
           render(data);
+          $("#msg").textContent =
+            "Listo · " + (data.today || "") + " · cargando IPs…";
+          try {
+            const ip = await fetchStats(key, "&ips=1");
+            if (ip.res.ok) {
+              render(ip.data);
+              $("#msg").textContent =
+                "Actualizado · " + (ip.data.today || "") + " · " + currentDays + " días";
+            }
+          } catch (_) {}
         } catch (e) {
-          $("#msg").textContent = "Error de red. Pulsa Actualizar";
+          const aborted = e && (e.name === "AbortError" || String(e).includes("abort"));
+          $("#msg").textContent = aborted
+            ? "Tardó más de 12 s. Pulsa Actualizar"
+            : "Error de red. Pulsa Actualizar";
           $("#msg").className = "dash-msg err";
         }
       }
@@ -734,8 +773,8 @@
           await reg.update();
           if (reg.waiting) {
             reg.waiting.postMessage({ type: "SKIP_WAITING" });
-            if (!sessionStorage.getItem("gr_sw_stats_96")) {
-              sessionStorage.setItem("gr_sw_stats_96", "1");
+            if (!sessionStorage.getItem("gr_sw_stats_108")) {
+              sessionStorage.setItem("gr_sw_stats_108", "1");
               location.reload();
               return;
             }
@@ -743,7 +782,7 @@
         } catch (_) {}
       })();
 
-      if (k || $("#keyInput").value) load();
+      if (($("#keyInput").value || "").trim()) load();
     </script>
   </body>
 </html>

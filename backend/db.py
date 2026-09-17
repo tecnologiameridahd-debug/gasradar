@@ -214,6 +214,22 @@ def execute(sql: str, params: tuple | list = ()) -> None:
             conn.execute(sql, params)
 
 
+def fetchall_on(conn: Any, sql: str, params: tuple | list = ()) -> list[dict]:
+    """Varias consultas en la misma conexión (el dashboard no abre 15 SSL)."""
+    sql = _adapt_sql(sql)
+    if db_backend() == "postgres":
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            return [dict(r) for r in cur.fetchall()]
+    cur = conn.execute(sql, params)
+    return [dict(r) for r in cur.fetchall()]
+
+
+def fetchone_on(conn: Any, sql: str, params: tuple | list = ()) -> dict | None:
+    rows = fetchall_on(conn, sql, params)
+    return rows[0] if rows else None
+
+
 def fetchall(sql: str, params: tuple | list = ()) -> list[dict]:
     init_schema()
     sql = _adapt_sql(sql)

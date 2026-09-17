@@ -18,7 +18,7 @@ from backend.prices import report_price
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-APP_VERSION = "0.9.107"
+APP_VERSION = "0.9.108"
 
 app = FastAPI(title="GasRadar", version=APP_VERSION)
 
@@ -600,15 +600,19 @@ def api_visit(request: Request, body: VisitBody):
 
 
 @app.get("/api/stats")
-def api_stats(key: str | None = None, days: int = Query(14, ge=1, le=90)):
-    """Resumen de visitas + alertas Telegram — requiere ?key=STATS_KEY o ALERTS_SECRET."""
+def api_stats(
+    key: str | None = None,
+    days: int = Query(7, ge=1, le=90),
+    ips: bool = False,
+):
+    """Resumen de visitas. ips=1 carga IPs (más lento)."""
     from backend.analytics import check_stats_key, summary
     from backend.telegram_bot import check_alerts_key
 
     if not (check_stats_key(key) or check_alerts_key(key)):
         raise HTTPException(401, "Clave incorrecta. Usa ?key= tu STATS_KEY o ALERTS_SECRET")
     try:
-        data = summary(days=days)
+        data = summary(days=days, include_ips=ips)
     except Exception as e:
         print(f"[api/stats] summary fail: {type(e).__name__}: {e}")
         raise HTTPException(
@@ -1090,7 +1094,10 @@ def stats_page():
     path = FRONTEND / "stats.html"
     if not path.exists():
         raise HTTPException(404, "Stats page missing")
-    return FileResponse(path)
+    return FileResponse(
+        path,
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
+    )
 
 
 def _apk_path() -> Path:
